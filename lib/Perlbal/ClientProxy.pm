@@ -267,6 +267,9 @@ sub event_write {
 sub event_read {
     my Perlbal::ClientProxy $self = shift;
 
+    # mark alive so we don't get killed for being idle
+    $self->{alive_time} = time;
+
     unless ($self->{req_headers}) {
         if (my $hd = $self->read_request_headers) {
             print "Got headers!  Firing off new backend connection.\n"
