@@ -84,6 +84,11 @@ sub reproxy_fd {
 sub event_write {
     my Perlbal::ClientHTTPBase $self = shift;
 
+    # Any HTTP client is considered alive if it's writable
+    # if it's not writable for 30 seconds, we kill it.
+    # subclasses can decide what's appropriate for timeout.
+    $self->{alive_time} = time;
+
     if ($self->{reproxy_fd}) {
         my $to_send = $self->{reproxy_file_size} - $self->{reproxy_file_offset};
         $self->tcp_cork(1) if $self->{reproxy_file_offset} == 0;
@@ -242,6 +247,8 @@ sub _simple_response {
     return 1;
 }
 
+# FIXME: let this be configurable?
+sub max_idle_time { 30; }
 
 sub event_err {  my $self = shift; $self->close; }
 sub event_hup {  my $self = shift; $self->close; }

@@ -6,12 +6,7 @@ package Perlbal::TCPListener;
 use strict;
 use base "Perlbal::Socket";
 use fields qw(service hostport);
-use Socket qw(IPPROTO_TCP SO_KEEPALIVE TCP_NODELAY SOL_SOCKET);
-
-# Linux-specific:
-use constant TCP_KEEPIDLE  => 4; # Start keeplives after this period
-use constant TCP_KEEPINTVL => 5; # Interval between keepalives
-use constant TCP_KEEPCNT   => 6; # Number of keepalives before death
+use Socket qw(IPPROTO_TCP);
 
 # TCPListener
 sub new {
@@ -52,14 +47,6 @@ sub event_read {
 
         IO::Handle::blocking($psock, 0);
 
-        # Linux-specific, enable keep alive (for 2.5 minutes)
-        (setsockopt($psock, SOL_SOCKET, SO_KEEPALIVE,  pack("l", 1)) &&
-         setsockopt($psock, IPPROTO_TCP, TCP_KEEPIDLE,  pack("l", 30)) &&
-         setsockopt($psock, IPPROTO_TCP, TCP_KEEPCNT,   pack("l", 2)) &&   
-         setsockopt($psock, IPPROTO_TCP, TCP_KEEPINTVL, pack("l", 30)) &&
-         1
-         ) || die "Couldn't set keep-alive settings on socket (Not on Linux?)";
-        
         if ($service_role eq "reverse_proxy") {
             Perlbal::ClientProxy->new($self->{service}, $psock);
         } elsif ($service_role eq "management") {

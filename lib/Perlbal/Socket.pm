@@ -11,9 +11,14 @@ use fields (
             'headers_string',  # headers as they're being read
             'headers',         # the final Perlbal::HTTPHeaders object
             'create_time',     # creation time
+            'alive_time',      # last time noted alive
             );
 
 use constant MAX_HTTP_HEADER_LENGTH => 102400;  # 100k, arbitrary
+
+# time we last did a full connection sweep (O(n) .. lame)
+# and closed idle connections.
+our $last_cleanup = 0;
 
 sub new {
     my Perlbal::Socket $self = shift;
@@ -23,11 +28,51 @@ sub new {
 
     $self->SUPER::new( @_ );
     $self->{headers_string} = '';
-    $self->{create_time} = time();
+
+    my $now = time;
+    $self->{alive_time} = $self->{create_time} = $now;
+
+    # see if it's time to do a cleanup
+    # FIXME: constant time interval is lame.  on pressure/idle?
+    if ($now - 15 > $last_cleanup) {
+        $last_cleanup = $now;
+        _do_cleanup();
+    }
 
     return $self;
 }
 
+# FIXME: this doesn't scale in theory, but it might use less CPU in
+# practice than using the Heap:: modules and manipulating the
+# expirations all the time, thus doing things properly
+# algorithmically.  and this is definitely less work, so it's worth
+# a try.
+sub _do_cleanup {
+    my $sf = Perlbal::Socket->get_sock_ref;    
+
+    my $now = time;
+
+    my %max_age;  # classname -> max age (0 means forever)
+    my @to_close;
+    while (my $k = each %$sf) {
+        my Perlbal::Socket $v = $sf->{$k};
+        my $ref = ref $v;
+        unless (defined $max_age{$ref}) {
+            $max_age{$ref} = $ref->max_idle_time || 0;
+        }
+        next unless $max_age{$ref};
+        if ($v->{alive_time} < $now - $max_age{$ref}) {
+            push @to_close, $v;
+        }
+    }
+
+    $_->close("perlbal_timeout") foreach @to_close;
+}
+
+# CLASS METHOD:
+# default is for sockets to never time out.  classes
+# can override.
+sub max_idle_time { 0; }
 
 # Socket: specific to HTTP socket types
 sub read_headers {
