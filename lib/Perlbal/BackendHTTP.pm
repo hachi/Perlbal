@@ -435,6 +435,10 @@ sub as_string {
         $ret .= "; client=$cp->{fd}";
     }
     $ret .= "; uses=$self->{use_count}; $self->{state}";
+    if ($self->{service}->{verify_backend}) {
+        $ret .= "; has_attention=";
+        $ret .= $self->{has_attention} ? 'yes' : 'no';
+    }
 
     return $ret;
 }
