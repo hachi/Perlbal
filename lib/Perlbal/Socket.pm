@@ -4,7 +4,18 @@
 
 package Perlbal::Socket;
 use strict;
-use IO::Epoll;
+
+# The IO::Epoll module is buggy in that it doesn't export
+# constants efficiently (at least as of 0.01), so doing
+# constants ourselves saves 13% of the user CPU time
+use IO::Epoll qw(epoll_ctl epoll_wait epoll_create);
+use constant EPOLLIN => 1;
+use constant EPOLLOUT => 4;
+use constant EPOLLERR => 8;
+use constant EPOLLHUP => 16;
+use constant EPOLL_CTL_ADD => 1;
+use constant EPOLL_CTL_DEL => 2;
+use constant EPOLL_CTL_MOD => 3;
 
 use fields qw(sock fd write_buf write_buf_offset write_buf_size
               headers_string headers read_buf read_ahead read_size
