@@ -248,25 +248,21 @@ sub run_manage_command {
 
     if ($cmd =~ /^queues$/) {
         my $now = time;
-        my %oldest; # { "service-PARM" => oldest age }
+
         foreach my $svc (values %service) {
-            my $name = $svc->{name};
-            foreach my $sock (@{$svc->{waiting_clients}}) {
-                my $age = $now - $sock->{create_time};
-                $oldest{$name} = $age
-                    if $age > ($oldest{$name} || 0);
-            }
+            next unless $svc->{role} eq 'reverse_proxy';
 
-            foreach my $sock (@{$svc->{waiting_clients_highpri}}) {
-                my $age = $now - $sock->{create_time};
-                $oldest{"$name-highpri"} = $age
-                    if $age > ($oldest{"$name-highpri"} || 0);
-            }
-        }
+            my ($age, $count) = (0, scalar(@{$svc->{waiting_clients}}));
+            my Perlbal::ClientProxy $oldest = $svc->{waiting_clients}->[0];
+            $age = $now - $oldest->{create_time} if defined $oldest;
+            $out->("$svc->{name}-normal.age $age");
+            $out->("$svc->{name}-normal.count $count");
 
-        # now print
-        foreach my $type (sort keys %oldest) {
-            $out->("$type $oldest{$type}");
+            ($age, $count) = (0, scalar(@{$svc->{waiting_clients_highpri}}));
+            $oldest = $svc->{waiting_clients_highpri}->[0];
+            $age = $now - $oldest->{create_time} if defined $oldest;
+            $out->("$svc->{name}-highpri.age $age");
+            $out->("$svc->{name}-highpri.count $count");
         }
         $out->('.');
         return 1;

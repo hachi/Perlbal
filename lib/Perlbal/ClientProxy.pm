@@ -8,6 +8,7 @@ use base "Perlbal::ClientHTTPBase";
 use fields (
             'backend',             # Perlbal::BackendHTTP object (or undef if disconnected)
             'reconnect_count',     # number of times we've tried to reconnect to backend
+            'high_priority',       # boolean; 1 if we are or were in the high priority queue
             );
 
 use constant READ_SIZE         => 4086;    # 4k, arbitrary
@@ -30,6 +31,7 @@ sub new {
     $self->{read_size} = 0;        # total bytes read from client
 
     $self->{backend} = undef;
+    $self->{high_priority} = 0;
 
     bless $self, ref $class || $class;
     $self->watch_read(1);
@@ -193,6 +195,7 @@ sub as_string {
         $ret .= "; write_buf_size=$self->{write_buf_size}"
             if $self->{write_buf_size} > 0;
     }
+    $ret .= "; highpri" if $self->{high_priority};
 
     return $ret;
 }

@@ -313,6 +313,7 @@ sub request_backend_connection {
 
     if ($hi_pri) {
         push @{$self->{waiting_clients_highpri}}, $cp;
+        $cp->{high_priority} = 1;
     } else {
         push @{$self->{waiting_clients}}, $cp;
     }
