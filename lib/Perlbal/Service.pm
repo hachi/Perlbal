@@ -453,7 +453,7 @@ sub set {
         return 1;
     }
 
-    if ($key eq "max_backend_uses") {
+    if ($key eq "max_backend_uses" || $key eq "backend_persist_cache") {
         return $err->("Expected integer value") unless $val =~ /^\d+$/;
         return $set->();
     }
