@@ -156,6 +156,25 @@ sub run_manage_command {
         return 1;
     }
 
+    if ($cmd =~ /^states$/) {
+        my $sf = Perlbal::Socket->get_sock_ref;
+
+        my %states; # { "Class" => { "State" => int count; } }
+        foreach my $sock (values %$sf) {
+            my $state = $sock->state;
+            next unless defined $state;
+            $states{ref $sock}->{$state}++;
+        }
+
+        # now print out text
+        foreach my $class (sort keys %states) {
+            foreach my $state (sort keys %{$states{$class}}) {
+                $out->("$class $state " . $states{$class}->{$state});
+            }
+        }
+        return 1;
+    }
+
     if ($cmd =~ /^show service (\w+)$/) {
         my $sname = $1;
         my Perlbal::Service $svc = $service{$sname};

@@ -1,5 +1,6 @@
 ######################################################################
 # HTTP connection to backend node
+# possible states: connecting, bored, sending_req, wait_res, xfer_res
 ######################################################################
 
 package Perlbal::BackendHTTP;
@@ -10,7 +11,6 @@ use fields ('client',  # Perlbal::ClientProxy connection, or undef
             'ip',      # IP scalar
             'port',    # port scalar
             'ipport',  # "$ip:$port"
-            'state',   # connecting, bored, sending_req, wait_res, xfer_res
             );
 use Socket qw(PF_INET IPPROTO_TCP SOCK_STREAM);
 
@@ -147,6 +147,7 @@ sub event_read {
     unless ($self->{headers}) {
         if (my $hd = $self->read_response_headers) {
             $self->{state}   = "xfer_res";
+            $client->{state} = "xfer_res";
 
             if (my $rep = $hd->header('X-REPROXY-FILE')) {
                 # make the client begin the async IO and reproxy

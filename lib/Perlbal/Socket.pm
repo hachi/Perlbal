@@ -13,6 +13,7 @@ use fields (
             'headers',         # the final Perlbal::HTTPHeaders object
             'create_time',     # creation time
             'alive_time',      # last time noted alive
+            'state',           # general purpose state; used by descendants.
 
             'read_buf',
             'read_ahead',
@@ -33,6 +34,7 @@ sub new {
 
     $self->SUPER::new( @_ );
     $self->{headers_string} = '';
+    $self->{state} = undef;
 
     my $now = time;
     $self->{alive_time} = $self->{create_time} = $now;
@@ -136,6 +138,14 @@ sub drain_read_buf_to {
 ### Default behavior is to ignore the call.  Children can override if they want
 ### to die now or do some other processing before death.
 sub die_gracefully { }
+
+### METHOD: state()
+### If you pass a parameter, sets the state, else returns it.
+sub state {
+    my Perlbal::Socket $self = shift;    
+    return $self->{state} unless @_;
+    return $self->{state} = shift;
+}
 
 sub read_request_headers  { read_headers(@_, 0); }
 sub read_response_headers { read_headers(@_, 1); }
