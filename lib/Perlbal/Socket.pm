@@ -150,7 +150,7 @@ sub state {
     my Perlbal::Socket $self = shift;    
     return $self->{state} unless @_;
 
-    push @{$state_changes{"$self"} ||= []}, $_[0];
+    push @{$state_changes{"$self"} ||= []}, $_[0] if Perlbal::TRACK_STATES;
     return $self->{state} = $_[0];
 }
 
@@ -164,7 +164,7 @@ sub as_string_html {
 
 sub DESTROY {
     my Perlbal::Socket $self = shift;
-    delete $state_changes{"$self"};
+    delete $state_changes{"$self"} if Perlbal::TRACK_STATES;
     Perlbal::objdtor();
 }
 
