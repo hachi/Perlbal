@@ -4,9 +4,14 @@
 
 package Perlbal::StatsListener;
 use base "Perlbal::Socket";
-use fields qw(service pos message_ring from_ring);
+use fields ('service',  # Perlbal::Service,
+	    'pos',           # index in ring.  this index has an empty value in it
+	                     # entries before it are good
+	    'message_ring',  # arrayref of UDP messages, unparsed
+	    'from_ring',     # arrayref of from addresses
+	    'hostinfo',      # hashref of ip (4 bytes) -> [ $free, $active ] (or undef)
+	    );
 
-# StatsListener
 sub new {
     my $class = shift;
 
@@ -37,19 +42,50 @@ sub new {
     return $self;
 }
 
-# StatsListener
 sub event_read {
-    my $self = shift;
+    my Perlbal::StatsListener $self = shift;
     my $sock = $self->{sock};
 
-    my $ring_size = 30;   # FIXME: arbitrary
+    my $ring_size = 30;   # FIXME: arbitrary (but rewrite-balancer uses 10)
 
     while (my $from = $sock->recv($self->{message_ring}[$self->{pos}], 1024)) {
 	$self->{from_ring}[$self->{pos}] = $from;
 	$self->{pos} = 0 if ++$self->{pos} == $ring_size;
-    }
 
-    return;
+	# new message from host $from, so clear its cached data
+	$hostinfo{$from} = undef if exists $hostinfo{$from};
+    }
+}
+
+sub get_endpoint {
+    my Perlbal::StatsListener $self = shift;
+
+    # FIXME: implement
+    return ();
+}
+
+sub set_hosts {
+    my Perlbal::StatsListener $self = shift;
+    my @hosts = @_;
+
+    # clear the known hosts
+    $self->{hostinfo} = {};
+
+    # make each provided host known, but undef (meaning
+    # its ring data hasn't been parsed)
+    foreach my $dq (@hosts) {
+	# converted dotted quad to packed format
+	my $pd = Socket::inet_aton($dq);
+	$self->{hostinfo}{$pd} = undef;
+    }
+}
+
+sub event_err { }
+sub event_hup { }
+
+1;
+
+__END__
 
     print "Ring pos: $self->{pos}\n";
 
@@ -61,13 +97,8 @@ sub event_read {
 	$msg =~ s/\n/ /g;
 	my ($port, $iaddr) = Socket::sockaddr_in($from);
 	$iaddr = Socket::inet_ntoa($iaddr);
-	#print "$i: ($msg) from=$iaddr\n";
+	print "$i: ($msg) from=$iaddr\n";
     }
 
 }
 
-# StatsListener
-sub event_err { }
-sub event_hup { }
-
-1;

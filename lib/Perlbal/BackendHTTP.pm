@@ -17,6 +17,7 @@ sub new {
 
     my $svc = $client->{service};
     my ($ip, $port) = $svc->get_backend_endpoint();
+    return undef unless $ip;
 
     my $sock = IO::Socket::INET->new(
 				     PeerAddr => $ip,

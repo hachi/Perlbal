@@ -137,7 +137,11 @@ sub event_read {
 	    # useful for profiling:
 	    exit 0 if Perlbal::SHUTDOWN_BY_CLIENT && $hd->header("X-TEMP-SHUTDOWN");
 
-	    Perlbal::BackendHTTP->new($self);
+	    my $be = Perlbal::BackendHTTP->new($self);
+
+	    # abort if we couldn't get a backend host
+	    return $self->close unless $be;
+
 	    $self->tcp_cork(1);  # cork writes to self
 	}
 	return;
@@ -163,9 +167,8 @@ sub event_read {
 	    $self->{read_ahead} += $len;
 	}
 
-	print "Read: ($len) [$$bref]\n";
     } else {
-	print "read-ahead hit.\n";
+
 	$self->watch_read(0);
     }
 }

@@ -2,3 +2,6 @@
 
 10.1.0.10    # test machine
 
+# can include port numbers, but defaults to 80 if not provided:
+# 10.1.0.4:80  
+

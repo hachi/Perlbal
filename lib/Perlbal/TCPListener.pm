@@ -2,8 +2,6 @@
 # TCP listener on a given port
 ######################################################################
 
-use Perlbal::Socket;
-
 package Perlbal::TCPListener;
 use base "Perlbal::Socket";
 use fields qw(service);
