@@ -156,7 +156,7 @@ sub setup_put {
         # verify minput if necessary
         if ($self->{service}->{min_put_directory}) {
             my @elems = grep { defined $_ && length $_ } split '/', $path;
-            return $self->send_response(400, 'Does not meet minimum directory requirement');
+            return $self->send_response(400, 'Does not meet minimum directory requirement')
                 unless scalar(@elems) >= $self->{service}->{min_put_directory};
             my $minput = '/' . join('/', @elems[0..$self->{service}->{min_put_directory}-1]);
             my $path = '/' . join('/', @elems[$self->{service}->{min_put_directory}..@elems] || ());
