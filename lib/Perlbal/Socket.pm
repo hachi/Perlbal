@@ -144,13 +144,14 @@ sub write {
     my $data;
     ($self, $data) = @_;
 
-    # nobody should be writing to closed sockets.  (temporary code to find
-    # my bug, but I'll probably just leave it in because it's a good assertion)
-    if ($self->{closed}) {
-	Carp::cluck("Caller shouldn't be calling write on closed socket $self");
-        # but let's lie and say it worked, since the caller's broken anyway
-	return 1;
-    }
+    # nobody should be writing to closed sockets, but caller code can
+    # do two writes within an event, have the first fail and
+    # disconnect the other side (whose destructor then closes the
+    # calling object, but it's still in a method), and then the
+    # now-dead object does its second write.  that is this case.  we
+    # just lie and say it worked.  it'll be dead soon and won't be
+    # hurt by this lie.
+    return 1 if $self->{closed};
 
     my $bref;
 
