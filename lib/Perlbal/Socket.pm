@@ -12,6 +12,10 @@ use fields (
             'headers',         # the final Perlbal::HTTPHeaders object
             'create_time',     # creation time
             'alive_time',      # last time noted alive
+
+            'read_buf',
+            'read_ahead',
+            'read_size',
             );
 
 use constant MAX_HTTP_HEADER_LENGTH => 102400;  # 100k, arbitrary
@@ -114,6 +118,18 @@ sub read_headers {
     return $self->{headers};
 }
 
+### METHOD: drain_read_buf_to( $destination )
+### Write read-buffered data (if any) from the receiving object to the
+### I<destination> object.
+sub drain_read_buf_to {
+    my ($self, $dest) = @_;
+    return unless $self->{read_ahead};
+
+    while (my $bref = shift @{$self->{read_buf}}) {
+        $dest->write($bref);
+        $self->{read_ahead} -= length($$bref);
+    }
+}
 
 sub read_request_headers  { read_headers(@_, 0); }
 sub read_response_headers { read_headers(@_, 1); }
