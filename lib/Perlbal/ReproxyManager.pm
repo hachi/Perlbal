@@ -18,6 +18,7 @@ our %ReproxyBackends;   # ( host:ip => [ $backend, ... ] ); array of backends we
 our %ReproxyMax;        # ( host:ip => int ); maximum number of connections to have open at any one time
 our $ReproxyGlobalMax;  # int; the global cap used if no per-host cap is specified
 our $NoSpawn = 0;       # bool; when set, spawn_backend immediately returns without running
+our $LastCleanup = 0;   # int; time we last ran our cleanup logic (FIXME: temp hack)
 
 # singleton new function; returns us if we exist, else creates us
 sub get {
@@ -39,11 +40,24 @@ sub do_reproxy {
 
     # get data we use
     my $datref = $cp->{reproxy_uris}->[0];
-    my $hostip = "$datref->[0]:$datref->[1]";
-    push @{$ReproxyQueues{$hostip} ||= []}, $cp;
+    my $ipport = "$datref->[0]:$datref->[1]";
+    push @{$ReproxyQueues{$ipport} ||= []}, $cp;
+
+    # see if we should do cleanup (FIXME: temp hack)
+    my $now = time();
+    if ($LastCleanup < $now - 5) {
+        # remove closed backends from our array. this is O(n) but n is small
+        # and we're paranoid that just keeping a count would get corrupt over
+        # time.  also removes the backends that have clients that are closed.
+        @{$ReproxyBackends{$ipport}} = grep {
+            ! $_->{closed} && (! $_->{client} || ! $_->{client}->{closed})
+        } @{$ReproxyBackends{$ipport}};
+
+        $LastCleanup = $now;
+    }
 
     # now start a new backend
-    $self->spawn_backend($hostip);
+    $self->spawn_backend($ipport);
     return 1;
 }
 
@@ -116,9 +130,9 @@ sub note_backend_close {
 
     # remove closed backends from our array. this is O(n) but n is small
     # and we're paranoid that just keeping a count would get corrupt over
-    # time.  also removes the backends that have clients that are closed.
+    # time.
     @{$ReproxyBackends{$be->{ipport}}} = grep {
-        ! $_->{closed} && (! $_->{client} || ! $_->{client}->{closed})
+        ! $_->{closed}
     } @{$ReproxyBackends{$be->{ipport}}};
 
     # spawn more if needed
