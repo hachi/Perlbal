@@ -243,7 +243,7 @@ sub backend_finished {
     $self->{responded} = 1;
     $self->close('backend_finished')
         unless defined $self->{content_length_remain} &&
-                       $self->{content_length_remain};
+                      ($self->{content_length_remain} <= 0);
 }
 
 # Client (overrides and calls super)
@@ -342,7 +342,7 @@ sub event_read {
             # close ourselves
             $self->close('responded_done_reading')
                 if defined $self->{content_length_remain} &&
-                          !$self->{content_length_remain};
+                          ($self->{content_length_remain} <= 0);
 
             # return since we're done here
             return;
