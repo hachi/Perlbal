@@ -404,6 +404,10 @@ sub request_backend_connection {
         $hi_pri = index($hicookie, $self->{high_priority_cookie_contents}) != -1;
         $cp->{high_priority} = 1 if $hi_pri;
     }
+    
+    # now, call hook to see if this should be high priority
+    $hi_pri = $self->run_hook('make_high_priority', $cp)
+        unless $hi_pri; # only if it's not already
 
     # before we even consider spawning backends, let's see if we have
     # some bored (pre-connected) backends that'd take this client
