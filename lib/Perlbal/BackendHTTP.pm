@@ -42,7 +42,8 @@ use constant BACKEND_READ_SIZE => 61449;  # 60k, to fit in a 64k slab
 
 # keys set here when an endpoint is found to not support persistent
 # connections and/or the OPTIONS method
-our (%NoVerify); # { "ip:port" => next-verify-time }
+our %NoVerify; # { "ip:port" => next-verify-time }
+our %NodeStats; # { "ip:port" => { ... } }; keep statistics about nodes
 
 # constructor for a backend connection takes a service (pool) that it's
 # for, and uses that service to get its backend IP/port, as well as the
@@ -75,6 +76,10 @@ sub new {
     $self->{service} = $svc;      # the service we're serving for
     $self->{reportto} = $opts->{reportto} || $svc; # reportto if specified
     $self->state("connecting");
+
+    # mark another connection to this ip:port
+    $NodeStats{$self->{ipport}}->{attempts}++;
+    $NodeStats{$self->{ipport}}->{lastattempt} = $self->{create_time};
 
     # setup callback in case we get stuck in connecting land
     Perlbal::Socket::register_callback(15, sub {
@@ -202,13 +207,16 @@ sub event_write {
     my Perlbal::BackendHTTP $self = shift;
     print "Backend $self is writeable!\n" if Perlbal::DEBUG >= 2;
 
+    my $now = time();
     delete $NoVerify{$self->{ipport}} if
         defined $NoVerify{$self->{ipport}} &&
-        $NoVerify{$self->{ipport}} < time();
+        $NoVerify{$self->{ipport}} < $now;
 
     if (! $self->{client} && $self->{state} eq "connecting") {
         # not interested in writes again until something else is
         $self->watch_write(0);
+        $NodeStats{$self->{ipport}}->{connects}++;
+        $NodeStats{$self->{ipport}}->{lastconnect} = $now;
 
         if (defined $self->{service} && $self->{service}->{verify_backend} &&
             !$self->{has_attention} && !defined $NoVerify{$self->{ipport}}) {
@@ -264,6 +272,7 @@ sub event_read {
             # other setup to mark being done with options checking
             $self->{waiting_options} = 0;
             $self->{has_attention} = 1;
+            $NodeStats{$self->{ipport}}->{verifies}++;
             $self->next_request(1); # initial
         }
         return;
@@ -280,6 +289,13 @@ sub event_read {
 
     unless ($self->{res_headers}) {
         if (my $hd = $self->read_response_headers) {
+            # note we got this response code
+            my $ref = ($NodeStats{$self->{ipport}}->{responsecodes} ||= []);
+            push @$ref, $hd->response_code;
+            if (scalar(@$ref) > 500) {
+                shift @$ref;
+            }
+
             # call service response received function
             return if $self->{reportto}->backend_response_received($self);
 
@@ -406,6 +422,8 @@ sub next_request {
     # set alive_time so reproxy can intelligently reuse this backend
     my $now = time();
     $self->{alive_time} = $now;
+    $NodeStats{$self->{ipport}}->{requests}++ unless $initial;
+    $NodeStats{$self->{ipport}}->{lastresponse} = $now;
 
     my $hd = $self->{res_headers};  # response headers
 

@@ -209,6 +209,27 @@ sub run_manage_command {
         return 1;
     }
 
+    if ($cmd =~ /^nodes/) {
+        my $ref = \%Perlbal::BackendHTTP::NodeStats;
+
+        foreach my $ipport (keys %$ref) {
+            foreach my $key (keys %{$ref->{$ipport}}) {
+                if (ref $ref->{$ipport}->{$key} eq 'ARRAY') {
+                    my %temp;
+                    $temp{$_}++ foreach @{$ref->{$ipport}->{$key}};
+                    foreach my $tkey (keys %temp) {
+                        $out->("$ipport $key $tkey $temp{$tkey}");
+                    }
+                } else {
+                    $out->("$ipport $key $ref->{$ipport}->{$key}");
+                }
+            }
+        }
+
+        $out->('.');
+        return 1;
+    }
+
     if ($cmd =~ /^prof\w*\s+(on|off|data)/) {
         my $which = $1;
         if ($which eq 'on') {
