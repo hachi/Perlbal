@@ -221,7 +221,8 @@ sub run_manage_command {
             my $href = Danga::Socket->ProfilingData;
             foreach my $key (sort keys %$href) {
                 my ($utime, $stime, $calls) = @{$href->{$key}};
-                $out->("$key $utime $stime $calls");
+                $out->(sprintf("%s %0.5f %0.5f %d %0.7f %0.7f", 
+                               $key, $utime, $stime, $calls, $utime / $calls, $stime / $calls));
             }
         }
         $out->('.');
