@@ -154,8 +154,8 @@ sub setup_delete {
     if ($uri =~ m!^(?:/[\w\-\.]+)+$!) {
         # now attempt the unlink
         Linux::AIO::aio_unlink($self->{service}->{docroot} . '/' . $uri, sub {
-            my $rv = shift;
-            if ($rv && !$!) {
+            my $err = shift;
+            if ($err == 0 && !$!) {
                 # delete was successful
                 return $self->send_response(204);
             } elsif ($! == ENOENT) {
