@@ -14,11 +14,15 @@ sub register {
     # verify that an incoming request is a palimg request
     $svc->register_hook('Palimg', 'start_serve_request', sub {
         my Perlbal::ClientHTTPBase $obj = $_[0];
+        return 0 unless $obj;
         my Perlbal::HTTPHeaders $hd = $obj->{req_headers};
         my $uriref = $_[1];
+        return 0 unless $uriref;
 
         # if this is palimg, peel off the requested modifications and put in headers
-        my ($fn, $ext, $extra) = $$uriref =~ m!^/palimg/(.+)\.(\w+)(.*)$!;
+        return 0 unless $$uriref =~ m!^/palimg/(.+)\.(\w+)(.*)$!;
+        my ($fn, $ext, $extra) = ($1, $2, $3);
+        return 0 unless $extra;
         my ($palspec) = $extra =~ m!^/p(.+)$!;
         return 0 unless $fn && $palspec;
         
