@@ -1,3 +1,7 @@
+    -- did some cleanup; made a bunch of HTTPHeaders accesses use the
+       accessor methods instead of referencing into the object's private
+       store of data
+
     -- fixed a crash caused by calling getsockname/getpeername on sockets
        that have been undefined after having been stolen during an internal
        redirect to another webserver

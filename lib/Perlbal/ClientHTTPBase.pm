@@ -97,7 +97,7 @@ sub setup_keepalive {
 
     # do keep alive if they sent content-length or it's a head request
     my $do_keepalive = $self->{service}->{persist_client} &&
-                       $rqhd->keep_alive($rqhd->{method} eq 'HEAD' ||
+                       $rqhd->keep_alive($rqhd->request_method eq 'HEAD' ||
                                          $hd->header('Content-length'));
     if ($do_keepalive) {
         my $timeout = $self->max_idle_time;

@@ -305,7 +305,7 @@ sub event_read {
             # setup our content length so we know how much data to expect, in general
             # we want the content-length from the response, but if this was a head request
             # we know it's a 0 length message the client wants
-            if ($rqhd->{method} eq 'HEAD') {
+            if ($rqhd->request_method eq 'HEAD') {
                 $self->{content_length} = 0;
             } else {
                 $self->{content_length} = $hd->content_length;

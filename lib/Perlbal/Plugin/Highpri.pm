@@ -71,7 +71,7 @@ sub register {
 
         # check it against our compiled regexp
         return 1 if $uri_check &&
-                    $cp->{req_headers}->{uri} =~ /$uri_check/;
+                    $cp->{req_headers}->request_uri =~ /$uri_check/;
         return 1 if $host_check &&
                     $cp->{req_headers}->header('Host') =~ /$host_check/;
 
