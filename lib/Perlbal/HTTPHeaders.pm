@@ -329,17 +329,20 @@ sub req_keep_alive {
     return 0;
 }
 
-# for this method, we return a bool indicating whether this response is
-# expected to stay open for keep-alive.
+# answers the question: is the backend expected to stay open.  this is a combination
+# of the request we sent to it and the response they sent...
 sub res_keep_alive {
     my Perlbal::HTTPHeaders $self = $_[0];
     my Perlbal::HTTPHeaders $req = $_[1];
 
-    # handle the http 1.0/0.9 case
-    if ($self->version_number < 1001) {
-        # get the connection header now (saves warnings later)
-        my $conn = lc ($self->header('Connection') || '');
+    # get the connection header now (saves warnings later)
+    my $conn = lc ($self->header('Connection') || '');
 
+    # if they said Connection: close, it's always not keep-alive
+    return 0 if $conn =~ /\bclose\b/i;
+
+    # handle the http 1.0/0.9 case which requires keep-alive specified
+    if ($self->version_number < 1001) {
         # must specify keep-alive, and must have a content length OR
         # the request must be a head request
         return 1 if

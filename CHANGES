@@ -1,3 +1,6 @@
+    -- fix bug with determination of keep-alive in http 1.1 case specifying
+       a connection: close header
+
     -- added 'uptime' management command to track how long Perlbal has been up
 
     -- new config commands: HEADER INSERT <svc> <header>: <value> and HEADER
