@@ -247,10 +247,11 @@ sub set_version {
     die "Bogus version" unless $ver =~ /^(\d+)\.(\d+)$/;
     my ($ver_ma, $ver_mi) = ($1, $2);
 
-    if ($self->{type} eq 'res') {
-        $self->{responseLine} = "HTTP/$ver $self->{code} " . $self->codetext;
-    } else {
+    # check for req, as the other can be res or httpres
+    if ($self->{type} eq 'req') {
         $self->{requestLine} = "$self->{method} $self->{uri} HTTP/$ver";
+    } else {
+        $self->{responseLine} = "HTTP/$ver $self->{code} " . $self->codetext;
     }
     $self->{ver} = "$ver_ma.$ver_mi";
     $self->{vernum} = $ver_ma*1000 + $ver_mi;
