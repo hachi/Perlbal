@@ -402,12 +402,15 @@ sub event_read {
 sub next_request {
     my Perlbal::BackendHTTP $self = $_[0];
 
+    # don't allow this if we're closed
+    return if $self->{closed};
+
     my $hd = $self->{res_headers};  # response headers
     unless (defined $self->{service} &&
             $self->{service}{persist_backend} &&
             $hd->header("Connection") =~ /\bkeep-alive\b/i) {
         # if we have a reportto interface, notify it that we're ready for another
-        unless (defined $self->{service}) {
+        if (!$self->{service} && $self->{reportto}) {
             return $self->{reportto}->backend_next_request($self);
         } else {            
             return $self->close('next_request_no_persist');
