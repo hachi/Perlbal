@@ -132,11 +132,17 @@ sub headers {
 sub close {
     my Perlbal::ClientProxy $self = shift;
     my $reason = shift;
+
+    # kill our backend if we still have one
     if (my $backend = $self->{backend}) {
 	print "Client ($self) closing backend ($backend)\n" if Perlbal::DEBUG >= 1;
 	$self->backend(undef);
 	$backend->close($reason ? "proxied_from_client_close:$reason" : "proxied_from_client_close");
     }
+
+    # close the file we were reproxying, if any
+    POSIX::close($self->{reproxy_fd}) if $self->{reproxy_fd};
+
     $self->SUPER::close($reason);
 }
 
