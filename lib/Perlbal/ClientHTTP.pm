@@ -320,10 +320,13 @@ sub handle_put {
             # we done putting this file?
             unless ($self->{content_length_remain}) {
                 # close it
-                Linux::AIO::aio_close($self->{put_fh}, sub {
+                # FIXME this should be done through AIO
+                if ($self->{put_fh}->close) {
                     $self->{put_fh} = undef;
                     return $self->send_response(200);
-                });
+                } else {
+                    return $self->system_error("Error saving file", "error in close: $!");
+                }
             }
         }
     });
