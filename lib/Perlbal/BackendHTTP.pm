@@ -101,6 +101,7 @@ sub assign_client {
     $hds->header("X-Forwarded-Host", undef);
 
     $self->tcp_cork(1);
+    $client->{state} = 'backend_req_sent';
     $self->write($hds->to_string_ref);
     $self->write(sub {
         $self->tcp_cork(0);
@@ -108,6 +109,7 @@ sub assign_client {
             # start waiting on a reply
             $self->watch_read(1);
             $self->{state}   = "wait_res";
+            $client->{state} = 'wait_res';
             # make the client push its overflow reads (request body)
             # to the backend
             $client->drain_read_buf_to($self);

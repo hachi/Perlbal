@@ -1,0 +1,72 @@
+Perlbal Classes -- a brief introduction/overview.
+
+Socket -- descends from Danga::Socket
+  Adds on to the base class to provide some functionality specifically
+useful for creating HTTP sockets.
+
+TCPListener -- descends from Perlbal::Socket
+  Very lightweight and fast connection accept class.  Takes incoming
+connections as fast as possible and passes them off, instantiating one of
+the various Client* classes to handle it.
+
+BackendHTTP -- descends from Perlbal::Socket
+  This class handles connections to the backend web nodes for getting data
+back to the user.  This class is used by other classes such as ClientProxy
+to send a request to an internal node.
+
+HTTPHeaders --
+  Header management.  Parses headers (request and response) and stores data
+for further user.  Also manages validation of the request line so that it
+conforms to HTTP specifications.
+
+ClientHTTPBase -- descends from Perlbal::Socket
+  Provides base functionality to ClientHTTP and ClientProxy.  Notably, the
+ability to efficiently send files to the remote user.  Also handles most of
+the state logic for statistics and such.
+
+ClientHTTP -- descends from Perlbal::ClientHTTPBase
+  Very simple and lightweight class.  Handles sending files to the user
+without much overhead.  Most of the functionality is contained in the parent
+class, and this class doesn't implement much new stuff.
+
+ClientProxy -- descends from Perlbal::ClientHTTPBase
+  Takes an incoming connection from a user and connects to a backend node
+(BackendHTTP) and relays the request.  The backend can then either tell the
+proxy to reproxy and load a file from disk, or return a file directly, or
+just return a status message.
+
+ClientManage -- descends from Perlbal::Socket
+  Simple interface that provides a way for users to use the management
+interface of Perlbal.  You can connect to the management port (as defined
+in the config file) with a web browser or regular telnet.
+
+Service --
+  A service is a particular item that Perlbal is doing.  Services can have
+a role which defines how they behave.  Each service can also have a bunch
+of parameters set to further adjust its behavior.  By itself, the Service
+class handles maintaining pools of backend connections and managing statistics
+about itself.
+
+StatsListener -- descends from Perlbal::Socket
+  This class listens for UDP broadcasts from the web nodes describing how
+many available children they have.  This information is then used to pick an
+endpoint for a backend connection to be made to in order to handle a user's
+incoming request.
+
+
+
+                            {{ INTERNET }}
+                                  |
+                                  v
+              [Service]<===>[TCPListener]
+                          ___/    |    \___
+                         v        v        v
+             [ClientManage]  [ClientHTTP] [ClientProxy]
+                                                ^
+                                                |
+                                                v
+                                          [BackendHTTP]
+
+So connections come in from wherever and get to the TCPListener.  It uses
+Service objects to determine what kind of Client* to spawn.  The Client
+classes then handle crafting the response for the user.

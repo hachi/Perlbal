@@ -13,6 +13,10 @@ use fields ('service',             # Perlbal::Service object
             'reproxy_file_size',   # size of file, once we stat() it
             'reproxy_fd',          # integer fd of reproxying file, once we open() it
             'reproxy_file_offset', # how much we've sent from the file.
+
+            'state',               # reading_headers:
+                                   #   wait_backend, backend_req_sent, wait_res, xfer_res
+                                   #   wait_stat, wait_open, xfer_disk
             );
 
 use Errno qw( EPIPE ECONNRESET );
@@ -48,6 +52,7 @@ sub new {
 
     $self->{service} = $service;
     $self->{headers_string} = '';
+    $self->{state} = 'reading_headers';
 
     bless $self, ref $class || $class;
     $self->watch_read(1);
@@ -76,6 +81,7 @@ sub reproxy_fd {
     return $self->{reproxy_fd} unless @_;
 
     my ($fd, $size) = @_;
+    $self->{state} = 'xfer_disk';
     $self->{reproxy_file_offset} = 0;
     $self->{reproxy_file_size} = $size;
     return $self->{reproxy_fd} = $fd;
@@ -125,6 +131,7 @@ sub event_write {
     }
 }
 
+# this gets called when a "web" service is serving a file locally.
 sub _serve_request {
     my Perlbal::ClientHTTPBase $self = shift;
     my Perlbal::HTTPHeaders $hd = shift;
@@ -144,6 +151,9 @@ sub _serve_request {
     my Perlbal::Service $svc = $self->{service};
     my $file = $svc->{docroot} . $uri;
 
+    # update state, since we're now waiting on stat
+    $self->{state} = 'wait_stat';
+    
     Linux::AIO::aio_stat($file, sub {
         # client's gone anyway
         return if $self->{closed};
@@ -174,6 +184,9 @@ sub _serve_request {
                 return;
             }
 
+            # state update
+            $self->{state} = 'wait_open';
+            
             Linux::AIO::aio_open($file, 0, 0, sub {
                 my $rp_fd = shift;
 
@@ -190,6 +203,7 @@ sub _serve_request {
                     return $self->close();
                 }
 
+                $self->{state} = 'xfer_disk';
                 $self->tcp_cork(1);  # cork writes to self
                 $self->write($res->to_string_ref);
                 $self->reproxy_fd($rp_fd, $size);
@@ -217,6 +231,7 @@ sub _serve_request {
 
             $res->header("Content-Length", length($body));
 
+            $self->{state} = 'xfer_resp';
             $self->tcp_cork(1);  # cork writes to self
             $self->write($res->to_string_ref);
             $self->write(\$body);
@@ -238,6 +253,7 @@ sub _simple_response {
     my $body = "<h1>$code" . ($en ? " - $en" : "") . "</h1>\n";
     $body .= $msg if $msg;
 
+    $self->{state} = 'xfer_resp';
     $self->tcp_cork(1);  # cork writes to self
     $self->write($res->to_string_ref);
     $self->write(\$body);
@@ -250,6 +266,21 @@ sub max_idle_time { 30; }
 
 sub event_err {  my $self = shift; $self->close; }
 sub event_hup {  my $self = shift; $self->close; }
+
+sub as_string {
+    my Perlbal::ClientHTTPBase $self = shift;
+
+    my $name = getsockname($self->{sock});
+    my $lport = $name ? (Socket::sockaddr_in($name))[0] : undef;
+    my $ret = $self->SUPER::as_string . ": localport=$lport";
+    $ret .= "; $self->{state}";
+
+    my $hd = $self->headers;
+    my $host = $hd->header('Host') || 'unknown';
+    $ret .= "; http://$host" . $hd->request_uri;
+
+    return $ret;
+}
 
 sub _durl {
     my ($a) = @_;
