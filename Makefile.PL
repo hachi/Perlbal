@@ -20,6 +20,7 @@ WriteMakefile(
     PREREQ_PM               => {
         'Linux::AIO'  => '1.3',
         'Danga::Socket' => '1.25',
+        'BSD::Resource' => 0,
     },
     dist                    => {
         CI                      => "cvs commit",

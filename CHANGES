@@ -1,5 +1,7 @@
+    -- added BSD::Resource as dependency to Makefile.PL (brad)
+
     -- fixed 304 Not Modified responses to not send Content-Length
-       and Content-Type headers.
+       and Content-Type headers.  (jr)
 
 1.01 (2004-10-22)
     -- when internally redirecting a URL, perlbal advertises
