@@ -476,7 +476,8 @@ sub run {
     # doing blocking IO
     my $aio_fd = Linux::AIO::poll_fileno;
 
-    Perlbal::Socket->OtherFds(
+    # add, so we don't clobber
+    Perlbal::Socket->AddOtherFds(
         $aio_fd => sub {
             # run any callbacks on async file IO operations
             Linux::AIO::poll_cb();
