@@ -295,14 +295,17 @@ sub req_keep_alive {
     my Perlbal::HTTPHeaders $self = $_[0];
     my Perlbal::HTTPHeaders $res = $_[1];
 
+    # get the connection header now (saves warnings later)
+    my $conn = lc ($self->header('Connection') || '');
+
     # check the client
     if ($self->{vernum} < 1001) {
         # they must specify a keep-alive header
-        return 0 unless $self->header('Connection') =~ /\bkeep-alive\b/i;
+        return 0 unless $conn =~ /\bkeep-alive\b/i;
     }
 
     # so it must be 1.1 which means keep-alive is on, unless they say not to
-    return 0 if $self->header('Connection') =~ /\bclose\b/i;
+    return 0 if $conn =~ /\bclose\b/i;
 
     # if we get here, the user wants keep-alive and seems to support it,
     # so we make sure that the response is in a form that we can understand
@@ -323,10 +326,13 @@ sub res_keep_alive {
 
     # handle the http 1.0/0.9 case
     if ($self->{vernum} < 1001) {
+        # get the connection header now (saves warnings later)
+        my $conn = lc ($self->header('Connection') || '');
+
         # must specify keep-alive, and must have a content length OR
         # the request must be a head request
         return 1 if
-            $self->header('Connection') =~ /\bkeep-alive\b/i &&
+            $conn =~ /\bkeep-alive\b/i &&
             (defined $self->header('Content-length') ||
              $req->request_method eq 'HEAD');
         return 0;
