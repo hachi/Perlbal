@@ -19,6 +19,9 @@ use fields ('client',  # Perlbal::ClientProxy connection, or undef
                              # we know for sure we're not just talking
                              # to the TCP stack
 
+            'waiting_options', # if true, we're waiting for an OPTIONS *
+                               # response to determine when we have attention
+
             'disconnect_at', # time this connection will be disconnected,
                              # if it's kept-alive and backend told us.
                              # otherwise undef for unknown.
@@ -38,6 +41,10 @@ use Perlbal::ClientProxy;
 # if this is made too big, (say, 128k), then perl does malloc instead
 # of using its slab cache.
 use constant BACKEND_READ_SIZE => 61449;  # 60k, to fit in a 64k slab
+
+# keys set here when an endpoint is found to not support persistent
+# connections and/or the OPTIONS method
+our (%NoVerify); # { "ip:port" => next-verify-time }
 
 # constructor for a backend connection takes a service (pool) that it's
 # for, and uses that service to get its backend IP/port, as well as the
@@ -79,8 +86,6 @@ sub new {
 
     $self->{has_attention} = 0;
     $self->{use_count}     = 0;
-    $self->{content_length} = undef;
-    $self->{content_length_remain} = undef;
 
     bless $self, ref $class || $class;
     $self->watch_write(1);
@@ -132,6 +137,10 @@ sub assign_client {
 
     $self->tcp_cork(1);
     $client->state('backend_req_sent');
+
+    $self->{content_length} = undef;
+    $self->{content_length_remain} = undef;
+
     $self->write($hds->to_string_ref);
     $self->write(sub {
         $self->tcp_cork(0);
@@ -156,10 +165,28 @@ sub event_write {
     my Perlbal::BackendHTTP $self = shift;
     print "Backend $self is writeable!\n" if Perlbal::DEBUG >= 2;
 
+    delete $NoVerify{$self->{ipport}} if
+        defined $NoVerify{$self->{ipport}} &&
+        $NoVerify{$self->{ipport}} < time();
+
     if (! $self->{client} && $self->{state} eq "connecting") {
-        $self->state("bored");
-        $self->{service}->register_boredom($self);
+        # not interested in writes again until something else is
         $self->watch_write(0);
+
+        if ($self->{service}->{verify_backend} && !$self->{has_attention} &&
+            !defined $NoVerify{$self->{ipport}}) {
+
+            # the backend should be able to answer this incredibly quickly.
+            $self->write("OPTIONS * HTTP/1.0\r\nConnection: keep-alive\r\n\r\n");
+            $self->watch_read(1);
+            $self->{waiting_options} = 1;
+            $self->{content_length_remain} = undef;
+            $self->state("verifying_backend");
+        } else {
+            # register our boredom (readiness for a client/request)
+            $self->state("bored");
+            $self->{service}->register_boredom($self);
+        }
         return;
     }
 
@@ -167,10 +194,45 @@ sub event_write {
     $self->watch_write(0) if $done;
 }
 
+sub verify_failure {
+    my Perlbal::BackendHTTP $self = shift;
+    $NoVerify{$self->{ipport}} = time() + 60;
+    $self->{service}->note_bad_backend_connect($self->{ip}, $self->{port});
+    $self->close('no_keep_alive');
+    return;
+}
+
 # Backend
 sub event_read {
     my Perlbal::BackendHTTP $self = shift;
     print "Backend $self is readable!\n" if Perlbal::DEBUG >= 2;
+
+    if ($self->{waiting_options}) {
+        if ($self->{content_length_remain}) {
+            # the HTTP/1.1 spec says OPTIONS responses can have content-lengths,
+            # but the meaning of the response is reserved for a future spec.
+            # this just gobbles it up for.
+            my $bref = $self->read(BACKEND_READ_SIZE);
+            return $self->verify_failure unless defined $bref;
+            $self->{content_length_remain} -= length($$bref);
+        } elsif (my $hd = $self->read_response_headers) {
+            # see if we have keep alive support
+            return $self->verify_failure unless $hd->keep_alive("n/a");
+            $self->{content_length_remain} = $hd->header("Content-Length");
+        }
+        unless ($self->{content_length_remain}) {
+            # other setup to mark being done with options checking
+            $self->{waiting_options} = 0;
+            $self->{has_attention} = 1;
+            $self->watch_read(0);
+            $self->state("bored");
+            $self->{service}->register_boredom($self);
+            $self->{headers} = undef;
+            $self->{headers_string} = '';
+            $self->{content_length_remain} = undef;
+        }
+        return;
+    }
 
     my Perlbal::ClientProxy $client = $self->{client};
 
@@ -321,8 +383,6 @@ sub next_request {
     $self->{headers} = undef;
     $self->{headers_string} = "";
     $self->{req_headers} = undef;
-    $self->{content_length} = undef;
-    $self->{content_length_remain} = undef;
 
     $svc->register_boredom($self);
     return;

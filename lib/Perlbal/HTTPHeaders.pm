@@ -86,10 +86,17 @@ sub new {
     if ($is_response) {
         # check for valid response line
         return fail("Bogus response line") unless
-            $first =~ m!^HTTP\/(\d+\.\d+)\s+(\d+)!;
-        my ($ver, $code) = ($1, $2);
-        $self->{code} = $2;
+            $first =~ m!^HTTP\/(\d+)\.(\d+)\s+(\d+)!;
+        my ($ver_ma, $ver_mi, $code) = ($1, $2, $3);
+        $self->{code} = $code;
         $self->{responseLine} = $first;
+
+        # version work so we know what version the backend spoke
+        unless (defined $ver_ma) {
+            ($ver_ma, $ver_mi) = (0, 9);
+        }
+        $self->{ver} = "$ver_ma.$ver_mi";
+        $self->{vernum} = $ver_ma*1000 + $ver_mi;
     } else {
         # check for valid request line
         return fail("Bogus request line") unless
