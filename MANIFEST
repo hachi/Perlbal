@@ -1,0 +1,19 @@
+Makefile.PL
+MANIFEST
+perlbal
+lib/Perlbal.pm
+lib/Perlbal/BackendHTTP.pm
+lib/Perlbal/ClientHTTP.pm
+lib/Perlbal/ClientHTTPBase.pm
+lib/Perlbal/ClientManage.pm
+lib/Perlbal/ClientProxy.pm
+lib/Perlbal/HTTPHeaders.pm
+lib/Perlbal/Service.pm
+lib/Perlbal/Socket.pm
+lib/Perlbal/StatsListener.pm
+lib/Perlbal/TCPListener.pm
+lib/Perlbal/Plugin/Palimg.pm
+lib/Perlbal/Plugin/Queues.pm
+lib/Perlbal/Plugin/Stats.pm
+lib/Perlbal/Plugin/Highpri.pm
+META.yml                                 Module meta-data (added by MakeMaker)
