@@ -334,6 +334,22 @@ sub request_backend_connection {
     my Perlbal::ClientProxy $cp;
     ($self, $cp) = @_;
 
+    my $hi_pri = 0;  # by default, low priority
+
+    # is there a defined high-priority cookie?
+    if (my $cname = $self->{high_priority_cookie}) {
+        # decide what priority class this request is in
+        my $hd = $cp->{req_headers};
+        my %cookie;
+        foreach (split(/;\s+/, $hd->header("Cookie") || '')) {
+            next unless ($_ =~ /(.*)=(.*)/);
+            $cookie{_durl($1)} = _durl($2);
+        }
+        my $hicookie = $cookie{$cname} || "";
+        $hi_pri = index($hicookie, $self->{high_priority_cookie_contents}) != -1;
+        $cp->{high_priority} = 1 if $hi_pri;
+    }
+
     # before we even consider spawning backends, let's see if we have
     # some bored (pre-connected) backends that'd take this client
     my Perlbal::BackendHTTP $be;
@@ -363,25 +379,8 @@ sub request_backend_connection {
         }
     }
 
-    my $hi_pri = 0;  # by default, low priority
-
-    # is there a defined high-priority cookie?
-    if (my $cname = $self->{high_priority_cookie}) {
-        # decide what priority class this request is in
-        my $hd = $cp->{req_headers};
-        my %cookie;
-        foreach (split(/;\s+/, $hd->header("Cookie") || '')) {
-            next unless ($_ =~ /(.*)=(.*)/);
-            $cookie{_durl($1)} = _durl($2);
-        }
-        my $hicookie = $cookie{$cname} || "";
-        $hi_pri = index($hicookie, $self->{high_priority_cookie_contents}) != -1;
-
-    }
-
     if ($hi_pri) {
         push @{$self->{waiting_clients_highpri}}, $cp;
-        $cp->{high_priority} = 1;
     } else {
         push @{$self->{waiting_clients}}, $cp;
     }
