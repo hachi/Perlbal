@@ -185,8 +185,8 @@ sub as_string {
         my $ipport = $self->{backend}->{ipport};
         $ret .= "; backend=$ipport";
     } else {
-        my $bufsize = $self->{write_buf_size} - $self->{write_buf_offset};
-        $ret .= "; write buffer: $bufsize";
+        $ret .= "; write_buf_size=$self->{write_buf_size}"
+            if $self->{write_buf_size} > 0;
     }
 
     return $ret;
