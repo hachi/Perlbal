@@ -274,16 +274,23 @@ sub spawn_backends {
     my Perlbal::Service $self = shift;
 
     # now start a connection to a host
-    my $tries = 0;
 
     # keep track of the sum of existing_bored + bored_created
     my $backends_created = scalar(@{$self->{bored_backends}}) + $self->{pending_connect_count};
     my $backends_needed = $self->{waiting_client_count} + $self->{connect_ahead};
     my $to_create = $backends_needed - $backends_created;
+
+    # can't create more than this, assuming one pending connect per node
+    my $max_creatable = $self->{node_count} - $self->{pending_connect_count};
+    $to_create = $max_creatable if $to_create > $max_creatable;
     
+    # cap number of attempted connects at once
+    $to_create = 10 if $to_create > 10;
+
     my $now = time;
 
-    while ($tries++ < 5 && $to_create > 0) {
+    while ($to_create) {
+        $to_create--;
         my ($ip, $port) = $self->get_backend_endpoint;
         unless ($ip) {
             print "No backend IP.\n";
@@ -294,7 +301,6 @@ sub spawn_backends {
         if (Perlbal::BackendHTTP->new($self, $ip, $port)) {
             $self->{pending_connects}{"$ip:$port"} = $now;
             $self->{pending_connect_count}++;
-            $to_create--;
         }
     }
 }
