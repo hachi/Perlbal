@@ -28,6 +28,10 @@ sub watched_sockets {
     return scalar keys %sock;
 }
 
+sub get_sock_ref {
+    return \%sock;
+}
+
 # Socket
 sub new {
     my Perlbal::Socket $self = shift;
@@ -43,6 +47,8 @@ sub new {
     $self->{write_buf_size} = 0;
     $self->{closed} = 0;
 
+    Perlbal::objctor();
+
     unless ($epoll) {
         $epoll = epoll_create(1024);
         if ($epoll < 0) {
@@ -56,6 +62,10 @@ sub new {
 
     $sock{$fd} = $self;
     return $self;
+}
+
+sub DESTROY {
+    Perlbal::objdtor();
 }
 
 # Socket
@@ -108,6 +118,11 @@ sub close {
     my $fd = $self->{fd};
     my $sock = $self->{sock};
     $self->{closed} = 1;
+
+    # we need to flush our write buffer, as there may 
+    # be self-referential closures (sub { $client->close })
+    # preventing the object from being destroyed
+    $self->{write_buf} = [];
 
     if (Perlbal::DEBUG >= 1) {
         my ($pkg, $filename, $line) = caller;

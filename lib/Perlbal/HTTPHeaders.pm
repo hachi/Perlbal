@@ -46,10 +46,16 @@ sub new_response {
     return bless $self, ref $class || $class;
 }
 
+sub DESTROY {
+    Perlbal::objdtor();
+}
+
 sub new {
     my ($class, $hstr, $is_response) = @_;
     # hstr: headers as a string
     # is_response: bool; is HTTP response (as opposed to request).  defaults to request.
+
+    Perlbal::objctor();
 
     $hstr =~ s!\r!!g;
     my @lines = split(/\n/, $hstr);

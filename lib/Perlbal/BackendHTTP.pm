@@ -34,6 +34,8 @@ sub new {
     my $self = fields::new($class);
     $self->SUPER::new($sock);
 
+    Perlbal::objctor();
+
     $self->{client} = $client;   # client Perlbal::Socket this backend conn is for
     $self->{client}->backend($self);  # set client's backend to us
 
@@ -191,11 +193,15 @@ sub event_err {
 # Backend
 sub event_hup {
     my Perlbal::BackendHTTP $self = shift;
-    print "HANGUP for $self\n";
+    print "HANGUP for $self\n" if Perlbal::DEBUG;
+}
+
+sub DESTROY {
+    Perlbal::objdtor();
+    $_[0]->SUPER::DESTROY;
 }
 
 1;
-
 
 # Local Variables:
 # mode: perl

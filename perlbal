@@ -7,6 +7,7 @@
 package Perlbal;
 
 use constant DEBUG => 0;
+use constant DEBUG_OBJ => 0;
 
 use strict;
 use IO::Socket;
@@ -44,6 +45,21 @@ sub error {
     return 0;
 }
 
+# Object instance counts, for debugging and leak detection
+our(%ObjCount);  # classname -> instances
+our(%ObjTotal);  # classname -> instances
+sub objctor {
+    if (DEBUG_OBJ) {
+        $ObjCount{(caller)[0]}++;
+        $ObjTotal{(caller)[0]}++;
+    }
+}
+sub objdtor {
+    if (DEBUG_OBJ) {
+        $ObjCount{(caller)[0]}--;
+    }
+}
+
 # returns 1 if command succeeded, 0 otherwise
 sub run_manage_command {
     my ($cmd, $out) = @_;  # $out is output stream closure
@@ -60,6 +76,21 @@ sub run_manage_command {
         $out->("ERROR: $_[0]");
         return 0;
     };
+
+    if ($cmd =~ /^obj$/) {
+        foreach (sort keys %ObjCount) {
+            $out->("$_ = $ObjCount{$_} (tot=$ObjTotal{$_})");
+        }
+        return 1;
+    }
+
+    if ($cmd =~ /^socks$/) {
+        my $sf = Perlbal::Socket->get_sock_ref;
+        foreach (sort { $a <=> $b } keys %$sf) {
+            $out->("$_ = $sf->{$_}");
+        }
+        return 1;
+    }
 
     if ($cmd =~ /^server (\w+) ?= ?(.+)$/) {
         my ($key, $val) = ($1, $2);

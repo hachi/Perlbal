@@ -23,6 +23,8 @@ sub new {
     $self = fields::new($class) unless ref $self;
     $self->SUPER::new($service, $sock);       # init base fields
 
+    Perlbal::objctor();
+
     $self->{read_buf} = [];        # scalar refs of bufs read from client
     $self->{read_ahead} = 0;       # bytes sitting in read_buf
     $self->{read_size} = 0;        # total bytes read from client
@@ -50,10 +52,7 @@ sub start_reproxy_file {
 
         unless ($size) {
             # FIXME: POLICY: 404 or retry request to backend w/o reproxy-file capability?
-            # for now we just close the connection, which is kinda lame.
-            print STDERR "REPROXY: $file (bogus)\n";
-            $self->close;
-            return;
+            return $self->_simple_response(404);
         }
 
         # fixup the Content-Length header with the correct size (application
@@ -81,9 +80,8 @@ sub start_reproxy_file {
 
             # handle errors
             if ($rp_fd < 0) {
-                # couldn't open the file we had already successfully stat'ed.
-                # FIXME: do 500 vs. 404 vs whatever based on $!
-                return $self->close();
+                # FIXME: do 500 vs. 404 vs whatever based on $! ?
+                return $self->_simple_response(500);
             }
 
             $self->reproxy_fd($rp_fd, $size);
@@ -116,7 +114,6 @@ sub close {
     # call ClientHTTPBase's close
     $self->SUPER::close($reason);
 }
-
 
 # Client
 sub event_write {
@@ -172,6 +169,11 @@ sub event_read {
 
         $self->watch_read(0);
     }
+}
+
+sub DESTROY {
+    Perlbal::objdtor();
+    $_[0]->SUPER::DESTROY;
 }
 
 1;

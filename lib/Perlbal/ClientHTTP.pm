@@ -33,7 +33,6 @@ sub event_read {
 
 1;
 
-
 # Local Variables:
 # mode: perl
 # c-basic-indent: 4
