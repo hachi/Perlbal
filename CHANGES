@@ -1,3 +1,7 @@
+    -- added tracking mode for helping look for leaked objects; records a
+       backtrace of every object created.  "server track_obj = 0/1" to enable
+       or disable it, and then "tracking" in a management interface to see.
+
     -- made Perlbal::objctor/objdtor take an object as their first parameter.
        much faster than using caller().
 
