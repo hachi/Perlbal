@@ -15,6 +15,8 @@ use fields ('service',  # Perlbal::Service,
             'need_parse',    # hashref:  ip -> pos
             );
 
+use constant RING_SIZE => 30;
+
 sub new {
     my $class = shift;
 
@@ -52,7 +54,6 @@ sub event_read {
     my Perlbal::StatsListener $self = shift;
     my $sock = $self->{sock};
 
-    my $ring_size = 30;   # FIXME: arbitrary (but rewrite-balancer uses 10)
     my ($port, $iaddr);
 
     while (my $from = $sock->recv($self->{message_ring}[$self->{pos}], 1024)) {
@@ -70,7 +71,7 @@ sub event_read {
             $self->{need_parse}{$from} = $self->{pos};
         }
 
-        $self->{pos} = 0 if ++$self->{pos} == $ring_size;
+        $self->{pos} = 0 if ++$self->{pos} == RING_SIZE;
     }
 }
 
@@ -116,6 +117,11 @@ sub set_hosts {
     my @hosts = @_;
 
     # clear the known hosts
+    $self->{pos} = 0;
+    $self->{message_ring} = [];
+    $self->{from_ring} = [];
+    $self->{total_free} = 0;
+    $self->{need_parse} = {};
     $self->{hostinfo} = {};
 
     # make each provided host known, but undef (meaning
@@ -125,6 +131,36 @@ sub set_hosts {
         my $pd = Socket::inet_aton($dq);
         $self->{hostinfo}{$pd} = undef;
     }
+}
+
+sub debug_dump {
+    my Perlbal::StatsListener $self = shift;
+    my $out = shift;
+    no warnings;
+
+    $out->("Stats listener dump:");
+    $out->("  pos = $self->{pos}");
+    $out->("  message_ring = ");
+
+    for (my $i=0; $i<RING_SIZE; $i++) {
+        my $ip = eval { Socket::inet_ntoa($self->{'from_ring'}[$i]); };
+        $out->("  \#$i: [$ip] " . $self->{'message_ring'}[$i]);
+    }
+
+    my $count_free = 0;
+    foreach my $host (sort keys %{$self->{hostinfo}}) {
+        my $ip = eval { Socket::inet_ntoa($host); };
+        my $hi = $self->{hostinfo}{$host};
+        my $need_parse = $self->{need_parse}{$host};
+        if ($hi) {
+            $count_free += $hi->[0];
+            $out->(" host $ip = [ $hi->[0] free, $hi->[1] act ] needparse=$need_parse");
+        } else {
+            $out->(" host $ip = needparse=$need_parse");
+        }
+    }
+
+    $out->(" total free: $self->{total_free} (calculated: $count_free)");
 }
 
 sub event_err { }
