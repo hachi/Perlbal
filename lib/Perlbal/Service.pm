@@ -173,9 +173,13 @@ sub register_boredom {
     my Perlbal::BackendHTTP $be;
     ($self, $be) = @_;
 
-    # note that this backend is no longer pending a connect
-    $self->{pending_connect_count}--;
-    $self->{pending_connects}{$be->{ipport}} = undef;
+    # note that this backend is no longer pending a connect,
+    # if we thought it was before
+    my $was_pending = $self->{pending_connects}{$be->{ipport}};
+    if ($was_pending) {
+        $self->{pending_connects}{$be->{ipport}} = undef;
+        $self->{pending_connect_count}--;
+    }
 
     my Perlbal::ClientProxy $cp = $self->get_client;
     if ($cp) {
@@ -189,17 +193,22 @@ sub register_boredom {
         }
     }
 
-    push @{$self->{bored_backends}}, $be;
+    if ($was_pending) {
+        push @{$self->{bored_backends}}, $be;
+    }
 }
 
 sub note_bad_backend_connect {
     my Perlbal::Service $self;
     my ($ip, $port);
-
     ($self, $ip, $port) = @_;
 
-    $self->{pending_connects}{"$ip:$port"} = undef;
-    $self->{pending_connect_count}--;
+    my $ipport = "$ip:$port";
+    my $was_pending = $self->{pending_connects}{$ipport};
+    if ($was_pending) {
+        $self->{pending_connects}{$ipport} = undef;
+        $self->{pending_connect_count}--;
+    }
 
     # FIXME: do something interesting (tell load balancer about dead host,
     # and fire up a new connection, if warranted)
