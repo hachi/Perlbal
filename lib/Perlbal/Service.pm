@@ -25,6 +25,7 @@ use fields (
             'node_count',         # number of nodes
             'nodefile.lastmod',   # unix time nodefile was last modified
             'nodefile.lastcheck', # unix time nodefile was last stated
+            'nodefile.checking',  # boolean; if true AIO is stating the file for us
             'sendstats.listen',        # what IP/port the stats listener runs on
             'sendstats.listen.socket', # Perlbal::StatsListener object
             'docroot',            # document root for webserver role
@@ -105,39 +106,39 @@ sub load_nodefile {
     my Perlbal::Service $self = shift;
 
     return 0 unless $self->{'nodefile'};
+    return 1 if $self->{'nodefile.checking'};
 
+    $self->{'nodefile.checking'} = 1;
     Linux::AIO::aio_stat($self->{nodefile}, sub {
-        return unless -e _;
+        return $self->{'nodefile.checking'} = 0
+            unless -e _;
 
         my $mod = (stat(_))[9];
-        return if $mod == $self->{'nodefile.lastmod'};
+        return $self->{'nodefile.checking'} = 0
+            if $mod == $self->{'nodefile.lastmod'};
 
-        Linux::AIO::aio_open($self->{nodefile}, 0, 0, sub {
-            my $fd = shift;
-            return if $fd < 0;
+        # construct a filehandle (we only have a descriptor here)
+        open NODEFILE, $self->{nodefile}
+            or return $self->{'nodefile.checking'} = 0;
 
-            # construct a filehandle (we only have a descriptor here)
-            open NODEFILE, "<&=$fd" or return;
+        # prepare for adding nodes
+        $self->{'nodefile.lastmod'} = $mod;
+        $self->{nodes} = [];
 
-            # prepare for adding nodes
-            $self->{'nodefile.lastmod'} = $mod;
-            $self->{nodes} = [];
-
-            # now parse contents
-            while (<NODEFILE>) {
-                s/\#.*//;
-                if (/(\d+\.\d+\.\d+\.\d+)(?::(\d+))?/) {
-                    my ($ip, $port) = ($1, $2);
-                    push @{$self->{nodes}}, [ $ip, $port || 80 ];
-                }
+        # now parse contents
+        while (<NODEFILE>) {
+            s/\#.*//;
+            if (/(\d+\.\d+\.\d+\.\d+)(?::(\d+))?/) {
+                my ($ip, $port) = ($1, $2);
+                push @{$self->{nodes}}, [ $ip, $port || 80 ];
             }
-            close NODEFILE;
+        }
+        close NODEFILE;
 
-            # setup things using new data
-            $self->{node_count} = scalar @{$self->{nodes}};
-            $self->populate_sendstats_hosts;
-            return;
-        });
+        # setup things using new data
+        $self->{node_count} = scalar @{$self->{nodes}};
+        $self->populate_sendstats_hosts;
+        return $self->{'nodefile.checking'} = 0;
     });
 
     return 1;
@@ -485,6 +486,7 @@ sub set {
         # force a reload
         $self->{'nodefile'} = $val;
         $self->{'nodefile.lastmod'} = 0;
+        $self->{'nodefile.checking'} = 0;
         $self->load_nodefile;
         $self->{'nodefile.lastcheck'} = time;
 
