@@ -9,6 +9,7 @@ use fields (
             'backend',             # Perlbal::BackendHTTP object (or undef if disconnected)
             'reconnect_count',     # number of times we've tried to reconnect to backend
             'high_priority',       # boolean; 1 if we are or were in the high priority queue
+            'reproxy_uris',        # arrayref; URIs to reproxy to, in order
             );
 
 use constant READ_SIZE         => 4086;    # 4k, arbitrary
@@ -36,6 +37,73 @@ sub new {
     bless $self, ref $class || $class;
     $self->watch_read(1);
     return $self;
+}
+
+# call this with a string of space separated URIs to start a process
+# that will fetch the item at the first and return it to the user,
+# on failure it will try the second, then third, etc
+sub start_reproxy_uri {
+    my Perlbal::ClientProxy $self = shift;
+    my $urls = shift;
+
+    # construct reproxy_uri list
+    if (defined $urls) {
+        my @uris = split /\s+/, $urls;
+        $self->{reproxy_uris} = [];
+        foreach my $uri (@uris) {
+            next unless $uri =~ m!^http://(.+?)(?::(\d+))?(/.*)?$!;
+            push @{$self->{reproxy_uris}}, [ $1, $2 || 80, $3 || '/' ];
+        }
+    }
+
+    # if we have no uris in our list now, tell the user 404
+    return $self->_simple_response(404)
+        unless @{$self->{reproxy_uris} || []};
+
+    # now build backend
+    $self->state('wait_backend');
+    my $datref = $self->{reproxy_uris}->[0];
+    my $be = Perlbal::BackendHTTP->new(undef, $datref->[0], $datref->[1], $self);
+}
+
+# this is a callback for when a backend has been created and is
+# ready for us to do something with it
+sub register_boredom {
+    my Perlbal::ClientProxy $self = shift;
+    my Perlbal::BackendHTTP $be = shift;
+
+    # get a URI
+    my $datref = shift @{$self->{reproxy_uris}};
+    unless (defined $datref) {
+        # return 404 and close the backend
+        $be->{client} = undef;
+        $be->close('invalid_uris');
+        return $self->_simple_response(404);
+    }
+
+    # now send request
+    $be->{client} = $self;
+    my $headers = "GET $datref->[2] HTTP/1.0\r\nConnection: close\r\n\r\n";
+    $be->{req_headers} = Perlbal::HTTPHeaders->new(\$headers);
+    $be->state('sending_req');
+    $self->state('backend_req_sent');
+    $be->write($be->{req_headers}->to_string_ref);
+    $be->watch_read(1);
+    $be->watch_write(1);
+}
+
+# this is used in the reproxy_uri path
+sub backend_response_received {
+    my Perlbal::ClientProxy $self = shift;
+    my Perlbal::BackendHTTP $be = shift;
+    if ($be->{res_headers}->{code} != 200) {
+        # fall back to an alternate URL
+        $be->{client} = undef;
+        $be->close('non_200_reproxy');
+        $self->start_reproxy_uri;
+        return 1;
+    }
+    return 0;
 }
 
 sub start_reproxy_file {

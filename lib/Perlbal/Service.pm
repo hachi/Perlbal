@@ -724,6 +724,11 @@ sub stats_info
     
 }
 
+# simple passthroughs to the run_hook mechanism.  part of the reportto interface.
+sub backend_response_received {
+    return $_[0]->run_hook('backend_response_received', $_[1]);
+}
+
 sub _durl
 {
     my ($a) = @_;

@@ -1,0 +1,40 @@
+Perlbal supports the concept of reproxying.  Basically, this gives it the
+ability to ask a backend node for a file and get back a specific header
+that says "this file is really over there, get it there."  Perlbal will
+then load that file or URL and send it to the user transparently, without
+them ever knowing that they got reproxied to another location.
+
+This can be useful for having URLs that get mapped to files on disk without
+giving users enough information to map out your directory structure.  For
+example, you can create a file structure such as:
+
+/home/pics/$userid/$pic
+
+Then you can have URLs such as:
+
+http://foo.com/mysite/users/$userid/picture/$pic
+
+When this URL gets passed to the backend web node, it could return a simple
+response that includes this header:
+
+X-REPROXY-FILE: /home/pics/$userid/$pic
+
+Perlbal will then use asynchronous IO to send the file to the user without
+slowing down Perlbal at all.
+
+This support also extens to URLs that can be located anywhere Perlbal has
+access to.  It's the same syntax, nearly:
+
+X-REPROXY-URL: http://foo.com:80/resource.html
+
+You can also specify multiple URLs:
+
+X-REPROXY-URL: http://foo.com:80/resource.html http://baz.com:8080/res.htm
+
+Just specify any number of space separated URLs.  Perlbal will request them
+one by one until one returns a response code of 200.  At that point Perlbal
+will proxy the response back to the user just like normal.
+
+Note that the user's headers are NOT passed through to the web server.  To
+the target server, it looks simply like Perlbal is requesting the resource
+for itself.  This behavior may change at some point.

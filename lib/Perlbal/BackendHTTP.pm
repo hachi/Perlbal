@@ -11,6 +11,7 @@ use fields ('client',  # Perlbal::ClientProxy connection, or undef
             'ip',      # IP scalar
             'port',    # port scalar
             'ipport',  # "$ip:$port"
+            'reportto', # object; must implement reporter interface
 
             'has_attention', # has been accepted by a webserver and
                              # we know for sure we're not just talking
@@ -47,7 +48,7 @@ our (%NoVerify); # { "ip:port" => next-verify-time }
 # for, and uses that service to get its backend IP/port, as well as the
 # client that will be using this backend connection.
 sub new {
-    my ($class, $svc, $ip, $port) = @_;
+    my ($class, $svc, $ip, $port, $reportto) = @_;
 
     my $sock;
     socket $sock, PF_INET, SOCK_STREAM, IPPROTO_TCP;
@@ -69,6 +70,7 @@ sub new {
     $self->{port}    = $port;     # backend port
     $self->{ipport}  = "$ip:$port";  # often used as key
     $self->{service} = $svc;      # the service we're serving for
+    $self->{reportto} = $reportto || $svc; # reportto if specified
     $self->state("connecting");
 
     # for header reading:
@@ -174,8 +176,8 @@ sub event_write {
         # not interested in writes again until something else is
         $self->watch_write(0);
 
-        if ($self->{service}->{verify_backend} && !$self->{has_attention} &&
-            !defined $NoVerify{$self->{ipport}}) {
+        if (defined $self->{service} && $self->{service}->{verify_backend} &&
+            !$self->{has_attention} && !defined $NoVerify{$self->{ipport}}) {
 
             # the backend should be able to answer this incredibly quickly.
             $self->write("OPTIONS * HTTP/1.0\r\nConnection: keep-alive\r\n\r\n");
@@ -186,7 +188,7 @@ sub event_write {
         } else {
             # register our boredom (readiness for a client/request)
             $self->state("bored");
-            $self->{service}->register_boredom($self);
+            $self->{reportto}->register_boredom($self);
         }
         return;
     }
@@ -250,8 +252,8 @@ sub event_read {
 
     unless ($self->{res_headers}) {
         if (my $hd = $self->read_response_headers) {
-            # call hook
-            return if $self->{service}->run_hook('backend_response_received', $self);
+            # call service response received function
+            return if $self->{reportto}->backend_response_received($self);
 
             # standard handling
             $self->state("xfer_res");
@@ -289,6 +291,10 @@ sub event_read {
             if (my $rep = $hd->header('X-REPROXY-FILE')) {
                 # make the client begin the async IO while we move on
                 $client->start_reproxy_file($rep, $hd);
+                $self->next_request;
+                return;
+            } elsif (my $urls = $hd->header('X-REPROXY-URL')) {
+                $client->start_reproxy_uri($urls);
                 $self->next_request;
                 return;
             } else {
