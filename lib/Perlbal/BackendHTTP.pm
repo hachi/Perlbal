@@ -98,6 +98,8 @@ sub event_read {
 
 		    # fixup the Content-Length header if it was undefined/0
 		    $hd->header("Content-Length", $size);
+		    # don't send this internal header to the client:
+		    $hd->header('X-REPROXY-FILE', undef);
 
 		    # setup the client's state:
 		    $client->write($hd->to_string_ref);
