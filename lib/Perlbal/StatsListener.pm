@@ -13,6 +13,7 @@ use fields ('service',  # Perlbal::Service,
             'hostinfo',      # hashref of ip (4 bytes) -> [ $free, $active ] (or undef)
             'total_free',    # int scalar: free listeners
             'need_parse',    # hashref:  ip -> pos
+            'use_count',     # hashref:  ip -> times_used (ip can also be '' for empty case)
             );
 
 use constant RING_SIZE => 30;
@@ -38,16 +39,22 @@ sub new {
     $self->SUPER::new($sock);       # init base fields
 
     $self->{service} = $service;
+    $self->reset_state;
+
+    bless $self, ref $class || $class;
+    $self->watch_read(1);
+    return $self;
+}
+
+sub reset_state {
+    my Perlbal::StatsListener $self = shift;
     $self->{pos} = 0;
     $self->{message_ring} = [];
     $self->{from_ring} = [];
     $self->{total_free} = 0;
     $self->{need_parse} = {};
     $self->{hostinfo} = {};
-
-    bless $self, ref $class || $class;
-    $self->watch_read(1);
-    return $self;
+    $self->{use_count} = {};
 }
 
 sub event_read {
@@ -89,7 +96,10 @@ sub get_endpoint {
     }
     $self->{need_parse} = {};
 
-    return () unless $self->{total_free};
+    unless ($self->{total_free}) {
+        $self->{use_count}{'no_free'}++;
+        return ();
+    }
 
     # pick what position we'll return
     my $winner = rand($self->{total_free});
@@ -104,11 +114,13 @@ sub get_endpoint {
             my $ip = Socket::inet_ntoa($from);
             $hi->[0]--;
             $self->{total_free}--;
+            $self->{use_count}{$from}++;
             return ($ip, 80);
         }
     }
 
     # guess we couldn't find anything
+    $self->{use_count}{'winner_too_high'}++;
     return ();
 }
 
@@ -117,12 +129,7 @@ sub set_hosts {
     my @hosts = @_;
 
     # clear the known hosts
-    $self->{pos} = 0;
-    $self->{message_ring} = [];
-    $self->{from_ring} = [];
-    $self->{total_free} = 0;
-    $self->{need_parse} = {};
-    $self->{hostinfo} = {};
+    $self->reset_state;
 
     # make each provided host known, but undef (meaning
     # its ring data hasn't been parsed)
@@ -152,15 +159,18 @@ sub debug_dump {
         my $ip = eval { Socket::inet_ntoa($host); };
         my $hi = $self->{hostinfo}{$host};
         my $need_parse = $self->{need_parse}{$host};
+        my $uses = $self->{use_count}{$host};
         if ($hi) {
             $count_free += $hi->[0];
-            $out->(" host $ip = [ $hi->[0] free, $hi->[1] act ] needparse=$need_parse");
+            $out->(" host $ip = $uses: [ $hi->[0] free, $hi->[1] act ] needparse=$need_parse");
         } else {
-            $out->(" host $ip = needparse=$need_parse");
+            $out->(" host $ip = $uses: needparse=$need_parse");
         }
     }
 
     $out->(" total free: $self->{total_free} (calculated: $count_free)");
+    $out->("Uses with no total: $self->{use_count}{'no_free'}, winner too high: $self->{use_count}{'winner_too_high'}");
+
 }
 
 sub event_err { }
