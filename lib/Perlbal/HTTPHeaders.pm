@@ -171,7 +171,8 @@ sub to_string_ref {
 }
 
 sub DESTROY {
-    Perlbal::objdtor($_[0]->{type});
+    my Perlbal::HTTPHeaders $self = shift;
+    Perlbal::objdtor($self->{type});
 }
 
 1;
