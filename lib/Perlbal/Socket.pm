@@ -227,10 +227,15 @@ sub drain_read_buf_to {
     }
 }
 
-### (VIRTUAL) METHOD: die_gracefully()
-### Default behavior is to ignore the call.  Children can override if they want
-### to die now or do some other processing before death.
-sub die_gracefully { }
+### METHOD: die_gracefully()
+### By default, if we're in persist_wait state, close.  Else, ignore.  Children
+### can override if they want to do some other processing.
+sub die_gracefully {
+    my Perlbal::Socket $self = $_[0];
+    if ($self->state eq 'persist_wait') {
+        $self->close('graceful_shutdown');
+    }
+}
 
 ### METHOD: close()
 ### Set our state when we get closed.

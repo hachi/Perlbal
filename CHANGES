@@ -1,3 +1,5 @@
+    -- sockets in persist_wait now get closed immediately during a graceful shutdown
+
     -- fix handling of OPTIONS responses; used to do its own state clearing but
        it now uses the next_request method as it should
 
