@@ -242,6 +242,9 @@ sub attempt_open {
     $self->{put_in_progress} = 1;
     
     Linux::AIO::aio_open("$path/$file", O_CREAT | O_TRUNC | O_WRONLY, 0644, sub {
+        # get the fd
+        my $fd = shift;
+
         # verify file was opened
         $self->{put_in_progress} = 0;
         if ($! == ENOENT) {
@@ -256,8 +259,9 @@ sub attempt_open {
         }
 
         # associate descriptor from aio_open with filehandle for aio_write/aio_close
-        my $fd = shift();
         unless ($self->{put_fh} = IO::Handle->new_from_fd($fd, "w")) {
+            my $err = "$!";
+
             # log the output of readlink
             my $linkinfo;
             eval {
@@ -265,8 +269,10 @@ sub attempt_open {
                 $linkinfo = readlink "/proc/self/fd/$fd";
                 $linkinfo ||= "Error obtaining link info: $!";
             };
+
+            # now log this whole thing in the system log (and send to the user)
             return $self->system_error("Unable to create file", 
-                                       "error = $!, path = $path, file = $file, fd = $fd ($linkinfo)");
+                                       "error = $err, path = $path, file = $file, fd = $fd ($linkinfo)");
         }
         $self->{put_pos} = 0;
         $self->handle_put;
