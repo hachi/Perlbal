@@ -5,7 +5,7 @@
 package Perlbal::TCPListener;
 use strict;
 use base "Perlbal::Socket";
-use fields qw(service);
+use fields qw(service hostport);
 use Socket qw(IPPROTO_TCP);
 
 # TCPListener
@@ -25,6 +25,7 @@ sub new {
 
     my $self = $class->SUPER::new($sock);
     $self->{service} = $service;
+    $self->{hostport} = $hostport;
     bless $self, ref $class || $class;
     $self->watch_read(1);
     return $self;
@@ -54,8 +55,24 @@ sub event_read {
             Perlbal::ClientHTTP->new($self->{service}, $psock);
         }
     }
-
 }
+
+sub as_string {
+    my Perlbal::TCPListener $self = shift;
+    my $ret = $self->SUPER::as_string;
+    my Perlbal::Service $svc = $self->{service};
+    $ret .= ": listening on $self->{hostport} for service '$svc->{name}'";
+    return $ret;
+}
+
+sub as_string_html {
+    my Perlbal::TCPListener $self = shift;
+    my $ret = $self->SUPER::as_string_html;
+    my Perlbal::Service $svc = $self->{service};
+    $ret .= ": listening on $self->{hostport} for service <b>$svc->{name}</b>";
+    return $ret;
+}
+
 
 1;
 
