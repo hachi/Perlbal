@@ -204,9 +204,6 @@ sub dump_state {
     }
     while (my ($hostip, $dat) = each %ReproxyBored) {
         $out->("bored $hostip " . scalar(@$dat));
-        foreach my $be (@$dat) {
-            $out->("... " . $be->as_string);
-        }
     }
     while (my ($hostip, $dat) = each %ReproxyQueues) {
         $out->("clients_queued $hostip " . scalar(@$dat));
