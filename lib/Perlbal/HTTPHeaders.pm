@@ -77,6 +77,7 @@ sub new {
     $self->{method} = undef;
     $self->{uri} = undef;
     $self->{type} = ($is_response ? "res" : "req");
+    Perlbal::objctor($self->{type});
 
     # check request line
     if ($is_response) {
@@ -129,7 +130,6 @@ sub new {
         }
     }
 
-    Perlbal::objctor($self->{type});
     return $self;
 }
 
