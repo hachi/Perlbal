@@ -72,8 +72,8 @@ sub objctor {
         if ($track_obj) {
             my $i = 1;
             my @list;
-            while (my ($pkg, $line) = (caller($i++))[0, 2]) {
-                push @list, "$pkg($line)";
+            while (my $sub = (caller($i++))[3]) {
+                push @list, $sub;
             }
             $ObjTrack{"$_[0]"} = [ time, join(', ', @list) ];
         }
