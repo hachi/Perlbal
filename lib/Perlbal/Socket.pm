@@ -323,8 +323,8 @@ sub event_write {
 # Socket
 sub wait_loop {
     while (1) {
-	# get up to 50 events, not waiting longer than 2 seconds
-	while (my $events = epoll_wait($epoll, 50, 2)) {
+	# get up to 50 events, not waiting longer than a second
+	while (my $events = epoll_wait($epoll, 50, 1_000)) {
 	  EVENT:
 	    foreach my $ev (@$events) {
 		# it's possible epoll_wait returned many events, including some at the end
@@ -351,8 +351,7 @@ sub wait_loop {
 	    # now we can close sockets that wanted to close during our event processing.
 	    # (we didn't want to close them during the loop, as we didn't want fd numbers
 	    #  being reused and confused during the event loop)
-	    $_->close foreach (@to_close);
-
+	    $_->close while ($_ = shift @to_close);
 	}
 	print STDERR "Event loop ending; restarting.\n";
     }
