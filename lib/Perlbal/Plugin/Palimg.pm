@@ -204,6 +204,9 @@ sub new_gif_palette
     # figure out how big global color table is (don't want to overwrite it)
     my $pf = ord substr($header, 10, 1);
     my $gct = 2 ** (($pf & 7) + 1);  # last 3 bits of packaged fields
+
+    # final sanity check for size so the substr below doesn't die
+    return unless length $header >= 13 + 3 * $gct;
     
     substr($header, 13, 3*$gct) = common_alter($palref, substr($header, 13, 3*$gct));
     $$data = $header;
