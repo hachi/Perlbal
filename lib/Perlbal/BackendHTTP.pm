@@ -73,10 +73,14 @@ sub event_write {
 
     my $done;
     unless ($self->{req_sent}++) {
-        my $hds = $self->{client}->headers;
+        my Perlbal::ClientProxy $client = $self->{client};
+        my $hds = $client->headers;
 
         # FIXME: make this conditional
         $hds->header("X-Proxy-Capabilities", "reproxy-file");
+        $hds->header("X-Forwarded-For", $client->peer_addr_string);
+        $hds->header("X-Host", undef);
+        $hds->header("X-Forwarded-Host", undef);
 
         $self->tcp_cork(1);
         $done = $self->write($hds->to_string_ref);

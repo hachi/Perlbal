@@ -135,6 +135,13 @@ sub sock {
     return $self->{sock};
 }
 
+sub peer_addr_string {
+    my Perlbal::Socket $self = shift;
+    my $pn = getpeername($self->{sock}) or return undef;
+    my ($port, $iaddr) = Socket::sockaddr_in($pn);
+    return Socket::inet_ntoa($iaddr);
+}
+
 # Socket
 # $data may be scalar, scalar ref, code ref (to run when there), or undef just to kick-start
 # returns 1 if writes all went through, or 0 if there are writes in queue
