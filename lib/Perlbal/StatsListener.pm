@@ -106,16 +106,23 @@ sub get_endpoint {
 
     # find the winner
     my $count = 0;
-    while (my ($from, $hi) = each %{$self->{hostinfo}}) {
-        next unless $hi;
-        $count += $hi->[0];  # increment free
 
-        if ($count >= $winner) {
-            my $ip = Socket::inet_ntoa($from);
-            $hi->[0]--;
-            $self->{total_free}--;
-            $self->{use_count}{$from}++;
-            return ($ip, 80);
+    # two passes, since the inner while is doing 'each'
+    # which we intrerupt when we find the winner.  so later,
+    # coming back into this, the each doesn't necessarily
+    # start in the beginning so we have to let it loop around
+    foreach my $pass (1..2) {
+        while (my ($from, $hi) = each %{$self->{hostinfo}}) {
+            next unless $hi;
+            $count += $hi->[0];  # increment free
+
+            if ($count >= $winner) {
+                my $ip = Socket::inet_ntoa($from);
+                $hi->[0]--;
+                $self->{total_free}--;
+                $self->{use_count}{$from}++;
+                return ($ip, 80);
+            }
         }
     }
 
