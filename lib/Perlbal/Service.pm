@@ -52,6 +52,7 @@ use fields (
             'hooks',    # hashref: hookname => [ [ plugin, ref ], [ plugin, ref ], ... ]
             'plugins',  # hashref: name => 1
             'plugin_order', # arrayref: name, name, name...
+            'plugin_setters', # hashref: { plugin_name => { key_name => coderef } }
             'extra_config', # hashref: extra config options; name => values
             'enable_put', # bool: whether PUT is supported
             'max_put_size', # int: max size in bytes of a put file
@@ -176,6 +177,30 @@ sub unregister_hooks {
         # call unregister_hook with this hook name
         $self->unregister_hook($_[0], $hook);        
     }
+}
+
+# register a value setter for plugin configuration
+sub register_setter {
+    my Perlbal::Service $self = shift;
+    my ($pclass, $key, $coderef) = @_;
+    return unless $pclass && $key && $coderef;
+    $self->{plugin_setters}->{lc $pclass}->{lc $key} = $coderef;
+}
+
+# remove a setter
+sub unregister_setter {
+    my Perlbal::Service $self = shift;
+    my ($pclass, $key) = @_;
+    return unless $pclass && $key;
+    delete $self->{plugin_setters}->{lc $pclass}->{lc $key};
+}
+
+# remove a bunch of setters
+sub unregister_setters {
+    my Perlbal::Service $self = shift;
+    my $pclass = shift;
+    return unless $pclass;
+    delete $self->{plugin_setters}->{lc $pclass};    
 }
 
 # take a backend we've created and mark it as pending if we do not
@@ -754,6 +779,13 @@ sub set {
         # set some extra configuration data data
         $self->{extra_config}->{$1} = $val;
         return 1;
+    }
+
+    # see if it happens to be a plugin set command?
+    if ($key =~ /^(.+)\.(.+)$/) {
+        if (my $coderef = $self->{plugin_setters}->{$1}->{$2}) {
+            return $coderef->($out, $2, $val);
+        }
     }
 
     return $err->("Unknown attribute '$key'");
