@@ -323,7 +323,11 @@ sub spawn_backends {
             return;
         }
         if (my Perlbal::BackendHTTP $be = $self->{pending_connects}{"$ip:$port"}) {
-            next if ! $be->{closed} && $be->{state} eq "connecting";
+            my $age = $now - $be->{create_time};
+            next if ! $be->{closed} && $be->{state} eq "connecting" && $age < 5;
+            if ($age >= 5 && $be->{state} eq "connecting") {
+                $be->close;
+            }
 
             # TEMP: should we clean our bookkeeping here?  we really
             # shouldn't get here.
