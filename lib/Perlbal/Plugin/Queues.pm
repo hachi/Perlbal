@@ -21,11 +21,11 @@ sub register {
         # determine age of oldest (first in line)
         my $now = time;
         my Perlbal::ClientProxy $cp = $svc->{waiting_clients}->[0];
-        my $age = defined $cp ? ($now - $cp->{create_time}) : 0;
+        my $age = defined $cp ? ($now - $cp->{last_request_time}) : 0;
 
         # now do the age of the high priority queue
         $cp = $svc->{waiting_clients_highpri}->[0];
-        my $hpage = defined $cp ? ($now - $cp->{create_time}) : 0;
+        my $hpage = defined $cp ? ($now - $cp->{last_request_time}) : 0;
         
         # setup the queue length headers
         $hds->header('X-Queue-Count', scalar(@{$svc->{waiting_clients}}));
