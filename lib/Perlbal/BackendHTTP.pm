@@ -272,7 +272,15 @@ sub next_request {
         return $self->close;
     }
 
-    $self->{use_count}++;
+    my Perlbal::Service $svc = $self->{service};
+
+    # keep track of how many times we've been used, and don't
+    # keep using this connection more times than the service
+    # is configured for.
+    if (++$self->{use_count} > $svc->{max_backend_uses} &&
+        $svc->{max_backend_uses}) {
+        return $self->close;
+    }
 
     # if backend told us, keep track of when the backend
     # says it's going to boot us, so we don't use it within
@@ -293,7 +301,7 @@ sub next_request {
     $self->{headers} = undef;
     $self->{headers_string} = "";
 
-    $self->{service}->register_boredom($self);
+    $svc->register_boredom($self);
     return;
 }
 

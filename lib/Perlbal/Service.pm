@@ -44,6 +44,7 @@ use fields (
             'persist_client',  # bool: persistent connections for clients
             'persist_backend', # bool: persistent connections for backends
             'verify_backend',  # bool: get attention of backend before giving it clients (using OPTIONS)
+            'max_backend_uses',  # max requests to send per kept-alive backend (default 0 = unlimited)
             );
 
 sub new {
@@ -58,6 +59,7 @@ sub new {
     $self->{persist_client} = 0;
     $self->{persist_backend} = 0;
     $self->{verify_backend} = 0;
+    $self->{max_backend_uses} = 0;
 
     $self->{nodes} = [];   # no configured nodes
 
@@ -423,6 +425,11 @@ sub set {
         $set->();
         $self->spawn_backends if $self->{enabled};
         return 1;
+    }
+
+    if ($key eq "max_backend_uses") {
+        return $err->("Expected integer value") unless $val =~ /^\d+$/;
+        return $set->();
     }
 
     if ($key eq "nodefile") {
