@@ -193,6 +193,14 @@ sub drain_read_buf_to {
 ### to die now or do some other processing before death.
 sub die_gracefully { }
 
+### METHOD: close()
+### Set our state when we get closed.
+sub close {
+    my Perlbal::Socket $self = $_[0];
+    $self->state('closed');
+    return $self->SUPER::close($_[1]);
+}
+
 ### METHOD: state()
 ### If you pass a parameter, sets the state, else returns it.
 sub state {

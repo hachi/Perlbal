@@ -320,6 +320,9 @@ sub close {
     my Perlbal::ClientProxy $self = shift;
     my $reason = shift;
 
+    # don't close twice
+    return if $self->{closed};
+
     # signal that we're done
     $self->{service}->run_hooks('end_proxy_request', $self);
 

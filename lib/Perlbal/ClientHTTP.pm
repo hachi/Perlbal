@@ -41,6 +41,9 @@ sub new {
 sub close {
     my Perlbal::ClientHTTP $self = shift;
 
+    # don't close twice
+    return if $self->{closed}:
+    
     $self->{put_fh} = undef;
 
     $self->SUPER::close(@_);

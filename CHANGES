@@ -1,3 +1,5 @@
+    -- lots more paranoia in close events and event_err handling for backends
+
     -- added tracking mode for helping look for leaked objects; records a
        backtrace of every object created.  "server track_obj = 0/1" to enable
        or disable it, and then "tracking" in a management interface to see.

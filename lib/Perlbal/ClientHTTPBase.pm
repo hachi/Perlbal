@@ -82,12 +82,15 @@ sub new {
 
 sub close {
     my Perlbal::ClientHTTPBase $self = shift;
-    my $reason = shift;
+
+    # don't close twice
+    return if $self->{closed};
 
     # close the file we were reproxying, if any
     POSIX::close($self->{reproxy_fd}) if $self->{reproxy_fd};
 
-    $self->SUPER::close($reason);
+    # now pass up the line
+    $self->SUPER::close(@_);
 }
 
 # given our request headers, determine if we should be sending

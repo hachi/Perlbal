@@ -119,8 +119,9 @@ sub new {
 
 sub close {
     my Perlbal::BackendHTTP $self = shift;
-    my $reason = shift;
-    $self->state("closed");
+
+    # don't close twice
+    return if $self->{closed};
 
     # tell our client that we're gone
     if (my $client = $self->{client}) {
@@ -134,7 +135,7 @@ sub close {
         $self->{reportto} = undef;
     }
 
-    $self->SUPER::close($reason);
+    $self->SUPER::close(@_);
 }
 
 # called by service when it's got a client for us, or by ourselves
@@ -467,8 +468,8 @@ sub event_err {
         # we don't want to duplicate POST requests, so for now
         # just fail
         # TODO: if just a GET request, retry?
-        $self->close('error');
         $self->{client}->close('backend_error');
+        $self->close('error');
         return;
     }
 
