@@ -90,15 +90,40 @@ sub run_manage_command {
 
     exit(0) if $cmd eq "shutdown";
 
-    if ($cmd =~ /^socks$/) {
+    if ($cmd =~ /^socks(?: (\w+))?$/) {
+        my $mode = $1 || "all";
         my $sf = Perlbal::Socket->get_sock_ref;
 
-        my $now = time;
-        $out->(sprintf("%5s %6s", "fd", "age"));
-        foreach (sort { $a <=> $b } keys %$sf) {
-            my $sock = $sf->{$_};
-            my $age = $now - $sock->{create_time};
-            $out->(sprintf("%5d %5ds %s", $_, $age, $sock->as_string));
+        if ($mode eq "summary") {
+            my %count;
+            my $write_buf = 0;
+            my $open_files = 0;
+            while (my $k = each %$sf) {
+                my Perlbal::Socket $v = $sf->{$k};
+                $count{ref $v}++;
+                $write_buf += $v->{write_buf_size};
+                if ($v->isa("Perlbal::ClientHTTPBase")) {
+                    my Perlbal::ClientHTTPBase $cv = $v;
+                    $open_files++ if $cv->{'reproxy_fd'};
+                }
+            }
+
+            foreach (sort keys %count) {
+                $out->(sprintf("%5d $_", $count{$_}));
+            }
+            $out->();
+            $out->(sprintf("Aggregate write buffer: %.1fk", $write_buf / 1024));
+            $out->(sprintf("            Open files: %d", $open_files));
+
+        } elsif ($mode eq "all") {
+
+            my $now = time;
+            $out->(sprintf("%5s %6s", "fd", "age"));
+            foreach (sort { $a <=> $b } keys %$sf) {
+                my $sock = $sf->{$_};
+                my $age = $now - $sock->{create_time};
+                $out->(sprintf("%5d %5ds %s", $_, $age, $sock->as_string));
+            }
         }
         return 1;
     }

@@ -70,7 +70,7 @@ sub handle_http {
         my $alt = shift;
         $body .= "<pre><div style='margin-bottom: 5px; background: #ddd'><b>$cmd</b></div>";
         Perlbal::run_manage_command($cmd, sub {
-            my $line = $_[0];
+            my $line = $_[0] || "";
             $alt->(\$line) if $alt;
             $body .= "$line\n"; 
         });
@@ -84,6 +84,8 @@ sub handle_http {
         $body .= "<li><a href='/obj'>Perl Objects in use</a></li>";
         $body .= "</ul>";
     } elsif ($uri eq "/socks") {
+        $prebox->('socks summary');
+
         $prebox->('socks', sub {
             ${$_[0]} =~ s!service \'(\w+)\'!<a href=\"/service?$1\">$1</a>!;
         });
