@@ -12,6 +12,9 @@ use warnings;
 use base "Perlbal::Socket";
 use HTTP::Date ();
 use fields ('service',             # Perlbal::Service object
+            'replacement_uri',     # URI to send instead of the one requested; this is used
+                                   # to instruct _serve_request to send an index file instead
+                                   # of trying to serve a directory and failing
 
             # reproxy support
             'reproxy_file',        # filename the backend told us to start opening
@@ -53,6 +56,7 @@ sub new {
     $self->SUPER::new($sock);       # init base fields
 
     $self->{service} = $service;
+    $self->{replacement_uri} = undef;
     $self->{headers_string} = '';
     $self->state('reading_headers');
 
@@ -154,7 +158,7 @@ sub _serve_request {
         return $self->_simple_response(403, "Unimplemented method");
     }
 
-    my $uri = _durl($hd->request_uri);
+    my $uri = _durl($self->{replacement_uri} || $hd->request_uri);
 
     # don't allow directory traversal
     if ($uri =~ /\.\./ || $uri !~ m!^/!) {
@@ -227,23 +231,33 @@ sub _serve_request {
             });
 
         } elsif (-d _) {
-            my $body;
+            $self->try_index_files($hd, $res);
+        }
+    });
+}
 
-            if ($svc->{dirindexing}) {
-                $res->header("Content-Type", "text/html");
-                opendir(D, $file);
-                foreach my $de (sort readdir(D)) {
-                    if (-d "$file/$de") {
-                        $body .= "<b><a href='$de/'>$de</a></b><br />\n";
-                    } else {
-                        $body .= "<a href='$de'>$de</a><br />\n";
-                    }
+sub try_index_files {
+    my Perlbal::ClientHTTPBase $self = shift;
+    my ($hd, $res, $filepos) = @_;
+    
+    # make sure this starts at 0 initially, and fail if it's past the end
+    $filepos ||= 0;
+    if ($filepos >= scalar(@{$self->{service}->{index_files} || []})) {
+        if ($self->{service}->{dirindexing}) {
+            # open the directory and create an index
+            my $body;
+            my $file = $self->{service}->{docroot} . '/' . $hd->request_uri;
+
+            $res->header("Content-Type", "text/html");
+            opendir(D, $file);
+            foreach my $de (sort readdir(D)) {
+                if (-d "$file/$de") {
+                    $body .= "<b><a href='$de/'>$de</a></b><br />\n";
+                } else {
+                    $body .= "<a href='$de'>$de</a><br />\n";
                 }
-                closedir(D);
-            } else {
-                $res->header("Content-Type", "text/html");
-                $body = "Directory listing disabled";
             }
+            closedir(D);
 
             $res->header("Content-Length", length($body));
 
@@ -252,9 +266,27 @@ sub _serve_request {
             $self->write($res->to_string_ref);
             $self->write(\$body);
             $self->write(sub { $self->close('xfer_done'); });
+        } else {
+            # just inform them that listing is disabled
+            $self->_simple_response(200, "Directory listing disabled")
         }
+
+        return;
+    }
+
+    # construct the file path we need to check
+    my $file = $self->{service}->{index_files}->[$filepos];
+    my $fullpath = $self->{service}->{docroot} . '/' . $hd->request_uri . '/' . $file;
+
+    # now see if it exists
+    Linux::AIO::aio_stat($fullpath, sub {
+        return if $self->{closed};
+        return $self->try_index_files($hd, $res, $filepos + 1) unless -f _;
+
+        # at this point the file exists, so we just want to serve it
+        $self->{replacement_uri} = $hd->request_uri . '/' . $file;
+        return $self->_serve_request($hd);
     });
-    
     
 }
 

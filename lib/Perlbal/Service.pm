@@ -31,6 +31,7 @@ use fields (
             'sendstats.listen.socket', # Perlbal::StatsListener object
             'docroot',            # document root for webserver role
             'dirindexing',        # bool: direcotry indexing?  (for webserver role)  not async.
+            'index_files',        # arrayref of filenames to try for index files
             'listener',
             'waiting_clients',         # arrayref of clients waiting for backendhttp conns
             'waiting_clients_highpri', # arrayref of high-priority clients waiting for backendhttp conns
@@ -109,6 +110,10 @@ sub new {
     $self->{waiting_clients} = [];
     $self->{waiting_clients_highpri} = [];
     $self->{waiting_client_count} = 0;
+
+    # directory handling
+    $self->{dirindexing} = 0;
+    $self->{index_files} = [ 'index.html' ];
 
     return $self;
 }
@@ -681,6 +686,14 @@ sub set {
         return $err->("Expected value 0 or 1")
             unless $val eq '0' || $val eq '1';
         return $set->();
+    }
+
+    if ($key eq "index_files") {
+        return $err->("Can only set index_files on a web_server service")
+            unless $self->{role} eq "web_server";
+        my @list = split(/[\s,]+/, $val);
+        $self->{index_files} = \@list;
+        return 1;
     }
 
     if ($key =~ /^sendstats\./) {
