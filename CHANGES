@@ -1,3 +1,6 @@
+    -- fix Highpri plugin to not check hosts for high priority values when
+       the host isn't defined
+
     -- made Palimg plugin far more paranoid about errors, and also uses new
        ClientHTTPBase scratch area for keeping track of data instead of using
        headers (which are generally slower)
