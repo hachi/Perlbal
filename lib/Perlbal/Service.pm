@@ -59,6 +59,7 @@ sub new {
     $self->{pending_connects} = {};
     $self->{pending_connect_count} = 0;
     $self->{bored_backends} = [];
+    $self->{connect_ahead} = 0;
 
     # waiting clients
     $self->{waiting_clients} = [];
