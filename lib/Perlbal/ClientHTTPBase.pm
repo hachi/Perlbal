@@ -112,6 +112,10 @@ sub http_response_sent {
         return;
     }
 
+    # now since we're doing persistence, uncork so the last packet goes.
+    # we will recork when we're processing a new request.
+    $self->tcp_cork(0);
+
     # prepare!
     $self->{replacement_uri} = undef;
     $self->{headers_string} = '';
