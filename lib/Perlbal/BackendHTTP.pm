@@ -135,10 +135,18 @@ sub close {
     }
 }
 
-# return our defined generation counter
+# return our defined generation counter with no parameter,
+# or set our generation if given a parameter
 sub generation {
     my Perlbal::BackendHTTP $self = $_[0];
-    return $self->{generation};
+    return $self->{generation} unless $_[1];
+    return $self->{generation} = $_[1];
+}
+
+# return what ip and port combination we're using
+sub ipport {
+    my Perlbal::BackendHTTP $self = $_[0];
+    return $self->{ipport};
 }
 
 # called by service when it's got a client for us, or by ourselves

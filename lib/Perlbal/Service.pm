@@ -305,6 +305,27 @@ sub get_client {
     return undef;
 }
 
+# given a backend, verify it's generation
+sub verify_generation {
+    my Perlbal::Service $self = $_[0];
+    my Perlbal::BackendHTTP $be = $_[1];
+
+    # fast cases: generation count matches, so we just return an 'okay!' flag
+    return 1 if $self->{generation} == $be->generation;
+
+    # if our current pool knows about this ip:port, then we can still use it
+    if (defined $self->{pool}->node_used($be->ipport)) {
+        # so we know this is good, in the future we just want to hit the fast case
+        # and continue, so let's update the generation
+        $be->generation($self->{generation});
+        return 1;
+    }
+
+    # if we get here, the backend should be closed
+    $be->close('invalid_generation');
+    return 0;
+}
+
 # called by backend connection after it becomes writable
 sub register_boredom {
     my Perlbal::Service $self;
@@ -320,8 +341,7 @@ sub register_boredom {
 
     # it is possible that this backend is part of a different pool that we're
     # no longer using... if that's the case, we want to close it
-    return $be->close('pool_switch')
-        unless $be->generation == $self->{generation};
+    return unless $self->verify_generation($be);
 
     # now try to fetch a client for it
     my Perlbal::ClientProxy $cp = $self->get_client;
@@ -403,10 +423,7 @@ sub request_backend_connection {
         next if $be->{closed};
 
         # now make sure that it's still in our pool, and if not, close it
-        unless ($be->generation == $self->{generation}) {
-            $be->close("pool_switch");
-            next;
-        }
+        next unless $self->verify_generation($be);
 
         # don't use connect-ahead connections when we haven't
         # verified we have their attention
