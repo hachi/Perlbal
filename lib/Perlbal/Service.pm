@@ -268,16 +268,13 @@ sub spawn_backends {
     my $tries = 0;
 
     # keep track of the sum of existing_bored + bored_created
-    my $bored_at = scalar @{$self->{bored_backends}};
-
+    my $backends_created = scalar(@{$self->{bored_backends}}) + $self->{pending_connect_count};
+    my $backends_needed = $self->{waiting_client_count} + $self->{connect_ahead};
+    my $to_create = $backends_needed - $backends_created;
+    
     my $now = time;
-    while ($tries++ < 5 &&
-           ( ($self->{waiting_client_count} > $self->{pending_connect_count} &&
-              $self->{pending_connect_count} < $self->{node_count}) 
-             ||
-             ( $bored_at < $self->{connect_ahead} )
-           ))
-    {
+
+    while ($tries++ < 5 && $to_create > 0) {
         my ($ip, $port) = $self->get_backend_endpoint;
         unless ($ip) {
             print "No backend IP.\n";
@@ -286,9 +283,9 @@ sub spawn_backends {
         }
         next if $self->{pending_connects}{"$ip:$port"};
         if (Perlbal::BackendHTTP->new($self, $ip, $port)) {
-            $bored_at++ if $self->{waiting_client_count} <= $self->{pending_connect_count};
             $self->{pending_connects}{"$ip:$port"} = $now;
             $self->{pending_connect_count}++;
+            $to_create--;
         }
     }
 }
