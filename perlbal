@@ -205,7 +205,7 @@ $opt_config = $default_config if ! $opt_config && -e $default_config;
 # load user config
 load_config($opt_config, sub { print STDOUT "$_[0]\n"; }) if $opt_config;
 
-unless (Perlbal::Socket::watched_sockets() > 0) {
+unless (Perlbal::Socket->WatchedSockets() > 0) {
     die "No services or management port configured.  Nothing to do.  Stopping.\n";
 }
 
@@ -225,8 +225,21 @@ $SIG{'INT'} = $SIG{'TERM'} = sub {
 # affected by this
 Linux::AIO::min_parallel(3);
 
+# register Linux::AIO's pipe which gets written to from threads
+# doing blocking IO
+my $aio_fd = Linux::AIO::poll_fileno;
+
+Perlbal::Socket->OtherFds(
+    $aio_fd => sub {
+        # run any callbacks on async file IO operations
+        Linux::AIO::poll_cb();
+    },
+);
+
+
+
 # wait for activity
-Perlbal::Socket->wait_loop();
+Perlbal::Socket->EventLoop();
 
 
 1;
