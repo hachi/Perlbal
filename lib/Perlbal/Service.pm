@@ -58,6 +58,7 @@ use fields (
             'enable_delete', # bool: whether DELETE is supported
             'buffer_size', # int: specifies how much data a ClientProxy object should buffer from a backend
             'buffer_size_reproxy_url', # int: same as above but for backends that are reproxying for us
+            'spawn_lock', # bool: if true, we're currently in spawn_backends
             );
 
 sub new {
@@ -164,6 +165,28 @@ sub unregister_hooks {
     }
 }
 
+# take a backend we've created and mark it as pending if we do not
+# have another pending backend connection in this slot
+sub add_pending_connect {
+    my Perlbal::Service $self = shift;
+    my Perlbal::BackendHTTP $be = shift;
+    return if defined $self->{pending_connects}{$be->{ipport}};
+    $self->{pending_connects}{$be->{ipport}} = $be;
+    $self->{pending_connect_count}++;
+}
+
+# remove a backend connection from the pending connect list if and only
+# if it is the actual connection contained in the list; prevent double
+# decrementing on accident
+sub clear_pending_connect {
+    my Perlbal::Service $self = shift;
+    my Perlbal::BackendHTTP $be = shift;
+    if ($self->{pending_connects}{$be->{ipport}} == $be) {
+        $self->{pending_connects}{$be->{ipport}} = undef;
+        $self->{pending_connect_count}--;
+    }
+}
+
 # returns string of balance method
 sub balance_method {
     my Perlbal::Service $self = shift;
@@ -230,16 +253,10 @@ sub load_nodefile {
 
 # called by BackendHTTP when it's closed by any means
 sub note_backend_close {
-    my Perlbal::Service $self;
-    my Perlbal::BackendHTTP $be;
-    ($self, $be) = @_;
-    if (my $pend_be = $self->{pending_connects}{$be->{ipport}}) {
-        if ($pend_be == $be) {
-            $self->{pending_connects}{$be->{ipport}} = undef;
-            $self->{pending_connect_count}--;
-            $self->spawn_backends;
-        }
-    }
+    my Perlbal::Service $self = shift;
+    my Perlbal::BackendHTTP $be = shift;
+    $self->clear_pending_connect($be);
+    $self->spawn_backends;
 }
 
 # called by ClientProxy when it dies.
@@ -302,10 +319,7 @@ sub register_boredom {
     # if we thought it was before.  but not if it's a persistent
     # connection asking to be re-used.
     unless ($be->{use_count}) {
-        if ($self->{pending_connects}{$be->{ipport}}) {
-            $self->{pending_connects}{$be->{ipport}} = undef;
-            $self->{pending_connect_count}--;
-        }
+        $self->clear_pending_connect($be);
     }
 
     my Perlbal::ClientProxy $cp = $self->get_client;
@@ -344,11 +358,8 @@ sub note_bad_backend_connect {
     my Perlbal::Service $self = shift;
     my Perlbal::BackendHTTP $be = shift;
 
-    my $was_pending = $self->{pending_connects}{$be->{ipport}};
-    if ($was_pending) {
-        $self->{pending_connects}{$be->{ipport}} = undef;
-        $self->{pending_connect_count}--;
-    }
+    # clear this pending connection
+    $self->clear_pending_connect($be);
 
     # FIXME: do something interesting (tell load balancer about dead host,
     # and fire up a new connection, if warranted)
@@ -423,6 +434,10 @@ sub request_backend_connection {
 sub spawn_backends {
     my Perlbal::Service $self = shift;
 
+    # check our lock and set it if we can
+    return if $self->{spawn_lock};
+    $self->{spawn_lock} = 1;
+
     # sanity checks on our bookkeeping
     if ($self->{pending_connect_count} < 0) {
         Perlbal::log('critical', "Bogus: service $self->{name} has pending connect ".
@@ -451,6 +466,7 @@ sub spawn_backends {
         unless ($ip) {
             Perlbal::log('critical', "No backend IP for service $self->{name}");
             # FIXME: register desperate flag, so load-balancer module can callback when it has a node
+            $self->{spawn_lock} = 0;
             return;
         }
         if (my Perlbal::BackendHTTP $be = $self->{pending_connects}{"$ip:$port"}) {
@@ -465,24 +481,14 @@ sub spawn_backends {
             }
         }
 
-        # ultimate edge case (happened in about 0.0000005% of the connections):
-        #  1. backend is stuck in "connecting" for >5 seconds
-        #  2. that ip:port combo is randomly chosen above
-        #  3. we call $be->close on it since it's old
-        #  4. $be->close calls $be->{service}->note_backend_close
-        #  5. note_backend_close then calls spawn_backends (us) again
-        #  6. if we happen to randomly pick the SAME ip:port from step 2, since it's
-        #     already closed, we happen to spawn a new one
-        #  7. spawn_backends returns and then we create ANOTHER backend here
-        # so for that case, we want to NOT create another one here because then
-        # we end up with a bad pending_connect_count.  so, let's not double-spawn.
-        next if $self->{pending_connects}{"$ip:$port"};        
-
+        # now actually spawn a backend and add it to our pending list
         if (my $be = Perlbal::BackendHTTP->new($self, $ip, $port)) {
-            $self->{pending_connects}{$be->{ipport}} = $be;
-            $self->{pending_connect_count}++;
+            $self->add_pending_connect($be);
         }
     }
+
+    # clear our spawn lock
+    $self->{spawn_lock} = 0;
 }
 
 sub get_backend_endpoint {
