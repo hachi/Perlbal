@@ -1,3 +1,8 @@
+    -- allow setting of nodefile on pools to 'none' or 'null' or 'undef' or just
+       an empty set of quotes ("", '') in order to stop using node files
+
+    -- automatically set use count to 0 on new nodes coming in from nodefile
+
     -- made auto-vivification of pulls throw warnings, and made Perlbal die if it
        tries to vivify a pool and the user has previously manually declared a pool
 

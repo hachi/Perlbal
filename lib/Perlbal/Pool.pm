@@ -62,6 +62,17 @@ sub set {
     my $set = sub { $self->{$key} = $val;   return 1; };
 
     if ($key eq 'nodefile') {
+        # allow to unset it, which stops us from checking it further,
+        # but doesn't clear our current list of nodes
+        if ($val =~ /^(?:none|undef|null|""|'')$/) {
+            $self->{'nodefile'} = undef;
+            $self->{'nodefile.lastmod'} = 0;
+            $self->{'nodefile.checking'} = 0;
+            $self->{'nodefile.lastcheck'} = 0;
+            return 1;
+        }
+
+        # enforce that it exists from here on out
         return $err->("File not found")
             unless -e $val;
 
@@ -153,6 +164,7 @@ sub _parse_nodefile {
         s/\#.*//;
         if (/(\d+\.\d+\.\d+\.\d+)(?::(\d+))?/) {
             my ($ip, $port) = ($1, $2);
+            $self->{node_used}->{"$ip:$port"} ||= 0; # set to 0 if not set
             push @{$self->{nodes}}, [ $ip, $port || 80 ];
         }
     }
@@ -184,6 +196,13 @@ sub _load_nodefile_async {
 
     Linux::AIO::aio_stat($self->{nodefile}, sub {
         $self->{'nodefile.checking'} = 0;
+
+        # this might have gotten unset while we were out statting the file, which
+        # means that the user has instructed us not to use a node file, and may
+        # have changed the nodes in the pool, so we should do nothing and return
+        return unless $self->{'nodefile'};
+
+        # ignore if the file doesn't exist
         return unless -e _;
 
         my $mod = (stat(_))[9];
