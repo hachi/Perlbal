@@ -22,6 +22,7 @@ use fields (
 
 our $HTTPCode = {
     200 => 'OK',
+    204 => 'No Content',
     304 => 'Not Modified',
     400 => 'Bad request',
     403 => 'Forbidden',
