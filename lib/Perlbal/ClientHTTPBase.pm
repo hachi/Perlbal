@@ -126,7 +126,8 @@ sub http_response_sent {
 
     # close if we're supposed to
     if (!defined $self->{res_headers} ||
-        $self->{res_headers}->header('Connection') =~ m/\bclose\b/i) {
+        $self->{res_headers}->header('Connection') =~ m/\bclose\b/i ||
+        $self->{do_die}) {
         # close if we have no response headers or they say to close
         $self->close("no_keep_alive");
         return 0;

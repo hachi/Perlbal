@@ -19,6 +19,7 @@ use fields (
             'create_time',     # creation time
             'alive_time',      # last time noted alive
             'state',           # general purpose state; used by descendants.
+            'do_die',          # if on, die and do no further requests
 
             'read_buf',
             'read_ahead',
@@ -63,6 +64,7 @@ sub new {
     $self->SUPER::new( @_ );
     $self->{headers_string} = '';
     $self->{state} = undef;
+    $self->{do_die} = 0;
 
     my $now = time;
     $self->{alive_time} = $self->{create_time} = $now;
@@ -235,6 +237,7 @@ sub die_gracefully {
     if ($self->state eq 'persist_wait') {
         $self->close('graceful_shutdown');
     }
+    $self->{do_die} = 1;
 }
 
 ### METHOD: close()
