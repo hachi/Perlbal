@@ -249,7 +249,7 @@ sub request_backend_connection {
 
         # don't use keep-alive connections if we know the server's
         # just about to kill the connection for being idle
-        if ($be->{disconnect_at} && $now + 2 > $be->{disconnect_at} + 2) {
+        if ($be->{disconnect_at} && $now + 2 > $be->{disconnect_at}) {
             $be->close("too_close_disconnect");
             next;
         }
