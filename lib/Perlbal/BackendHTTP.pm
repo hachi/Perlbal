@@ -165,6 +165,14 @@ sub event_read {
 
     my Perlbal::ClientProxy $client = $self->{client};
 
+    # temp debug
+    unless ($client) {
+        my $bref = $self->read(BACKEND_READ_SIZE);
+        print "Backend ($self; att=$self->{has_attention}) readable ".
+            "without client.  Read: <" . ($bref ? $$bref : "undef") . ">\n";
+        return $self->close;
+    }
+
     unless ($self->{headers}) {
         if (my $hd = $self->read_response_headers) {
             $self->{state}   = "xfer_res";
@@ -319,8 +327,7 @@ sub event_err {
 sub event_hup {
     my Perlbal::BackendHTTP $self = shift;
     print "HANGUP for $self\n" if Perlbal::DEBUG;
-
-    
+    $self->close("after_hup");
 }
 
 sub as_string {
