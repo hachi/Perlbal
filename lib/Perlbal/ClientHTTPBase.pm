@@ -276,8 +276,10 @@ sub as_string {
     $ret .= "; $self->{state}";
 
     my $hd = $self->headers;
-    my $host = $hd->header('Host') || 'unknown';
-    $ret .= "; http://$host" . $hd->request_uri;
+    if (defined $hd) {
+        my $host = $hd->header('Host') || 'unknown';
+        $ret .= "; http://$host" . $hd->request_uri;
+    }
 
     return $ret;
 }
