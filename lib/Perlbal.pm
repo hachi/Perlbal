@@ -39,6 +39,7 @@ our(%service);   # servicename -> Perlbal::Service
 our(%plugins);   # plugin => 1 (shows loaded plugins)
 our($last_error);
 our $foreground = 1; # default to foreground
+our $track_obj = 0;  # default to not track creation locations
 
 # setup a USR1 signal handler that tells us to dump some basic statistics
 # of how we're doing to the syslog
@@ -59,12 +60,23 @@ sub error {
 # Object instance counts, for debugging and leak detection
 our(%ObjCount);  # classname -> instances
 our(%ObjTotal);  # classname -> instances
+our(%ObjTrack);  # "$objref" -> creation location
 sub objctor {
     if (DEBUG_OBJ) {
         my $ref = ref $_[0];
         $ref .= "-$_[1]" if $_[1];
         $ObjCount{$ref}++;
         $ObjTotal{$ref}++;
+
+        # now, if we're tracing leaks, note this object's creation location
+        if ($track_obj) {
+            my $i = 1;
+            my @list;
+            while (my ($pkg, $line) = (caller($i++))[0, 2]) {
+                push @list, "$pkg($line)";
+            }
+            $ObjTrack{"$_[0]"} = [ time, join(', ', @list) ];
+        }
     }
 }
 sub objdtor {
@@ -72,6 +84,11 @@ sub objdtor {
         my $ref = ref $_[0];
         $ref .= "-$_[1]" if $_[1];
         $ObjCount{$ref}--;
+
+        # remove tracking for this object
+        if ($track_obj) {
+            delete $ObjTrack{"$_[0]"};
+        }
     }
 }
 
@@ -126,6 +143,22 @@ sub run_manage_command {
     }
 
     exit(0) if $cmd eq "shutdown";
+
+    if ($cmd =~ /^track/) {
+        my $now = time();
+        my @list;
+        foreach (keys %ObjTrack) {
+            my $age = $now - $ObjTrack{$_}->[0];
+            push @list, [ $age, "${age}s $_: $ObjTrack{$_}->[1]" ];
+        }
+
+        # now output based on sorted age
+        foreach (sort { $a->[0] <=> $b->[0] } @list) {
+            $out->($_->[1]);
+        }
+        $out->('.');
+        return 1;
+    }
 
     if ($cmd eq 'shutdown graceful') {
         # set connect ahead to 0 for all services so they don't spawn extra backends
@@ -351,6 +384,11 @@ sub run_manage_command {
         } elsif ($key eq "aio_threads") {
             Linux::AIO::min_parallel($val);
 
+        } elsif ($key =~ /^track_obj/) {
+            return $err->("Expected 1 or 0") unless $val eq '1' || $val eq '0';
+            $track_obj = $val + 0;
+            %ObjTrack = () if $val; # if we're turning it on, clear it out
+            
         }
 
         return 1;
