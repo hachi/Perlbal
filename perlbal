@@ -100,6 +100,11 @@ sub run_manage_command {
     exit(0) if $cmd eq "shutdown";
 
     if ($cmd eq 'shutdown graceful') {
+        # set connect ahead to 0 for all services so they don't spawn extra backends
+        foreach my $svc (values %service) {
+            $svc->{connect_ahead} = 0;
+        }
+        
         # tell all sockets we're doing a graceful stop
         my $sf = Perlbal::Socket->get_sock_ref;
         foreach my $k (keys %$sf) {
@@ -153,7 +158,27 @@ sub run_manage_command {
                 $out->(sprintf("%5d %5ds %s", $_, $age, $sock->as_string));
             }
         }
+        $out->('.');
         return 1;
+    }
+
+    if ($cmd =~ /^backends$/) {
+        my $sf = Perlbal::Socket->get_sock_ref;
+
+        my %nodes; # { "Backend" => int count }
+        foreach my $sock (values %$sf) {
+            if ($sock->isa("Perlbal::BackendHTTP")) {
+                my Perlbal::BackendHTTP $cv = $sock;
+                $nodes{"$cv->{ipport}"}++;
+            }
+        }
+
+        # now print out text
+        foreach my $node (sort keys %nodes) {
+            $out->("$node " . $nodes{$node});
+        }
+        $out->('.');
+        return 1;   
     }
 
     if ($cmd =~ /^states$/) {
@@ -172,6 +197,7 @@ sub run_manage_command {
                 $out->("$class $state " . $states{$class}->{$state});
             }
         }
+        $out->('.');
         return 1;
     }
 
@@ -180,6 +206,7 @@ sub run_manage_command {
         my Perlbal::Service $svc = $service{$sname};
         return $err->("Unknown service") unless $sname;
         $svc->stats_info($out);
+        $out->('.');
         return 1;
     }
 
@@ -215,6 +242,7 @@ sub run_manage_command {
             my $svc = $service{$name};
             $out->("$name $svc->{listen} " . ($svc->{enabled} ? "ENABLED" : "DISABLED"));
         }
+        $out->('.');
         return 1;
     }
 
