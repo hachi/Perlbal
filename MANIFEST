@@ -1,5 +1,6 @@
 Makefile.PL
 MANIFEST
+CHANGES
 perlbal
 lib/Perlbal.pm
 lib/Perlbal/BackendHTTP.pm
@@ -17,3 +18,9 @@ lib/Perlbal/Plugin/Queues.pm
 lib/Perlbal/Plugin/Stats.pm
 lib/Perlbal/Plugin/Highpri.pm
 META.yml                                 Module meta-data (added by MakeMaker)
+doc/Classes.txt
+doc/README.txt
+doc/Hooks.txt
+doc/Reproxying.txt
+conf/nodelist.dat
+conf/perlbal.conf

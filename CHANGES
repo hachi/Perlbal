@@ -1,0 +1,14 @@
+1.01 (2004-10-22)
+    -- when internally redirecting a URL, perlbal advertises
+       that it supports persisent HTTP connections now,
+       and caches those sockets for 5 seconds.  (not configurable)
+       useful under load, otherwise you waste all local ports
+       on a machine
+
+    -- ditch dependence on IO::SendFile.  do it ourselves (1 line)
+       with perl's syscall function
+
+    -- add doc/* and conf/* to MANIFEST file
+
+1.00
+    -- initial packaged release
