@@ -236,6 +236,7 @@ sub pair_up_connections {
         next if $self->{pending_connects}{"$ip:$port"};
         if (Perlbal::BackendHTTP->new($self, $ip, $port)) {
             $self->{pending_connects}{"$ip:$port"} = $now;
+            $self->{pending_connect_count}++;
         }
     }
 }

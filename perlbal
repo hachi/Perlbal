@@ -64,6 +64,15 @@ sub objdtor {
     }
 }
 
+sub service_names {
+    return sort keys %service;
+}
+
+sub service {
+    my $class = shift;
+    return $service{$_[0]};
+}
+
 # returns 1 if command succeeded, 0 otherwise
 sub run_manage_command {
     my ($cmd, $out) = @_;  # $out is output stream closure
@@ -136,13 +145,19 @@ sub run_manage_command {
         $out->("SERVICE $sname");
         $out->("     listening: $svc->{listen}");
         $out->("          role: $svc->{role}");
+        if ($svc->{role} eq "reverse_proxy" ||
+            $svc->{role} eq "web_server") {
+            $out->("  pend clients: $svc->{waiting_client_count}");
+            $out->("  pend backend: $svc->{pending_connect_count}");
+        }
         if ($svc->{role} eq "reverse_proxy") {
             $out->("balance method: " . $svc->balance_method);
             $out->("         nodes:");
             foreach my $n (@{ $svc->{nodes} }) {
                 $out->("                $n->[0]:$n->[1]");
             }
-            
+        } elsif ($svc->{role} eq "web_server") {
+            $out->("        docroot: $svc->{docroot}");
         }
 
         return 1;

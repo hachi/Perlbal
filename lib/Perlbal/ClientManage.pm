@@ -82,6 +82,13 @@ sub handle_http {
         $body .= "<h1>perlbal management interface</h1><ul>";
         $body .= "<li><a href='/socks'>Sockets</a></li>";
         $body .= "<li><a href='/obj'>Perl Objects in use</a></li>";
+        $body .= "<li>Service Details<ul>";
+        foreach my $sname (Perlbal->service_names) {
+            my Perlbal::Service $svc = Perlbal->service($sname);
+            next unless $svc;
+            $body .= "<li><a href='/service?$sname'>$sname</a> - $svc->{role} ($svc->{listen})</li>\n";
+        }
+        $body .= "</ul></li>";
         $body .= "</ul>";
     } elsif ($uri eq "/socks") {
         $prebox->('socks summary');
