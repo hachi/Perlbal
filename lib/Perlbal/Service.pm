@@ -345,23 +345,6 @@ sub note_bad_backend_connect {
     $self->spawn_backends;
 }
 
-sub note_backend_close {
-    my Perlbal::Service $self = shift;
-    my Perlbal::BackendHTTP $be = shift;
-
-    if (my Perlbal::BackendHTTP $pbe = $self->{pending_connects}{$be->{ipport}}) {
-        # same actual connection?
-        if ($be == $pbe) {
-            # this backend is gone, note its death
-            $self->{pending_connects}{$be->{ipport}} = undef;
-            $self->{pending_connect_count}--;
-        }
-    }
-
-    # now spawn more if needed?
-    $self->spawn_backends;
-}
-
 sub request_backend_connection {
     my Perlbal::Service $self;
     my Perlbal::ClientProxy $cp;

@@ -123,9 +123,6 @@ sub close {
         $client->backend(undef);
     }
 
-    # and our reporter interface
-    $self->{reportto}->note_backend_close($self);
-
     $self->SUPER::close($reason);
 }
 

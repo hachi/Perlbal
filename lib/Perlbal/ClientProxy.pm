@@ -113,10 +113,6 @@ sub backend_response_received {
     return 0;
 }
 
-# responses are handled in the backend_response_received above.  we don't do anything
-# special when a backend closes.
-sub note_backend_close { }
-
 sub start_reproxy_file {
     my Perlbal::ClientProxy $self = shift;
     my $file = shift;                      # filename to reproxy
