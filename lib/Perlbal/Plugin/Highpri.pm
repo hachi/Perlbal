@@ -72,8 +72,10 @@ sub register {
         # check it against our compiled regexp
         return 1 if $uri_check &&
                     $cp->{req_headers}->request_uri =~ /$uri_check/;
-        return 1 if $host_check &&
-                    $cp->{req_headers}->header('Host') =~ /$host_check/;
+        if ($host_check) {
+            my $hostname = $cp->{req_headers}->header('Host');
+            return 1 if $hostname && $hostname =~ /$host_check/;
+        }
 
         # doesn't fit, so return 0
         return 0;
