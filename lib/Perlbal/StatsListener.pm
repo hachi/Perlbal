@@ -14,6 +14,7 @@ use fields ('service',  # Perlbal::Service,
             'total_free',    # int scalar: free listeners
             'need_parse',    # hashref:  ip -> pos
             'use_count',     # hashref:  ip -> times_used (ip can also be '' for empty case)
+            'use_total',     # int scalar: count of uses we've had total
             'dead',          # int; if 1 then we're dead (don't give out any more info)
             );
 
@@ -99,13 +100,18 @@ sub get_endpoint {
     }
     $self->{need_parse} = {};
 
-    unless ($self->{total_free}) {
-        $self->{use_count}{'no_free'}++;
-        return ();
+    # mode 1 (normal) is on advertised free, mode 2 is when nothing's
+    # free, so we make a weighted random guess on past performance
+    my $mode = 1;
+    my $upper_bound = $self->{total_free};
+
+    unless ($upper_bound) {
+        $mode = 2;
+        $upper_bound = $self->{use_total};
     }
 
     # pick what position we'll return
-    my $winner = rand($self->{total_free});
+    my $winner = rand($upper_bound);
 
     # find the winner
     my $count = 0;
@@ -116,14 +122,23 @@ sub get_endpoint {
     # start in the beginning so we have to let it loop around
     foreach my $pass (1..2) {
         while (my ($from, $hi) = each %{$self->{hostinfo}}) {
-            next unless $hi;
-            $count += $hi->[0];  # increment free
+            if ($mode == 1) {
+                # must have data
+                next unless $hi;
+                $count += $hi->[0];
+            } elsif ($mode == 2) {
+                # increment count by uses this one's received for weighting
+                $count += $self->{use_count}{$from};
+            }
 
             if ($count >= $winner) {
                 my $ip = Socket::inet_ntoa($from);
-                $hi->[0]--;
-                $self->{total_free}--;
-                $self->{use_count}{$from}++;
+                if ($mode == 1) {
+                    $hi->[0]--;
+                    $self->{total_free}--;
+                    $self->{use_total}++;
+                    $self->{use_count}{$from}++;
+                }
                 return ($ip, 80);
             }
         }
