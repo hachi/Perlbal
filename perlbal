@@ -169,18 +169,18 @@ sub run_manage_command {
         return $err->("Expected numeric parameter") unless $val =~ /^\d+$/;
 
         if ($key eq "max_connections") {
-            my ($nowsoft, $nowhard)  = getrlimit(RLIMIT_NOFILE);
-            $out->("WAS: ($nowsoft, $nowhard)");
-
-            unless ($> == 0) {
-                $out->("ERROR: need to be root to increase max connections");
+            my $rv = setrlimit(RLIMIT_NOFILE, $val, $val);
+            unless (defined $rv && $rv) {
+                if ($> == 0) {
+                    $err->("Unable to set limit.");
+                } else {
+                    $err->("Need to be root to increase max connections.");
+                }
             }
         } elsif ($key eq "aio_threads") {
 
         }
 
-        #my $rv = setrlimit(RLIMIT_NOFILE, 10_000, 10_000);
-        #print "setrlimit = $rv\n";
         return 1;
     }
 
