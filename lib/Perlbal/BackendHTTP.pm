@@ -324,9 +324,9 @@ sub event_read {
         return;
     }
 
-    # if our client's 250k behind, stop buffering
-    # FIXME: constant
-    if ($client->{write_buf_size} > 256_000) {
+    # if our client's behind more than the max limit, stop buffering
+    my $buf_size = defined $self->{service} ? $client->{service}->{buffer_size} : $client->{service}->{buffer_size_reproxy_url};
+    if ($client->{write_buf_size} > $buf_size) {
         $self->watch_read(0);
         return;
     }

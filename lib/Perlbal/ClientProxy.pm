@@ -211,10 +211,10 @@ sub event_write {
     $self->SUPER::event_write;
 
     # trigger our backend to keep reading, if it's still connected
-    # FIXME constant (and in BackendHTTP)
-    if ($self->{write_buf_size} < 256_000) {
-        my $backend = $self->{backend};
-        $backend->watch_read(1) if $backend;
+    if (my $backend = $self->{backend}) {
+        # figure out which maximum buffer size to use
+        my $buf_size = defined $backend->{service} ? $self->{service}->{buffer_size} : $self->{service}->{buffer_size_reproxy_url};
+        $backend->watch_read(1) if $self->{write_buf_size} < $buf_size;
     }
 }
 

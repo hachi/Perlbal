@@ -55,6 +55,8 @@ use fields (
             'max_put_size', # int: max size in bytes of a put file
             'min_put_directory', # int: number of directories required to exist at beginning of URIs in put
             'enable_delete', # bool: whether DELETE is supported
+            'buffer_size', # int: specifies how much data a ClientProxy object should buffer from a backend
+            'buffer_size_reproxy_url', # int: same as above but for backends that are reproxying for us
             );
 
 sub new {
@@ -82,6 +84,10 @@ sub new {
     $self->{max_put_size} = 0; # 0 means no max size
     $self->{min_put_directory} = 0;
     $self->{enable_delete} = 0;
+
+    # set some default maximum buffer sizes
+    $self->{buffer_size} = 256_000;
+    $self->{buffer_size_reproxy_url} = 51_200;
 
     # track pending connects to backend
     $self->{pending_connects} = {};
@@ -561,7 +567,8 @@ sub set {
     }
 
     if ($key eq "max_backend_uses" || $key eq "backend_persist_cache" ||
-        $key eq "max_put_size" || $key eq "min_put_directory") {
+        $key eq "max_put_size" || $key eq "min_put_directory" ||
+        $key eq "buffer_size" || $key eq "buffer_size_reproxy_url") {
         return $err->("Expected integer value") unless $val =~ /^\d+$/;
         return $set->();
     }
