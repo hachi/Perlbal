@@ -1,3 +1,6 @@
+    -- made Perlbal::objctor/objdtor take an object as their first parameter.
+       much faster than using caller().
+
     -- fix Highpri plugin to not check hosts for high priority values when
        the host isn't defined
 
