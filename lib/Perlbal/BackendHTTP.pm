@@ -5,7 +5,13 @@
 package Perlbal::BackendHTTP;
 use strict;
 use base "Perlbal::Socket";
-use fields qw(client service ip port ipport);
+use fields ('client',  # Perlbal::ClientProxy connection, or undef
+            'service', # Perlbal::Service
+            'ip',      # IP scalar
+            'port',    # port scalar
+            'ipport',  # "$ip:$port"
+            'state',   # connecting, bored, sending_req, wait_res, xfer_res
+            );
 use Socket qw(PF_INET IPPROTO_TCP SOCK_STREAM);
 
 use Perlbal::ClientProxy;
@@ -40,6 +46,7 @@ sub new {
     $self->{port}    = $port;     # backend port
     $self->{ipport}  = "$ip:$port";  # often used as key
     $self->{service} = $svc;      # the service we're serving for
+    $self->{state}   = "connecting";
 
     # for header reading:
     $self->{headers} = undef;      # defined w/ headers object once all headers in
@@ -59,6 +66,7 @@ sub new {
 sub close {
     my Perlbal::BackendHTTP $self = shift;
     my $reason = shift;
+    $self->{state}   = "closed";
 
     # tell our client that we're gone
     if (my $client = $self->{client}) {
@@ -78,7 +86,8 @@ sub assign_client {
 
     # set our client, and the client's backend to us
     $client->{service}->mark_node_used($self->{ipport});
-    $self->{client} = $client;   
+    $self->{client} = $client;
+    $self->{state}   = "sending_req";
     $self->{client}->backend($self);
 
     my $hds = $client->headers;
@@ -98,6 +107,7 @@ sub assign_client {
         if (my $client = $self->{client}) {
             # start waiting on a reply
             $self->watch_read(1);
+            $self->{state}   = "wait_res";
             # make the client push its overflow reads (request body)
             # to the backend
             $client->drain_read_buf_to($self);
@@ -114,8 +124,9 @@ sub event_write {
     my Perlbal::BackendHTTP $self = shift;
     print "Backend $self is writeable!\n" if Perlbal::DEBUG >= 2;
 
-    unless ($self->{client}) {
+    if (! $self->{client} && $self->{state} eq "connecting") {
         $self->{service}->register_boredom($self);
+        $self->{state}   = "bored";
         $self->watch_write(0);
         return;
     }
@@ -133,6 +144,7 @@ sub event_read {
 
     unless ($self->{headers}) {
         if (my $hd = $self->read_response_headers) {
+            $self->{state}   = "xfer_res";
 
             if (my $rep = $hd->header('X-REPROXY-FILE')) {
                 # make the client begin the async IO and reproxy
@@ -196,18 +208,22 @@ sub event_err {
         return;
     }
 
+    if ($self->{state} eq "connecting") {
+        # then tell the service manager that this connection
+        # failed, so it can spawn a new one and note the dead host
+        $self->{service}->note_bad_backend_connect($self->{ip}, $self->{port});
+    }
+
     # close ourselves first
     $self->close("error");
-
-    # then tell the service manager that this connection
-    # failed, so it can spawn a new one and note the dead host
-    $self->{service}->note_bad_backend_connect($self->{ip}, $self->{port});
 }
 
 # Backend
 sub event_hup {
     my Perlbal::BackendHTTP $self = shift;
     print "HANGUP for $self\n" if Perlbal::DEBUG;
+
+    
 }
 
 sub as_string {
@@ -218,11 +234,8 @@ sub as_string {
     my $ret = $self->SUPER::as_string . ": localport=$lport";
     if (my Perlbal::ClientProxy $cp = $self->{client}) {
         $ret .= "; client=$cp->{fd}";
-    } elsif ($self->peer_addr_string) {
-        $ret .= "; bored";
-    } else {
-        $ret .= "; connecting";
     }
+    $ret .= "; $self->{state}";
 
     return $ret;
 }
