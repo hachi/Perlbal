@@ -397,6 +397,11 @@ sub event_read {
             return $self->http_response_sent
                 if defined $self->{content_length_remain} &&
                           ($self->{content_length_remain} <= 0);
+
+            # at this point, if the backend has responded then we just return
+            # as we don't want to send it on to them or buffer it up, which is
+            # what the code below does
+            return;
         }
 
         if ($backend) {
