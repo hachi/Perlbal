@@ -325,10 +325,9 @@ sub event_read {
                 my $res_source = $self->{primary_res_headers} || $hd;
                 my $thd = $client->{res_headers} = $res_source->clone;
 
-                # for now, we don't support keep-alive and we force HTTP 1.0
-                $thd->set_version('1.0');
-                $thd->header('Connection', 'close');
-                $thd->header('Keep-Alive', undef);
+                # setup_keepalive will set Connection: and Keep-Alive: headers for us
+                # as well as setup our HTTP version appropriately
+                $client->setup_keepalive($thd);
 
                 # if we had an alternate primary response header, make sure
                 # we send the real content-length (from the reproxied URL)

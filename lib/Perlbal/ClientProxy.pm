@@ -224,24 +224,22 @@ sub start_reproxy_file {
             # 404; the file size doesn't match what we expected
             return $self->_simple_response(404);
         }
-        
 
         # fixup the Content-Length header with the correct size (application
         # doesn't need to provide a correct value if it doesn't want to stat())
         $hd->header("Content-Length", $size);
+
         # don't send this internal header to the client:
         $hd->header('X-REPROXY-FILE', undef);
 
         # rewrite some other parts of the header
-        $hd->set_version('1.0');
-        $hd->header('Connection', 'close');
-        $hd->header('Keep-Alive', undef);
+        $self->setup_keepalive($hd);
 
         # just send the header, now that we cleaned it.
         $self->write($hd->to_string_ref);
 
         if ($self->{req_headers}->request_method eq 'HEAD') {
-            $self->write(sub { $self->close('head_request'); });
+            $self->write(sub { $self->http_response_sent; });
             return;
         }
 
@@ -278,7 +276,9 @@ sub backend {
     return $self->{backend} = $backend;
 }
 
-# called by the backend when it's done sending us stuff
+# our backend enqueues a call to this method in our write buffer, so this is called
+# right after we've finished sending all of the results to the user.  at this point,
+# if we were doing keep-alive, we don't close and setup for the next request.
 sub backend_finished {
     my Perlbal::ClientProxy $self = shift;
 
@@ -289,12 +289,30 @@ sub backend_finished {
     # now, two cases; undefined clr, or defined and zero, or defined and non-zero
     if (defined $self->{content_length_remain}) {
         # defined, so a POST, close if it's 0 or less
-        $self->close('backend_finished')
+        return $self->http_response_sent
             if $self->{content_length_remain} <= 0;
     } else {
-        # not defined, so we simply close and we're done (GET requests, etc)        
-        $self->close('backend_finished');
+        # not defined, so we're ready for another connection?
+        return $self->http_response_sent;
     }
+}
+
+# called when we've sent a response to a user fully and we need to reset state
+sub http_response_sent {
+    my Perlbal::ClientProxy $self = $_[0];
+
+    # persistence logic is in ClientHTTPBase
+    return 0 unless $self->SUPER::http_response_sent;
+
+    # if we get here we're being persistent, reset our state
+    $self->{backend} = undef;
+    $self->{high_priority} = 0;
+    $self->{reproxy_uris} = undef;
+    $self->{reproxy_expected_size} = undef;
+    $self->{currently_reproxying} = undef;
+    $self->{content_length_remain} = undef;
+    $self->{responded} = 0;
+    return 1;
 }
 
 # Client (overrides and calls super)
@@ -358,6 +376,9 @@ sub event_read {
             $self->{content_length_remain} -= $self->{read_size}
                 if defined $self->{content_length_remain};
 
+            # note that we've gotten a request
+            $self->{requests}++;
+
             $self->state('wait_backend');
             $self->{service}->request_backend_connection($self);
 
@@ -390,13 +411,10 @@ sub event_read {
         # transport connection until it has read the entire request"
         if ($self->{responded}) {
             # in addition, if we're now out of data (clr == 0), then we should
-            # close ourselves
-            $self->close('responded_done_reading')
+            # either close ourselves or get ready for another request
+            return $self->http_response_sent
                 if defined $self->{content_length_remain} &&
                           ($self->{content_length_remain} <= 0);
-
-            # return since we're done here
-            return;
         }
 
         if ($backend) {

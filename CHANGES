@@ -1,3 +1,6 @@
+    -- ClientProxy class now supports persistence; set persist_client on
+       the proxy service in order to enable it.
+
     -- Palimg plugin now supports fallback to web server mode if the
        requested URI doesn't fit our desired pattern
 

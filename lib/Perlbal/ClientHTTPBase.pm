@@ -4,6 +4,8 @@
 #   reading_headers (initial state, then follows one of two paths)
 #     wait_backend, backend_req_sent, wait_res, xfer_res, draining_res
 #     wait_stat, wait_open, xfer_disk
+# both paths can then go into persist_wait, which means they're waiting
+# for another request from the user
 ######################################################################
 
 package main;
@@ -95,6 +97,9 @@ sub setup_keepalive {
     my Perlbal::HTTPHeaders $hd = $_[1];
     my Perlbal::HTTPHeaders $rqhd = $self->{req_headers};
 
+    # for now, we enforce outgoing HTTP 1.0
+    $hd->set_version("1.0");
+
     # do keep alive if they sent content-length or it's a head request
     my $do_keepalive = $self->{service}->{persist_client} &&
                        $rqhd->keep_alive($rqhd->request_method eq 'HEAD' ||
@@ -110,7 +115,8 @@ sub setup_keepalive {
 }
 
 # called when we've finished writing everything to a client and we need
-# to reset our state for another request
+# to reset our state for another request.  returns 1 to mean that we should
+# support persistence, 0 means we're discarding this connection.
 sub http_response_sent {
     my Perlbal::ClientHTTPBase $self = $_[0];
 
@@ -119,7 +125,7 @@ sub http_response_sent {
         $self->{res_headers}->header('Connection') =~ m/\bclose\b/i) {
         # close if we have no response headers or they say to close
         $self->close("no_keep_alive");
-        return;
+        return 0;
     }
 
     # now since we're doing persistence, uncork so the last packet goes.
@@ -138,12 +144,13 @@ sub http_response_sent {
     $self->{reproxy_file_offset} = 0;
 
     # reset state
-    $self->state('reading_headers');
+    $self->state('persist_wait');
 
     # NOTE: because we only speak 1.0 to clients they can't have
     # pipeline in a read that we haven't read yet.
     $self->watch_read(1);
     $self->watch_write(0);
+    return 1;
 }
 
 sub reproxy_fh {
