@@ -170,7 +170,22 @@ sub unregister_hooks {
 sub add_pending_connect {
     my Perlbal::Service $self = shift;
     my Perlbal::BackendHTTP $be = shift;
-    return if defined $self->{pending_connects}{$be->{ipport}};
+
+    # error if we already have a pending connection for this ipport
+    if (defined $self->{pending_connects}{$be->{ipport}}) {
+        Perlbal::log('warning', "Warning: attempting to spawn backend connection that already existed.");
+
+        # now dump a backtrace so we know how we got here
+        my $depth = 0;
+        while (my ($package, $filename, $line, $subroutine) = caller($depth++)) {
+            Perlbal::log('warning', "          -- [$filename:$line] $package::$subroutine");
+        }
+
+        # we're done now, just return
+        return;
+    }
+
+    # set this connection up in the pending connection list
     $self->{pending_connects}{$be->{ipport}} = $be;
     $self->{pending_connect_count}++;
 }
