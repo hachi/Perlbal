@@ -96,34 +96,50 @@ sub event_read {
 	if (my $hd = $self->read_response_headers) {
 
 	    if (my $rep = $hd->header('X-REPROXY-FILE')) {
-		if (my $size = -s $rep) {
-		    my $just_head = $client->request_method eq 'HEAD';
+		Linux::AIO::aio_stat($rep, sub {
+		    if (my $size = -s _) {
+			print "Got size: $size\n";
+			my $just_head = $client->request_method eq 'HEAD';
 
-		    unless ($just_head) {
-			my $fh = new IO::File;
-			open($fh, $rep) or return $client->close("reproxy_file_open_error");
-			$client->reproxy_file($fh, $size);
+			# fixup the Content-Length header if it was undefined/0
+			$hd->header("Content-Length", $size);
+			# don't send this internal header to the client:
+			$hd->header('X-REPROXY-FILE', undef);
+
+			my $detach = sub {
+			    # setup the client's state:
+			    $client->write($hd->to_string_ref);
+			    $client->all_sent(1) if $just_head;
+			    
+			    $client->backend(undef);    # disconnect ourselves from it
+			    $self->{client} = undef;    # .. and it from us
+			    $self->close;               # close ourselves
+			    
+			    $client->watch_write(1);    # and kick-start it into writing
+			};
+
+			if ($just_head) {
+			    $detach->();
+			} else {
+			    Linux::AIO::aio_open($rep, 0, 0 , sub {
+				my $rp_fd = shift;
+				print "Got open: $rp_fd\n";
+				$client->reproxy_fd($rp_fd, $size);
+				$detach->();
+			    });
+			  }
+
+		    } else {
+			print STDERR "REPROXY: $rep (bogus)\n";
+			$client->close;
 		    }
+		});
 
-		    # fixup the Content-Length header if it was undefined/0
-		    $hd->header("Content-Length", $size);
-		    # don't send this internal header to the client:
-		    $hd->header('X-REPROXY-FILE', undef);
+		# don't get back here.  our Linux::AIO callback will invoke the above
+		  # FIXME: add a "aio in progress" state flag, just in case we get back here somehow
+		$self->watch_read(0);
+		return;
 
-		    # setup the client's state:
-		    $client->write($hd->to_string_ref);
-		    $client->all_sent(1) if $just_head;
-
-		    $client->backend(undef);    # disconnect ourselves from it
-		    $self->{client} = undef;    # .. and it from us
-		    $self->close;               # close ourselves
-
-		    $client->watch_write(1);    # and kick-start it into writing
-		} else {
-		    print STDERR "REPROXY: $rep (bogus)\n";
-		    $client->close;
-		}
-		
 	    } else {
 		$client->write($hd->to_string_ref);
 		$self->drain_read_buf_to($client);

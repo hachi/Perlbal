@@ -323,9 +323,8 @@ sub event_write {
 # Socket
 sub wait_loop {
     while (1) {
-	# get 20 events, waiting forever (-1).  FIXME: in the future, change -1
-	# to something else, so we can do periodic cleanup of stale/slow connections
-	while (my $events = epoll_wait($epoll, 20, -1)) {
+	# get up to 50 events, not waiting longer than 2 seconds
+	while (my $events = epoll_wait($epoll, 50, 2)) {
 	  EVENT:
 	    foreach my $ev (@$events) {
 		# it's possible epoll_wait returned many events, including some at the end
@@ -345,6 +344,9 @@ sub wait_loop {
 		    $pob->event_hup    if $state & EPOLLHUP && ! $pob->{closed};
 		}
 	    }
+
+	    # run any callbacks on async file IO operations
+	    Linux::AIO::poll_cb();
 
 	    # now we can close sockets that wanted to close during our event processing.
 	    # (we didn't want to close them during the loop, as we didn't want fd numbers

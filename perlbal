@@ -17,6 +17,8 @@ use IO::Socket;
 use IO::Handle;
 use IO::SendFile;
 
+use Linux::AIO;
+
 use IO::File;
 use Getopt::Long;
 use Data::Dumper;
@@ -24,7 +26,6 @@ use BSD::Resource;
 use Carp qw(cluck);
 
 $SIG{'PIPE'} = "IGNORE";  # handled manually
-$SIG{'INT'} = sub { print "Caught ^C, exiting.\n"; exit 0; };
 
 use lib 'lib';
 use Perlbal::Socket;
@@ -36,6 +37,7 @@ use Perlbal::ClientProxy;
 use Perlbal::BackendHTTP;
 use Perlbal::ClientManage;
 
+Linux::AIO::min_parallel(250);
 
 ######################################################################
 # server management functions

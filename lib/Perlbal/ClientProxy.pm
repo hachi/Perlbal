@@ -5,12 +5,15 @@
 package Perlbal::ClientProxy;
 use strict;
 use base "Perlbal::Socket";
-use fields qw(service backend all_sent reproxy_file reconnect_count
+use fields qw(service backend all_sent reproxy_fd reconnect_count
 	      reproxy_file_offset reproxy_file_size );
 
 use constant READ_SIZE         => 4086;    # 4k, arbitrary
 use constant READ_AHEAD_SIZE   => 8192;    # 8k, arbitrary
 use Errno qw( EPIPE );
+
+# to get the sysclose number:
+require 'syscall.ph';
 
 # ClientProxy
 sub new {
@@ -78,24 +81,25 @@ sub close {
 }
 
 # Client
-sub reproxy_file {
+sub reproxy_fd {
     my Perlbal::ClientProxy $self = shift;
-    return $self->{reproxy_file} unless @_;
-    my ($fh, $size) = @_;
+    return $self->{reproxy_fd} unless @_;
+
+    my ($fd, $size) = @_;
     $self->{reproxy_file_offset} = 0;
     $self->{reproxy_file_size} = $size;
-    return $self->{reproxy_file} = $fh;
+    return $self->{reproxy_fd} = $fd;
 }
 
 # Client
 sub event_write { 
     my Perlbal::ClientProxy $self = shift;
 
-    if ($self->{reproxy_file}) {
+    if ($self->{reproxy_fd}) {
 	my $to_send = $self->{reproxy_file_size} - $self->{reproxy_file_offset};
 	$self->tcp_cork(1) if $self->{reproxy_file_offset} == 0;
 	my $sent = IO::SendFile::sendfile($self->{fd}, 
-					  fileno($self->{reproxy_file}),
+					  $self->{reproxy_fd},
 					  0, # NULL offset means kernel moves filepos (apparently)
 					  $to_send);
 	print "REPROXY Sent: $sent\n" if Perlbal::DEBUG >= 2;
@@ -111,8 +115,11 @@ sub event_write {
 	$self->{reproxy_file_offset} += $sent;
 
 	if ($sent >= $to_send) {
+	    # close the sendfile fd
+	    my $rv = syscall(&SYS_close, $self->{reproxy_fd});
+
 	    $self->tcp_cork(0);
-	    $self->{reproxy_file} = undef;
+	    $self->{reproxy_fd} = undef;
 	    $self->close("sendfile_done");
 	    $self->all_sent(1);  # set our own flag that we're done
 	}
