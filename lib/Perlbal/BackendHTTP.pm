@@ -281,13 +281,9 @@ sub event_read {
             }
 
             if (my $rep = $hd->header('X-REPROXY-FILE')) {
-                # make the client begin the async IO and reproxy
-                # process while we detach and die
+                # make the client begin the async IO while we move on
                 $client->start_reproxy_file($rep, $hd);
-                $client->backend(undef);    # disconnect ourselves from it
-
-                $self->{client} = undef;    # .. and it from us
-                $self->close;               # close ourselves
+                $self->next_request;
                 return;
             } else {
                 $client->write($hd->to_string_ref);
