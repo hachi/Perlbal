@@ -6,6 +6,7 @@ package Perlbal::BackendHTTP;
 use strict;
 use base "Perlbal::Socket";
 use fields qw(client ip port req_sent);
+use Socket qw(PF_INET IPPROTO_TCP SOCK_STREAM);
 
 use constant BACKEND_READ_SIZE => 131072;  # 128k; arbitrary
 
@@ -17,12 +18,16 @@ sub new {
     my ($ip, $port) = $svc->get_backend_endpoint();
     return undef unless $ip;
 
-    my $sock = IO::Socket::INET->new(
-				     PeerAddr => $ip,
-				     PeerPort => $port,
-                                     Proto => 'tcp',
-                                     Blocking => 0,
-                                     );
+    my $sock;
+    socket $sock, PF_INET, SOCK_STREAM, IPPROTO_TCP;
+
+    unless ($sock) {
+	print STDERR "Error creating socket: $!\n";
+	return undef;
+    }
+    
+    IO::Handle::blocking($sock, 0);
+    connect $sock, Socket::sockaddr_in($port, Socket::inet_aton($ip));
 
     my $self = fields::new($class);
     $self->SUPER::new($sock);

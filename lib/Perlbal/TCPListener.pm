@@ -6,6 +6,7 @@ package Perlbal::TCPListener;
 use strict;
 use base "Perlbal::Socket";
 use fields qw(service);
+use Socket qw(IPPROTO_TCP);
 
 # TCPListener
 sub new {
@@ -13,7 +14,7 @@ sub new {
 
     my $sock = IO::Socket::INET->new(
                                      LocalAddr => $hostport,
-                                     Proto => 'tcp',
+                                     Proto => IPPROTO_TCP,
                                      Listen => 1024,
                                      ReuseAddr => 1,
                                      Blocking => 0,
