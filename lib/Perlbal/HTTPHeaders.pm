@@ -65,14 +65,13 @@ sub new {
     my Perlbal::HTTPHeaders $self = shift;
     $self = fields::new($self) unless ref $self;
 
-    my ($hstr, $is_response) = @_;
-    # hstr: headers as a string
+    my ($hstr_ref, $is_response) = @_;
+    # hstr: headers as a string ref
     # is_response: bool; is HTTP response (as opposed to request).  defaults to request.
 
     my $absoluteURIHost = undef;
 
-    my @lines = split(/\r?\n/, $hstr);
-    my $first = (shift @lines) || "";
+    my @lines = split(/\r?\n/, $$hstr_ref);
 
     $self->{headers} = {};
     $self->{origcase} = {};
@@ -84,12 +83,14 @@ sub new {
 
     # check request line
     if ($is_response) {
+        $self->{responseLine} = (shift @lines) || "";
+
         # check for valid response line
         return fail("Bogus response line") unless
-            $first =~ m!^HTTP\/(\d+)\.(\d+)\s+(\d+)!;
+            $self->{responseLine} =~ m!^HTTP\/(\d+)\.(\d+)\s+(\d+)!;
+
         my ($ver_ma, $ver_mi, $code) = ($1, $2, $3);
         $self->{code} = $code;
-        $self->{responseLine} = $first;
 
         # version work so we know what version the backend spoke
         unless (defined $ver_ma) {
@@ -98,32 +99,30 @@ sub new {
         $self->{ver} = "$ver_ma.$ver_mi";
         $self->{vernum} = $ver_ma*1000 + $ver_mi;
     } else {
+        $self->{requestLine} = (shift @lines) || "";
+
         # check for valid request line
         return fail("Bogus request line") unless
-            $first =~ m!^(\w+) ((?:\*|(?:\S*?)))(?: HTTP/(\d+)\.(\d+))$!;
+            $self->{requestLine} =~ m!^(\w+) ((?:\*|(?:\S*?)))(?: HTTP/(\d+)\.(\d+))$!;
 
-        my ($method, $uri, $ver_ma, $ver_mi) = ($1, $2, $3, $4);
+        $self->{method} = $1;
+        $self->{uri} = $2;
+
+        my ($ver_ma, $ver_mi) = ($3, $4);
 
         # now check uri for not being a uri
-        if ($uri =~ m!^http://([^/:]+?)(?::\d+)?(/.*)?$!) {
+        if ($self->{uri} =~ m!^http://([^/:]+?)(?::\d+)?(/.*)?$!) {
             $absoluteURIHost = lc($1);
-            $uri = $2 || "/"; # "http://www.foo.com" yields no path, so default to "/"
+            $self->{uri} = $2 || "/"; # "http://www.foo.com" yields no path, so default to "/"
         }
-
-        print "Method: [$method] URI: [$uri]\n" if Perlbal::DEBUG >= 1;
 
         # default to HTTP/0.9
         unless (defined $ver_ma) {
             ($ver_ma, $ver_mi) = (0, 9);
         }
 
-        $self->{requestLine} = $first;
-
         $self->{ver} = "$ver_ma.$ver_mi";
         $self->{vernum} = $ver_ma*1000 + $ver_mi;
-
-        $self->{method} = $method;
-        $self->{uri} = $uri;
     }
 
     my $last_header = undef;

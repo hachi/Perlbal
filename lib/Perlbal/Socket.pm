@@ -118,7 +118,7 @@ sub read_headers {
         print "post-header extra: $len bytes\n" if Perlbal::DEBUG >= 2;
     }
 
-    unless ($self->{headers} = Perlbal::HTTPHeaders->new($self->{headers}, $is_res)) {
+    unless ($self->{headers} = Perlbal::HTTPHeaders->new(\$self->{headers}, $is_res)) {
         # bogus headers?  close connection.
         return $self->close("parse_header_failure");
     }
@@ -147,7 +147,7 @@ sub die_gracefully { }
 ### METHOD: state()
 ### If you pass a parameter, sets the state, else returns it.
 sub state {
-    my Perlbal::Socket $self = shift;    
+    my Perlbal::Socket $self = shift;
     return $self->{state} unless @_;
 
     push @{$state_changes{"$self"} ||= []}, $_[0] if Perlbal::TRACK_STATES;
