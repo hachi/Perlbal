@@ -19,6 +19,8 @@ use constant MAX_HTTP_HEADER_LENGTH => 102400;  # 100k, arbitrary
 our %sock;                             # fd (num) -> Perlbal::Socket object
 our $epoll;
 
+our @to_close;   # sockets to close when event loop is done
+
 sub watched_sockets {
     return scalar keys %sock;
 }
@@ -100,18 +102,10 @@ sub close {
     my $sock = $self->{sock};
     $self->{closed} = 1;
 
-    my ($pkg, $filename, $line) = caller;
-    print "Closing \#$fd due to $pkg/$filename/$line ($reason)\n"
-	if Perlbal::DEBUG >= 1;
-    {
-	my $i = 0;
-	my $errmsg;
-	while (my ($p, $f, $l) = caller($i++)) {
-	    $errmsg .= "  $p, $f, $l\n";
-	}
-	#print $errmsg;
+    if (Perlbal::DEBUG >= 1) {
+	my ($pkg, $filename, $line) = caller;
+	print "Closing \#$fd due to $pkg/$filename/$line ($reason)\n";
     }
-
 
     if (epoll_ctl($epoll, EPOLL_CTL_DEL, $fd, $self->{event_watch}) == 0) {
 	print "Client $fd disconnected.\n" if Perlbal::DEBUG >= 1;
@@ -120,7 +114,11 @@ sub close {
     }
 
     delete $sock{$fd};
-    $sock->close;
+
+    # defer closing the actual socket until the event loop is done
+    # processing this round of events.  (otherwise we might reuse fds)
+    push @to_close, $sock;
+
     return 0;
 }
 
@@ -319,8 +317,9 @@ sub event_write {
 
 # Socket
 sub wait_loop {
-    # get 1 event, wait forever (-1)
     while (1) {
+	# get 20 events, waiting forever (-1).  FIXME: in the future, change -1
+	# to something else, so we can do periodic cleanup of stale/slow connections
 	while (my $events = epoll_wait($epoll, 20, -1)) {
 	  EVENT:
 	    foreach my $ev (@$events) {
@@ -328,23 +327,25 @@ sub wait_loop {
 		# that ones in the front triggered unregister-interest actions.  if we
 		# can't find the %sock entry, it's because we're no longer interested
 		# in that event.
-		my Perlbal::Socket $pob = $sock{$ev->[0]} or 
-		    die "Error: can't find Perlbal::Socket for fd=$ev->[0], state=$ev->[1]\n";
+		my Perlbal::Socket $pob = $sock{$ev->[0]} or next;  # it was probably closed
 
 		print "Event: fd=$ev->[0] (", ref($pob), "), state=$ev->[1] \@ " . time() . "\n"
 		    if Perlbal::DEBUG >= 1;
 
-		die "Error: closed Perlbal::Socket returned in epoll loop for fd=$ev->[0]\n"
-		    if $pob->{closed};
-
 		my $state = $ev->[1];
-		$pob->event_read   if $state & EPOLLIN;
+		$pob->event_read   if $state & EPOLLIN && ! $pob->{closed};
 		$pob->event_write  if $state & EPOLLOUT && ! $pob->{closed};
 		if ($state & (EPOLLERR|EPOLLHUP)) {
 		    $pob->event_err    if $state & EPOLLERR && ! $pob->{closed};
 		    $pob->event_hup    if $state & EPOLLHUP && ! $pob->{closed};
 		}
 	    }
+
+	    # now we can close sockets that wanted to close during our event processing.
+	    # (we didn't want to close them during the loop, as we didn't want fd numbers
+	    #  being reused and confused during the event loop)
+	    $_->close foreach (@to_close);
+
 	}
 	print STDERR "Event loop ending; restarting.\n";
     }
