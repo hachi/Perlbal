@@ -28,6 +28,7 @@ our $HTTPCode = {
     404 => 'Not Found',
     500 => 'Internal Server Error',
     501 => 'Not Implemented',
+    503 => 'Service Unavailable',
 };
 
 sub fail {

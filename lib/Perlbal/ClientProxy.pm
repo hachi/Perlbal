@@ -16,6 +16,10 @@ use fields (
             'content_length_remain', # int: amount of data we're still waiting for
             'responded',           # bool: whether we've already sent a response to the user or not
             'last_request_time',   # int: time that we last received a request
+            'primary_res_hdrs',  # if defined, we are doing a transparent reproxy-URI
+                                 # and the headers we get back aren't necessarily
+                                 # the ones we want.  instead, get most headers
+                                 # from the provided res headers object here.
             );
 
 use constant READ_SIZE         => 4086;    # 4k, arbitrary
@@ -63,7 +67,7 @@ sub start_reproxy_uri {
     my $urls = $_[2];
 
     # failure if we have no primary response headers
-    return unless $primary_res_hdrs;
+    return unless $self->{primary_res_hdrs} ||= $primary_res_hdrs;
 
     # construct reproxy_uri list
     if (defined $urls) {
@@ -84,62 +88,40 @@ sub start_reproxy_uri {
     }
 
     # if we have no uris in our list now, tell the user 404
-    return $self->_simple_response(404)
+    return $self->_simple_response(503)
         unless @{$self->{reproxy_uris} || []};
 
     # set the expected size if we got a content length in our headers
-    if (my $expected_size = $primary_res_hdrs->header('X-REPROXY-EXPECTED-SIZE')) {
+    if ($primary_res_hdrs && (my $expected_size = $primary_res_hdrs->header('X-REPROXY-EXPECTED-SIZE'))) {
         $self->{reproxy_expected_size} = $expected_size;
     }
 
-    # now build backend
+    # pass ourselves off to the reproxy manager
     $self->state('wait_backend');
-    my $datref = $self->{reproxy_uris}->[0];
-    my $reuse_sock = $self->{service}->get_reproxy_reusable_sock("$datref->[0]:$datref->[1]");
-    my $be = Perlbal::BackendHTTP->new(undef, $datref->[0], $datref->[1],
-        { reportto => $self, primary_res_headers => $primary_res_hdrs,
-          reuse_sock => $reuse_sock,
-        });
+    Perlbal::ReproxyManager::do_reproxy($self);
 }
 
-# called by a backend when it's ready to move on to the next request
-sub backend_next_request {
+# called by the reproxy manager when we can't get to our requested backend
+sub try_next_uri {
     my Perlbal::ClientProxy $self = $_[0];
-    my Perlbal::BackendHTTP $be = $_[1];
 
-    # get the socket from the backend and put it back into the service
-    if ($be->{res_headers} && $be->{res_headers}->header('Connection') =~ /\bkeep-alive\b/i) {
-        my $sock = $be->steal_socket;
-        $self->{service}->put_reproxy_reusable_sock($be->{ipport}, $sock)
-            if $sock;
-    }
-    return;
-}
-
-# called by the backend when it closes, no matter what the reason
-sub note_backend_close {
-    my Perlbal::ClientProxy $self = $_[0];
-    my Perlbal::BackendHTTP $be = $_[1];
-
-    # if we were reproxying, try again with the next URI
-    if ($self->{currently_reproxying}) {
-        $self->start_reproxy_uri($be->{primary_res_headers});
-    }
+    shift @{$self->{reproxy_uris}};
+    $self->{currently_reproxying} = undef;
+    $self->start_reproxy_uri();
 }
 
 # this is a callback for when a backend has been created and is
 # ready for us to do something with it
-sub register_boredom {
+sub use_reproxy_backend {
     my Perlbal::ClientProxy $self = $_[0];
     my Perlbal::BackendHTTP $be = $_[1];
 
     # get a URI
     my $datref = $self->{currently_reproxying} = shift @{$self->{reproxy_uris}};
     unless (defined $datref) {
-        # return 404 and close the backend
-        $be->{client} = undef;
+        # return error and close the backend
         $be->close('invalid_uris');
-        return $self->_simple_response(404);
+        return $self->_simple_response(503);
     }
 
     # now send request
@@ -172,28 +154,10 @@ sub backend_response_received {
         # fall back to an alternate URL
         $be->{client} = undef;
         $be->close('non_200_reproxy');
-
-        # now call start_reproxy_uri, which, without a second parameter will
-        # try the next location in the list we were given originally
-        $self->start_reproxy_uri($be->{primary_res_headers});
+        $self->try_next_uri;
         return 1;
     }
     return 0;
-}
-
-# part of the reportto interface; this is called when a backend is unable to establish
-# a connection with a backend.  we simply try the next uri.
-sub note_bad_backend_connect {
-    my Perlbal::ClientProxy $self = $_[0];
-    my Perlbal::BackendHTTP $be = $_[1];
-    
-    # undef the backend's client and setup for the next try
-    $be->{client} = undef;
-    shift @{$self->{reproxy_uris}};
-    $self->{currently_reproxying} = undef;
-    $self->start_reproxy_uri($be->{primary_res_headers});
-    
-    return 1;
 }
 
 sub start_reproxy_file {

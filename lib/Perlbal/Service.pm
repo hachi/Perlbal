@@ -65,7 +65,6 @@ use fields (
                                  # connections to activate pressure relief at
             'queue_relief_chance', # int:0-100; % chance to take a standard priority
                                    # request when we're in pressure relief mode
-            'reproxy_sock_cache', # hashref; { "host:ip" => [ [ time-last-used, sock ], ... ] }
             );
 
 sub new {
@@ -93,9 +92,6 @@ sub new {
     $self->{max_put_size} = 0; # 0 means no max size
     $self->{min_put_directory} = 0;
     $self->{enable_delete} = 0;
-
-    # setup our reproxy cache
-    $self->{reproxy_sock_cache} = {};
 
     # disable pressure relief by default
     $self->{queue_relief_size} = 0;
@@ -205,32 +201,6 @@ sub unregister_setters {
     my $pclass = shift;
     return unless $pclass;
     delete $self->{plugin_setters}->{lc $pclass};    
-}
-
-# get a connection to another server for a reproxy request being served by
-# one of our clients.  returns a socket.
-sub get_reproxy_reusable_sock {
-    my Perlbal::Service $self = $_[0];
-
-    # now shift until we get one that's valid
-    my $now = time;
-    while (my $row = shift(@{$self->{reproxy_sock_cache}->{$_[1]}})) {
-        # $row = [ 0:good-until-time, 1:sock ]
-        next if $row->[0] < $now || !getpeername($row->[1]);
-
-        # return this one if it's still connected
-        return $row->[1];
-    }
-    return undef;
-}
-
-# push a socket back onto our array of things we've got.
-sub put_reproxy_reusable_sock {
-    my Perlbal::Service $self = $_[0];
-    return unless $_[1] && $_[2];
-
-    # push onto end, time() + 5 means it's good until 5 seconds from now
-    push @{$self->{reproxy_sock_cache}->{$_[1]}}, [ time() + 5, $_[2] ];
 }
 
 # take a backend we've created and mark it as pending if we do not

@@ -31,13 +31,6 @@ use fields ('client',  # Perlbal::ClientProxy connection, or undef
             'content_length_remain',    # bytes remaining to be read
 
             'use_count',  # number of requests this backend's been used for
-
-            'primary_res_headers',  # if defined, this instance of BackendHTTP
-                                    # is a transient reproxying-URL case
-                                    # and the headers we get back aren't necessarily
-                                    # the ones we want.  instead, get most headers
-                                    # from the provided res headers object here.
-
             );
 use Socket qw(PF_INET IPPROTO_TCP SOCK_STREAM);
 
@@ -55,26 +48,21 @@ our (%NoVerify); # { "ip:port" => next-verify-time }
 # for, and uses that service to get its backend IP/port, as well as the
 # client that will be using this backend connection.  final parameter is
 # an options hashref that contains some options:
-#       primary_res_headers => HTTPHeaders object to draw primary headers from
 #       reportto => object obeying reportto interface
-#       reuse_sock => socket to use to talk to the backend
 sub new {
     my ($class, $svc, $ip, $port, $opts) = @_;
     $opts ||= {};
 
-    # see if we can reuse a socket?
-    my $sock = $opts->{reuse_sock};
-    unless ($sock) {
-        socket $sock, PF_INET, SOCK_STREAM, IPPROTO_TCP;
+    my $sock;
+    socket $sock, PF_INET, SOCK_STREAM, IPPROTO_TCP;
 
-        unless ($sock && defined fileno($sock)) {
-            Perlbal::log('critical', "Error creating socket: $!");
-            return undef;
-        }
-
-        IO::Handle::blocking($sock, 0);
-        connect $sock, Socket::sockaddr_in($port, Socket::inet_aton($ip));
+    unless ($sock && defined fileno($sock)) {
+        Perlbal::log('critical', "Error creating socket: $!");
+        return undef;
     }
+
+    IO::Handle::blocking($sock, 0);
+    connect $sock, Socket::sockaddr_in($port, Socket::inet_aton($ip));
 
     my $self = fields::new($class);
     $self->SUPER::new($sock);
@@ -86,7 +74,6 @@ sub new {
     $self->{ipport}  = "$ip:$port";  # often used as key
     $self->{service} = $svc;      # the service we're serving for
     $self->{reportto} = $opts->{reportto} || $svc; # reportto if specified
-    $self->{primary_res_headers} = $opts->{primary_res_headers};
     $self->state("connecting");
 
     # setup callback in case we get stuck in connecting land
@@ -123,6 +110,9 @@ sub close {
     # don't close twice
     return if $self->{closed};
 
+    # this closes the socket and sets our closed flag
+    $self->SUPER::close(@_);
+
     # tell our client that we're gone
     if (my $client = $self->{client}) {
         $client->backend(undef);
@@ -134,8 +124,6 @@ sub close {
         $reportto->note_backend_close($self);
         $self->{reportto} = undef;
     }
-
-    $self->SUPER::close(@_);
 }
 
 # called by service when it's got a client for us, or by ourselves
@@ -325,7 +313,7 @@ sub event_read {
                 $self->next_request;
                 return;
             } else {
-                my $res_source = $self->{primary_res_headers} || $hd;
+                my $res_source = $client->{primary_res_hdrs} || $hd;
                 my $thd = $client->{res_headers} = $res_source->clone;
 
                 # setup_keepalive will set Connection: and Keep-Alive: headers for us
@@ -335,7 +323,7 @@ sub event_read {
                 # if we had an alternate primary response header, make sure
                 # we send the real content-length (from the reproxied URL)
                 # and not the one the first server gave us
-                if ($self->{primary_res_headers}) {
+                if ($client->{primary_res_hdrs}) {
                     $thd->header('Content-Length', $hd->header('Content-Length'));
                     $thd->header('X-REPROXY-FILE', undef);
                     $thd->header('X-REPROXY-URL', undef);
@@ -406,33 +394,34 @@ sub next_request {
     # don't allow this if we're closed
     return if $self->{closed};
 
+    # set alive_time so reproxy can intelligently reuse this backend
+    my $now = time();
+    $self->{alive_time} = $now;
+
     my $hd = $self->{res_headers};  # response headers
-    unless (defined $self->{service} &&
-            $self->{service}{persist_backend} &&
-            $hd->header("Connection") =~ /\bkeep-alive\b/i) {
-        # if we have a reportto interface, notify it that we're ready for another
-        if (!$self->{service} && $self->{reportto}) {
-            return $self->{reportto}->backend_next_request($self);
-        } else {            
-            return $self->close('next_request_no_persist');
-        }
+    unless ($hd->header("Connection") =~ /\bkeep-alive\b/i) {
+        # just close, no keep-alive support
+        return $self->close('next_request_no_persist');
     }
 
-    my Perlbal::Service $svc = $self->{service};
+    # we've been used
+    $self->{use_count}++;
 
-    # keep track of how many times we've been used, and don't
-    # keep using this connection more times than the service
-    # is configured for.
-    if (++$self->{use_count} > $svc->{max_backend_uses} &&
-        $svc->{max_backend_uses}) {
-        return $self->close('exceeded_max_uses');
+    # service specific
+    if (my Perlbal::Service $svc = $self->{service}) {
+        # keep track of how many times we've been used, and don't
+        # keep using this connection more times than the service
+        # is configured for.
+        if ($svc->{max_backend_uses} && ($self->{use_count} > $svc->{max_backend_uses})) {
+            return $self->close('exceeded_max_uses');
+        }
     }
 
     # if backend told us, keep track of when the backend
     # says it's going to boot us, so we don't use it within
     # a few seconds of that time
     if ($hd->header("Keep-Alive") =~ /\btimeout=(\d+)/i) {
-        $self->{disconnect_at} = time() + $1;
+        $self->{disconnect_at} = $now + $1;
     } else {
         $self->{disconnect_at} = undef;
     }
@@ -449,7 +438,7 @@ sub next_request {
     $self->{headers_string} = "";
     $self->{req_headers} = undef;
 
-    $svc->register_boredom($self);
+    $self->{reportto}->register_boredom($self);
     return;
 }
 

@@ -31,6 +31,7 @@ use Perlbal::ClientHTTPBase;
 use Perlbal::ClientProxy;
 use Perlbal::ClientHTTP;
 use Perlbal::BackendHTTP;
+use Perlbal::ReproxyManager;
 
 $SIG{'PIPE'} = "IGNORE";  # handled manually
 
@@ -363,11 +364,19 @@ sub run_manage_command {
         return 1;
     }
 
-    if ($cmd =~ /^server (\w+) ?= ?(.+)$/) {
+    if ($cmd =~ /^server (\S+) ?= ?(.+)$/) {
         my ($key, $val) = ($1, $2);
         return $err->("Expected numeric parameter") unless $val =~ /^-?\d+$/;
 
-        if ($key eq "max_connections") {
+        if ($key =~ /^max_reproxy_connections(?:\((.+)\))?/) {
+            my $hostip = $1;
+            if (defined $hostip) {
+                $Perlbal::ReproxyManager::ReproxyMax{$hostip} = $val+0;
+            } else {
+                $Perlbal::ReproxyManager::ReproxyGlobalMax = $val+0;
+            }
+
+        } elsif ($key eq "max_connections") {
             my $rv = setrlimit(RLIMIT_NOFILE, $val, $val);
             unless (defined $rv && $rv) {
                 if ($> == 0) {
@@ -391,6 +400,11 @@ sub run_manage_command {
             
         }
 
+        return 1;
+    }
+
+    if ($cmd =~ /^reproxy_state/) {
+        Perlbal::ReproxyManager::dump_state($out);
         return 1;
     }
 
