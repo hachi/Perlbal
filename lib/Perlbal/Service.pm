@@ -465,6 +465,19 @@ sub spawn_backends {
             }
         }
 
+        # ultimate edge case (happened in about 0.0000005% of the connections):
+        #  1. backend is stuck in "connecting" for >5 seconds
+        #  2. that ip:port combo is randomly chosen above
+        #  3. we call $be->close on it since it's old
+        #  4. $be->close calls $be->{service}->note_backend_close
+        #  5. note_backend_close then calls spawn_backends (us) again
+        #  6. if we happen to randomly pick the SAME ip:port from step 2, since it's
+        #     already closed, we happen to spawn a new one
+        #  7. spawn_backends returns and then we create ANOTHER backend here
+        # so for that case, we want to NOT create another one here because then
+        # we end up with a bad pending_connect_count.  so, let's not double-spawn.
+        next if $self->{pending_connects}{"$ip:$port"};        
+
         if (my $be = Perlbal::BackendHTTP->new($self, $ip, $port)) {
             $self->{pending_connects}{$be->{ipport}} = $be;
             $self->{pending_connect_count}++;
