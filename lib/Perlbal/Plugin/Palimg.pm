@@ -194,6 +194,9 @@ sub new_gif_palette
 {
     my ($data, $palref) = @_;
 
+    # make sure we have data to operate on, or the substrs below die
+    return unless $$data;
+
     # 13 bytes for magic + image info (size, color depth, etc)
     # and then the global palette table (3*256)
     my $header = substr($$data, 0, 13+3*256);

@@ -1,3 +1,6 @@
+    -- bug in PalImg caused crash on files with no length (or when another
+       error occurs that causes no data to be sent to new_gif_palette function)
+
     -- ReproxyManager would sometimes let closed backends back into the pool
        and hand them off to clients, fixed to check for that
 
