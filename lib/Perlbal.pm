@@ -52,6 +52,7 @@ our $track_obj = 0;  # default to not track creation locations
 our $reqs = 0; # total number of requests we've done
 our $starttime = time(); # time we started
 our ($lastutime, $laststime, $lastreqs) = (0, 0, 0); # for deltas
+our $verbose = 0; # turned off by default
 
 # setup XS status data structures
 our %XSModules; # ( 'headers' => 'Perlbal::XS::HTTPHeaders' )
@@ -156,6 +157,10 @@ sub run_manage_command {
     my $err = sub {
         $out->("ERROR: $_[0]");
         return 0;
+    };
+    my $ok = sub {
+        $out->("OK") if $verbose;
+        return 1;
     };
 
     if ($cmd =~ /^obj$/) {
@@ -344,7 +349,6 @@ sub run_manage_command {
 
         # so they know something happened
         $out->('.');
-
         return 1;
     }
 
@@ -436,7 +440,6 @@ sub run_manage_command {
             }
         }
         $out->('.');
-
         return 1;
     }
 
@@ -575,12 +578,12 @@ sub run_manage_command {
             
         }
 
-        return 1;
+        return $ok->();
     }
 
     if ($cmd =~ /^reproxy_state/) {
         Perlbal::ReproxyManager::dump_state($out);
-        return 1;
+        return $ok->();
     }
 
     if ($cmd =~ /^create service (\w+)$/) {
@@ -588,7 +591,7 @@ sub run_manage_command {
         return $err->("service '$name' already exists") if $service{$name};
         return $err->("pool '$name' already exists") if $pool{$name};
         $service{$name} = Perlbal::Service->new($name);
-        return 1;
+        return $ok->();
     }
 
     if ($cmd =~ /^create pool (\w+)$/) {
@@ -597,7 +600,7 @@ sub run_manage_command {
         return $err->("service '$name' already exists") if $service{$name};
         $vivify_pools = 0;
         $pool{$name} = Perlbal::Pool->new($name);
-        return 1;
+        return $ok->();
     }
 
     # pool add <pool> <ipport>
@@ -611,7 +614,7 @@ sub run_manage_command {
         my $pl = $pool{$name};
         return $err->("Pool '$name' not found") unless $pl;
         $pl->$cmd($ip, $port);
-        return 1;
+        return $ok->();
     }
 
     if ($cmd =~ /^show pool(?:\s+(\w+))?$/) {
@@ -647,9 +650,9 @@ sub run_manage_command {
     if ($cmd =~ /^set (\w+)\.([\w\.]+) ?= ?(.+)$/) {
         my ($name, $key, $val) = ($1, $2, $3);
         if (my Perlbal::Service $svc = $service{$name}) {
-            return $svc->set($key, $val, $out);
+            return $svc->set($key, $val, $out, $verbose);
         } elsif (my Perlbal::Pool $pl = $pool{$name}) {
-            return $pl->set($key, $val, $out);
+            return $pl->set($key, $val, $out, $verbose);
         }
         return $err->("service/pool '$name' does not exist");
     }
@@ -660,14 +663,21 @@ sub run_manage_command {
             unless $mode =~ /^(?:insert|remove)$/;
         my $svc = $service{$name};
         return $err->("service '$name' does not exist") unless $svc;
-        return $svc->header_management($mode, $header, $val, $out);
+        return $ok->()
+            if $svc->header_management($mode, $header, $val, $out);
     }
 
     if ($cmd =~ /^(disable|enable) (\w+)$/) {
         my ($verb, $name) = ($1, $2);
         my $svc = $service{$name};
         return $err->("service '$name' does not exist") unless $svc;
-        return $svc->$verb($out);
+        return $ok->()
+            if $svc->$verb($out);
+    }
+
+    if ($cmd =~ /^verbose (on|off)$/) {
+        $verbose = ($1 eq 'on') ? 1 : 0;
+        return $ok->();
     }
 
     if ($cmd =~ /^(un)?load (\w+)$/) {
@@ -680,7 +690,7 @@ sub run_manage_command {
             return $err->($@) if $@;
             $plugins{$fn} = $un ? 0 : 1;
         }
-        return 1;
+        return $ok->();
     }
 
     if ($cmd =~ /^plugins$/) {
@@ -702,11 +712,13 @@ sub run_manage_command {
 
 sub load_config {
     my ($file, $writer) = @_;
+    $verbose = 0;
     open (F, $file) or die "Error opening config file ($file): $!\n";
     while (<F>) {
         return 0 unless run_manage_command($_, $writer);
     }
     close(F);
+    $verbose = 1;
     return 1;
 }
 

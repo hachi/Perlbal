@@ -1,3 +1,7 @@
+    -- new command for config file; VERBOSE ON/OFF; can be used to enable or
+       disable confirmation of all commands such as SET, SERVER, CREATE, etc.
+       by default, it's off for config files, but on for management connections.
+
     -- add generation count to services that increments every time a pool is
        switched.  this data is now stored on backends when they're spawned as
        well, and when we allocate a backend we verify the generation so old ones

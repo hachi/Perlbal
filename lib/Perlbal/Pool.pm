@@ -57,9 +57,10 @@ sub new {
 sub set {
     my Perlbal::Pool $self = shift;
     
-    my ($key, $val, $out) = @_;
-    my $err = sub { $out->("ERROR: $_[0]"); return 0; };
-    my $set = sub { $self->{$key} = $val;   return 1; };
+    my ($key, $val, $out, $verbose) = @_;
+    my $err = sub { $out->("ERROR: $_[0]");   return 0;       };
+    my $ok  = sub { $out->("OK") if $verbose; return 1;       };
+    my $set = sub { $self->{$key} = $val;     return $ok->(); };
 
     if ($key eq 'nodefile') {
         # allow to unset it, which stops us from checking it further,
@@ -69,7 +70,7 @@ sub set {
             $self->{'nodefile.lastmod'} = 0;
             $self->{'nodefile.checking'} = 0;
             $self->{'nodefile.lastcheck'} = 0;
-            return 1;
+            return $ok->();
         }
 
         # enforce that it exists from here on out
@@ -82,7 +83,7 @@ sub set {
         $self->{'nodefile.checking'} = 0;
         $self->load_nodefile;
         $self->{'nodefile.lastcheck'} = time;
-        return 1;
+        return $ok->();
     }
 
     if ($key eq "balance_method") {

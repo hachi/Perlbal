@@ -569,9 +569,10 @@ sub munge_headers {
 sub set {
     my Perlbal::Service $self = shift;
 
-    my ($key, $val, $out) = @_;
-    my $err = sub { $out->("ERROR: $_[0]"); return 0; };
-    my $set = sub { $self->{$key} = $val;   return 1; };
+    my ($key, $val, $out, $verbose) = @_;
+    my $err = sub { $out->("ERROR: $_[0]");   return 0;       };
+    my $ok  = sub { $out->("OK") if $verbose; return 1;       };
+    my $set = sub { $self->{$key} = $val;     return $ok->(); };
 
     my $pool_set = sub {
         # if we don't have a pool, automatically create one named $NAME_pool
@@ -592,7 +593,7 @@ sub set {
              "         This behavior is obsolete.  This value should be set on a\n" .
              "         pool object and not on a service.\n" if $Perlbal::vivify_pools;
         return $err->("No pool defined for service") unless $self->{pool};
-        return $self->{pool}->set($key, $val, $out);
+        return $self->{pool}->set($key, $val, $out, $verbose);
     };
 
     if ($key eq "role") {
@@ -625,7 +626,7 @@ sub set {
     if ($key eq 'trusted_upstream_proxies') {
         if ($self->{trusted_upstreams} = Net::Netmask->new2($val)) {
             # set, all good
-            return 1;
+            return $ok->();
         } else {
             return $err->("Error defining trusted upstream proxies: " . Net::Netmask::errstr());
         }
@@ -674,7 +675,7 @@ sub set {
         return $err->("Expected integer value") unless $val =~ /^\d+$/;
         $set->();
         $self->spawn_backends if $self->{enabled};
-        return 1;
+        return $ok->();
     }
 
     if ($key eq "max_backend_uses" || $key eq "backend_persist_cache" ||
@@ -714,7 +715,7 @@ sub set {
             unless $self->{role} eq "web_server";
         my @list = split(/[\s,]+/, $val);
         $self->{index_files} = \@list;
-        return 1;
+        return $ok->();
     }
 
     if ($key eq 'plugins') {
@@ -747,13 +748,13 @@ sub set {
             push @{$self->{plugin_order}}, $fn;
             return $err->($@) if $@;
         }
-        return 1;
+        return $ok->();
     }
 
     if ($key =~ /^extra\.(.+)$/) {
         # set some extra configuration data data
         $self->{extra_config}->{$1} = $val;
-        return 1;
+        return $ok->();
     }
 
     if ($key eq 'pool') {
@@ -763,7 +764,7 @@ sub set {
         $self->{pool} = $pl;
         $self->{pool}->increment_use_count;
         $self->{generation}++;
-        return 1;
+        return $ok->();
     }
 
     # see if it happens to be a plugin set command?
@@ -790,7 +791,7 @@ sub enable {
     # create listening socket
     my $tl = Perlbal::TCPListener->new($self->{listen}, $self);
     unless ($tl) {
-        $out && $out->("Can't start service '$self->{name}' on $self->{listen}: $Perlbal::last_error");
+        $out && $out->("ERROR: Can't start service '$self->{name}' on $self->{listen}: $Perlbal::last_error");
         return 0;
     }
 
