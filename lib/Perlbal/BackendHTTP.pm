@@ -264,13 +264,7 @@ sub event_read {
             # other setup to mark being done with options checking
             $self->{waiting_options} = 0;
             $self->{has_attention} = 1;
-            $self->watch_read(0);
-            $self->state("bored");
-            $self->{req_headers} = undef;
-            $self->{res_headers} = undef;
-            $self->{headers_string} = '';
-            $self->{content_length_remain} = undef;
-            $self->{service}->register_boredom($self);
+            $self->next_request;
         }
         return;
     }
