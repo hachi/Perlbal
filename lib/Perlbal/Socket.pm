@@ -74,7 +74,7 @@ sub watch_read {
     $event |=  EPOLLIN if   $val;
     if ($event != $self->{event_watch}) {
 	epoll_ctl($epoll, EPOLL_CTL_MOD, $self->{fd}, $event)
-	    and die "couldn't modify epoll settings for $self->{fd}\n";
+	    and print STDERR "couldn't modify epoll settings for $self->{fd}\n";
 	$self->{event_watch} = $event;
     }
 }
@@ -88,7 +88,7 @@ sub watch_write {
     $event |=  EPOLLOUT if   $val;
     if ($event != $self->{event_watch}) {
 	epoll_ctl($epoll, EPOLL_CTL_MOD, $self->{fd}, $event)
-	    and die "couldn't modify epoll settings for $self->{fd}\n";
+	    and print STDERR "couldn't modify epoll settings for $self->{fd}\n";
 	$self->{event_watch} = $event;
     }
 }
