@@ -107,7 +107,9 @@ sub http_response_sent {
     my Perlbal::ClientHTTPBase $self = $_[0];
 
     # close if we're supposed to
-    if ($self->{res_headers}->header('Connection') =~ m/\bclose\b/i) {
+    if (!defined $self->{res_headers} ||
+        $self->{res_headers}->header('Connection') =~ m/\bclose\b/i) {
+        # close if we have no response headers or they say to close
         $self->close("no_keep_alive");
         return;
     }
