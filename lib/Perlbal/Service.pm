@@ -36,6 +36,8 @@ use fields (
             'waiting_client_map'  ,    # map of clientproxy fd -> 1 (if they're waiting for a conn)
             'pending_connects',        # hashref of "ip:port" -> $time (only one pending connect to backend at a time)
             'pending_connect_count',   # number of outstanding backend connects
+            'high_priority_cookie',          # cookie name to check if client can 'cut in line' and get backends faster
+            'high_priority_cookie_contents', # aforementioned cookie value must contain this substring
             );
 
 sub new {
@@ -138,12 +140,16 @@ sub get_client {
     my Perlbal::ClientProxy $cp;
     while ($cp = shift @{$self->{waiting_clients_highpri}}) {
         my $backlog = scalar @{$self->{waiting_clients}};
-        print "Got from fast queue, in front of $backlog others\n";
-        print "Backend $be->{fd} requesting client, got FAST = $cp->{fd}.\n" unless $cp->{closed};
+        if (Perlbal::DEBUG >= 2) {
+            print "Got from fast queue, in front of $backlog others\n";
+            print "Backend $be->{fd} requesting client, got FAST = $cp->{fd}.\n" unless $cp->{closed};
+        }
         return $ret->($cp) if ! $cp->{closed};
     }
     while ($cp = shift @{$self->{waiting_clients}}) {
-        print "Backend $be->{fd} requesting client, got normal = $cp->{fd}.\n" unless $cp->{closed};
+        if (Perlbal::DEBUG >= 2) {
+            print "Backend $be->{fd} requesting client, got normal = $cp->{fd}.\n" unless $cp->{closed};
+        }
         return $ret->($cp) if ! $cp->{closed};
     }
 
@@ -172,28 +178,30 @@ sub request_backend_connection {
     my Perlbal::ClientProxy $cp;
     ($self, $cp) = @_;
 
-    # decide what priority class this request is in
-    my $hd = $cp->{headers};
+    my $hi_pri = 0;  # by default, low priority
 
-    my %cookie;
-    foreach (split(/;\s+/, $hd->header("Cookie") || '')) {
-        next unless ($_ =~ /(.*)=(.*)/);
-        $cookie{_durl($1)} = _durl($2);
+    # is there a defined high-priority cookie?
+    if (my $cname = $self->{high_priority_cookie}) {
+        # decide what priority class this request is in
+        my $hd = $cp->{headers};
+        my %cookie;
+        foreach (split(/;\s+/, $hd->header("Cookie") || '')) {
+            next unless ($_ =~ /(.*)=(.*)/);
+            $cookie{_durl($1)} = _durl($2);
+        }
+        my $hicookie = $cookie{$cname} || "";
+        $hi_pri = index($hicookie, $self->{high_priority_cookie_contents}) != -1;
+
     }
 
-    if ($cookie{'fastq'}) {
-        print "Client ($cp->{fd}) wants backend. (fast)\n";
+    if ($hi_pri) {
         push @{$self->{waiting_clients_highpri}}, $cp;
     } else {
-        print "Client ($cp->{fd}) wants backend.\n";
         push @{$self->{waiting_clients}}, $cp;
     }
 
     $self->{waiting_client_count}++;
     $self->{waiting_client_map}{$cp->{fd}} = 1;
-
-    my $backlog = scalar @{$self->{waiting_clients}};
-    print "Slow queue = $backlog (", join(", ", map { $_->{fd} } @{$self->{waiting_clients}}), ")\n";
 
     $self->pair_up_connections;
 }
@@ -215,9 +223,9 @@ sub pair_up_connections {
             return;
         }
         next if $self->{pending_connects}{"$ip:$port"};
-        $self->{pending_connects}{"$ip:$port"} = $now;
-        Perlbal::BackendHTTP->new($self, $ip, $port);
-        print "New backend spawned: $ip:$port\n";
+        if (Perlbal::BackendHTTP->new($self, $ip, $port)) {
+            $self->{pending_connects}{"$ip:$port"} = $now;
+        }
     }
 }
 
@@ -242,8 +250,6 @@ sub get_backend_endpoint {
 
     # no nodes?
     return () unless $self->{node_count};
-
-    print "Random\n";
 
     # pick one randomly
     return @{$self->{nodes}[int(rand($self->{node_count}))]};
@@ -292,6 +298,10 @@ sub set {
         }->{$val};
         return $err->("Unknown balance method")
             unless $val;
+        return $set->();
+    }
+
+    if ($key eq "high_priority_cookie" || $key eq "high_priority_cookie_contents") {
         return $set->();
     }
 
