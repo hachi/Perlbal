@@ -5,6 +5,7 @@
 package Perlbal::ClientManage;
 use strict;
 use base "Perlbal::Socket";
+use fields qw(service buf);
 
 # ClientManage
 sub new {
