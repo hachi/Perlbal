@@ -677,7 +677,8 @@ sub event_hup {  my $self = shift; $self->close; }
 ######################################################################
 package Perlbal::ClientProxy;
 use base "Perlbal::Socket";
-use fields qw(service backend all_sent reproxy_file reproxy_file_offset reproxy_file_size);
+use fields qw(service backend all_sent reproxy_file reconnect_count
+	      reproxy_file_offset reproxy_file_size );
 
 use constant READ_SIZE         => 4086;    # 4k, arbitrary
 use constant READ_AHEAD_SIZE   => 8192;    # 8k, arbitrary
@@ -856,10 +857,10 @@ use constant BACKEND_READ_SIZE => 131072;  # 128k; arbitrary
 
 # Backend
 sub new {
-    my ($class, $client, $ip, $port) = @_;
+    my ($class, $client) = @_;
 
-    $ip ||= "10.1.0.2";
-    $port ||= 85;
+    my $svc = $client->{service};
+    my ($ip, $port) = $svc->get_backend_endpoint();
 
     my $sock = IO::Socket::INET->new(
 				     PeerAddr => $ip,
@@ -933,7 +934,6 @@ sub event_read {
 
     unless ($self->{headers}) {
 	if (my $hd = $self->read_response_headers) {
-	    $client->write($hd->to_string_ref);
 
 	    if (my $rep = $hd->header('X-REPROXY-FILE')) {
 		if (my $size = -s $rep) {
@@ -942,19 +942,25 @@ sub event_read {
 		    open($fh, $rep) or return $client->close("reproxy_file_open_error");
 		    $client->reproxy_file($fh, $size);
 
+		    # fixup the Content-Length header if it was undefined/0
+		    $hd->header("Content-Length", $size);
+
 		    # setup the client's state:
 		    $client->backend(undef);    # disconnect ourselves from it
 		    $self->{client} = undef;    # .. and it from us
 		    $self->close;               # close ourselves
 		    $client->watch_write(1);    # and kick-start it into writing
 		} else {
-		    print "REPROXY: $rep (bogus)\n";
+		    print STDERR "REPROXY: $rep (bogus)\n";
 		    $client->close;
 		}
 		
 	    } else {
 		$self->drain_read_buf_to($client);
 	    }
+
+	    $client->write($hd->to_string_ref);
+
 	}
 	return;
     }
@@ -1006,9 +1012,11 @@ sub event_err {
 	return;
     }
 
-    # otherwise, retry connection
-    Perlbal::BackendHTTP->new($self->{client}, "10.1.0.2", 81)
-	if $self->{client};
+    # otherwise, retry connection up to 5 times (FIXME: arbitrary)
+    my Perlbal::ClientProxy $client = $self->{client};
+    Perlbal::BackendHTTP->new($client)
+	if $client && ! $client->{closed} && 
+	++$client->{reconnect_count} < 5;
 
     $self->close("error");
 }
@@ -1032,6 +1040,10 @@ sub new {
 	enabled => 0,
     };
     return bless $self, ref $class || $class;
+}
+
+sub get_backend_endpoint {
+    return ("10.1.0.10", "80");
 }
 
 # getter only
@@ -1066,6 +1078,12 @@ sub set {
 	return $set->();
     }
 
+    if ($key eq "nodefile") {
+	return $err->("File not found")
+	    unless -e $val;
+	return $set->();
+    }
+
     if ($key =~ /^sendstats\./) {
 	return $err->("Can only set sendstats listening address on service with balancing method 'sendstats'")
 	    unless $self->{balance_method} eq "sendstats";
@@ -1081,10 +1099,6 @@ sub set {
 		    Perlbal::StatsListener->new($val, $self)) {
 		return $err->("Error creating stats listener: $Perlbal::last_error");
 	    }
-	}
-	if ($key eq "sendstats.nodefile") {
-	    return $err->("File not found")
-		unless -e $val;
 	}
 	return $set->();
     }
