@@ -1,3 +1,8 @@
+    -- made auto-vivification of pulls throw warnings, and made Perlbal die if it
+       tries to vivify a pool and the user has previously manually declared a pool
+
+    -- updated pool commands to be more flexible (POOL pool ADD node, etc)
+
     -- add pools; a way of having different sets of nodes and instantly switching
        between them, so traffic stops going to old nodes; see the example config
        file for usage

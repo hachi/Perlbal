@@ -548,12 +548,26 @@ sub set {
     my $err = sub { $out->("ERROR: $_[0]"); return 0; };
     my $set = sub { $self->{$key} = $val;   return 1; };
 
-    my $vivify_pool = sub {
+    my $pool_set = sub {
         # if we don't have a pool, automatically create one named $NAME_pool
         unless ($self->{pool}) {
+            # die if necessary
+            die "ERROR: Attempt to vivify pool $self->{name}_pool but one or more pools\n" .
+                "       have already been created manually.  Please set $key on a\n" .
+                "       previously created pool.\n" unless $Perlbal::vivify_pools;
+
+            # create the pool and ensure that vivify stays on
             Perlbal::run_manage_command("CREATE POOL $self->{name}_pool", $out);
             Perlbal::run_manage_command("SET $self->{name}.pool = $self->{name}_pool");
+            $Perlbal::vivify_pools = 1;
         }
+
+        # now we actually do the set
+        warn "WARNING: '$key' set on service $self->{name} on auto-vivified pool.\n" .
+             "         This behavior is obsolete.  This value should be set on a\n" .
+             "         pool object and not on a service.\n" if $Perlbal::vivify_pools;
+        return $err->("No pool defined for service") unless $self->{pool};
+        return $self->{pool}->set($key, $val, $out);
     };
 
     if ($key eq "role") {
@@ -618,12 +632,13 @@ sub set {
 
     # this is now handled by Perlbal::Pool, so we pass this set command on
     # through in case people try to use it on us like the old method.
+    return $pool_set->()
+        if $key eq 'balance_method' ||
+           $key eq 'nodefile' ||
+           $key =~ /^sendstats\./;
     if ($key eq "balance_method") {
         return $err->("Can only set balance method on a reverse_proxy service")
             unless $self->{role} eq "reverse_proxy";
-        $vivify_pool->();
-        return $err->("No pool defined for service") unless $self->{pool};
-        return $self->{pool}->set($key, $val, $out);
     }
 
     if ($key eq "high_priority_cookie" || $key eq "high_priority_cookie_contents") {
@@ -652,16 +667,6 @@ sub set {
         return $set->();
     }
 
-    # nowadays services don't manage nodefiles themselves.  they are only
-    # responsible for handling backends allocated out of a pool.  but old
-    # style config files using a nodefile still need to work out of the box,
-    # so we transform them into pool creations.
-    if ($key eq "nodefile") {
-        $vivify_pool->();
-        return $err->("No pool defined for service") unless $self->{pool};
-        return $self->{pool}->set($key, $val, $out);
-    }
-
     if ($key eq "docroot") {
         return $err->("Can only set docroot on a web_server service")
             unless $self->{role} eq "web_server";
@@ -685,12 +690,6 @@ sub set {
         my @list = split(/[\s,]+/, $val);
         $self->{index_files} = \@list;
         return 1;
-    }
-
-    if ($key =~ /^sendstats\./) {
-        $vivify_pool->();
-        return $err->("No pool defined for service") unless $self->{pool};
-        return $self->{pool}->set($key, $val, $out);
     }
 
     if ($key eq 'plugins') {

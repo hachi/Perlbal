@@ -46,6 +46,7 @@ our(%service);   # servicename -> Perlbal::Service
 our(%pool);      # poolname => Perlbal::Pool
 our(%plugins);   # plugin => 1 (shows loaded plugins)
 our($last_error);
+our $vivify_pools = 1; # if on, allow automatic creation of pools
 our $foreground = 1; # default to foreground
 our $track_obj = 0;  # default to not track creation locations
 our $reqs = 0; # total number of requests we've done
@@ -594,12 +595,19 @@ sub run_manage_command {
         my $name = $1;
         return $err->("pool '$name' already exists") if $pool{$name};
         return $err->("service '$name' already exists") if $service{$name};
+        $vivify_pools = 0;
         $pool{$name} = Perlbal::Pool->new($name);
         return 1;
     }
 
-    if ($cmd =~ /^pool (add|remove) (\w+) (\d+.\d+.\d+.\d+)(?::(\d+))?$/) {
+    # pool add <pool> <ipport>
+    # pool <pool> add <ipport>
+    # ... or 'remove' instead of 'add'
+    if ($cmd =~ /^pool (\w+) (\w+) (\d+.\d+.\d+.\d+)(?::(\d+))?$/) {
         my ($cmd, $name, $ip, $port) = ($1, $2, $3, $4 || 80);
+        if ($name =~ /^(?:add|remove)$/) {
+            ($cmd, $name) = ($name, $cmd);
+        }
         my $pl = $pool{$name};
         return $err->("Pool '$name' not found") unless $pl;
         $pl->$cmd($ip, $port);
