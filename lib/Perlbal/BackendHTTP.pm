@@ -12,6 +12,9 @@ use fields ('client',  # Perlbal::ClientProxy connection, or undef
             'port',    # port scalar
             'ipport',  # "$ip:$port"
 
+            'req_headers',   # the HTTP request headers (as opposed to 'headers'
+                             # which is the response headers)
+
             'has_attention', # has been accepted by a webserver and
                              # we know for sure we're not just talking
                              # to the TCP stack
@@ -76,6 +79,8 @@ sub new {
 
     $self->{has_attention} = 0;
     $self->{use_count}     = 0;
+    $self->{content_length} = undef;
+    $self->{content_length_remain} = undef;
 
     bless $self, ref $class || $class;
     $self->watch_write(1);
@@ -110,6 +115,7 @@ sub assign_client {
     $self->{client}->backend($self);
 
     my Perlbal::HTTPHeaders $hds = $client->headers->clone;
+    $self->{req_headers} = $hds;
 
     # Use HTTP/1.0 to backend (FIXME: use 1.1 and support chunking)
     $hds->set_version("1.0");
@@ -191,8 +197,22 @@ sub event_read {
                 $hd->header("Content-Length", undef);
             }
 
-            if ($self->{content_length} = $hd->header("Content-Length")) {
+            my Perlbal::HTTPHeaders $rqhd = $self->{req_headers};
+
+            if ($rqhd->{method} eq "HEAD") {
+                # content-lengths coming back from HEAD requests aren't
+                # real.  there never is a message body.  just pass it
+                # back to the client and don't actually read what's not there
+                $self->{content_length} = 0;
+                $self->{content_length_remain} = 0;
+            } elsif (defined($self->{content_length} = $hd->header("Content-Length"))) {
+                # the normal case for a GET/POST, etc.  real data coming back
+                # also, an OPTIONS requests generally has a defined but 0 content-length
                 $self->{content_length_remain} = $self->{content_length};
+            } elsif ($hd->{code} == 304 || $hd->{code} == 204 || ($hd >= 100 && $hd <= 199)) {
+                # cases that will have no content-length
+                $self->{content_length} = 0;
+                $self->{content_length_remain} = 0;
             }
 
             if (my $rep = $hd->header('X-REPROXY-FILE')) {
@@ -209,12 +229,12 @@ sub event_read {
 
                 # if we over-read anything from backend (most likely)
                 # then decrement it from our count of bytes we need to read
-                if ($self->{content_length}) {
+                if (defined $self->{content_length}) {
                     $self->{content_length_remain} -= $self->{read_ahead};
                 }
                 $self->drain_read_buf_to($client);
 
-                if ($self->{content_length} && ! $self->{content_length_remain}) {
+                if (defined $self->{content_length} && ! $self->{content_length_remain}) {
                     # order important:  next_request detaches us from client, so
                     # $client->close can't kill us
                     $self->next_request;
@@ -300,6 +320,9 @@ sub next_request {
 
     $self->{headers} = undef;
     $self->{headers_string} = "";
+    $self->{req_headers} = undef;
+    $self->{content_length} = undef;
+    $self->{content_length_remain} = undef;
 
     $svc->register_boredom($self);
     return;
