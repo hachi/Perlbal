@@ -1,3 +1,15 @@
+    -- ReproxyManager would sometimes let closed backends back into the pool
+       and hand them off to clients, fixed to check for that
+
+    -- new policy: you don't muck around with the internals of other classes.
+       notably, clients don't change the internals of a backend and backends
+       don't change the internals of a client.  this was causing all sorts of
+       problems because nobody was cleaning up properly.  (especially with regard
+       to "who is my backend's client" type questions.)
+
+    -- fixed up code that did its own keep-alive checks to use the HTTPHeaders
+       functions so that in the future every part of the code stays up to date
+
     -- Perlbal::Socket now has the option to keep track of all objects that
        are created.  new command to management interface 'leaks' will show
        all objects currently in memory.  turn this functionality on by enabling

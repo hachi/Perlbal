@@ -399,10 +399,10 @@ sub next_request {
     $self->{alive_time} = $now;
 
     my $hd = $self->{res_headers};  # response headers
-    unless ($hd->header("Connection") =~ /\bkeep-alive\b/i) {
-        # just close, no keep-alive support
-        return $self->close('next_request_no_persist');
-    }
+
+    # verify that we have keep-alive support
+    return $self->close('next_request_no_persist')
+        unless $hd->res_keep_alive($self->{req_headers});
 
     # we've been used
     $self->{use_count}++;
@@ -426,8 +426,6 @@ sub next_request {
         $self->{disconnect_at} = undef;
     }
 
-    my Perlbal::ClientProxy $client = $self->{client};
-    $client->backend(undef) if $client;
     $self->{client} = undef;
 
     $self->state("bored");
@@ -437,6 +435,10 @@ sub next_request {
     $self->{res_headers} = undef;
     $self->{headers_string} = "";
     $self->{req_headers} = undef;
+
+    $self->{read_size} = 0;
+    $self->{content_length_remain} = undef;
+    $self->{content_length} = undef;
 
     $self->{reportto}->register_boredom($self);
     return;

@@ -66,6 +66,9 @@ sub start_reproxy_uri {
     my Perlbal::HTTPHeaders $primary_res_hdrs = $_[1];
     my $urls = $_[2];
 
+    # at this point we need to disconnect from our backend
+    $self->{backend} = undef;
+
     # failure if we have no primary response headers
     return unless $self->{primary_res_hdrs} ||= $primary_res_hdrs;
 
@@ -165,6 +168,9 @@ sub start_reproxy_file {
     my $file = shift;                      # filename to reproxy
     my Perlbal::HTTPHeaders $hd = shift;   # headers from backend, in need of cleanup
 
+    # at this point we need to disconnect from our backend
+    $self->{backend} = undef;
+
     # call hook for pre-reproxy
     return if $self->{service}->run_hook("start_file_reproxy", $self, \$file);
 
@@ -252,6 +258,9 @@ sub backend_finished {
     # mark ourselves as having responded (presumeably if we're here,
     # the backend has responded already)
     $self->{responded} = 1;
+
+    # our backend is done with us, so we disconnect ourselves from it
+    $self->{backend} = undef;
 
     # now, two cases; undefined clr, or defined and zero, or defined and non-zero
     if (defined $self->{content_length_remain}) {

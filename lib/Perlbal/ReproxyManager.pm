@@ -98,6 +98,13 @@ sub register_boredom {
         push @{$ReproxyBackends{$ipport}}, $be;
     }
 
+    # sometimes a backend is closed but it tries to register with us anyway... ignore it
+    # but since this might have been our only one, spawn another
+    if ($be->{closed}) {
+        $self->spawn_backend($ipport);
+        return;
+    }
+
     # find some clients to use
     while (my Perlbal::ClientProxy $cp = shift @{$ReproxyQueues{$ipport} || []}) {
         # safety checks

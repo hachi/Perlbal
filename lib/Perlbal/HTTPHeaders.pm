@@ -305,8 +305,11 @@ sub req_keep_alive {
     return 0 if $self->header('Connection') =~ /\bclose\b/i;
 
     # if we get here, the user wants keep-alive and seems to support it,
-    # so see if the response is wanting it
-    return 1 if $res->res_keep_alive($self);
+    # so we make sure that the response is in a form that we can understand
+    # well enough to do keep-alive.  FIXME: support chunked encoding in the
+    # future, which means this check changes.
+    return 1 if defined $res->header('Content-length') ||
+                $self->request_method eq 'HEAD';
 
     # fail-safe, no keep-alive
     return 0;
