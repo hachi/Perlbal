@@ -27,6 +27,11 @@ use fields (
 
 use constant MAX_HTTP_HEADER_LENGTH => 102400;  # 100k, arbitrary
 
+use constant TRACK_OBJECTS => 0;            # see @created_objects below
+if (TRACK_OBJECTS) {
+    use Scalar::Util qw(weaken isweak);
+}
+
 # time we last did a full connection sweep (O(n) .. lame)
 # and closed idle connections.
 our $last_cleanup = 0;
@@ -34,8 +39,19 @@ our %state_changes = (); # { "objref" => [ state, state, state, ... ] }
 our $last_callbacks = 0; # time last ran callbacks
 our $callbacks = []; # [ [ time, subref ], [ time, subref ], ... ]
 
+# this one deserves its own section.  we keep track of every Perlbal::Socket object
+# created if the TRACK_OBJECTS constant is on.  we use weakened references, though,
+# so this list will hopefully contain mostly undefs.  users can ask for this list if
+# they want to work with it via the get_created_objects_ref function.
+our @created_objects; # ( $ref, $ref, $ref ... )
+our $last_co_cleanup = 0; # clean the list every few seconds
+
 sub get_statechange_ref {
     return \%state_changes;
+}
+
+sub get_created_objects_ref {
+    return \@created_objects;
 }
 
 sub new {
@@ -62,6 +78,27 @@ sub new {
     if ($now > $last_callbacks) {
         $last_callbacks = $now;
         run_callbacks();
+    }
+
+    # now put this item in the list of created objects
+    if (TRACK_OBJECTS) {
+        # clean the created objects list if necessary
+        if ($last_co_cleanup < $now - 5) {
+            # remove out undefs, because those are natural byproducts of weakening
+            # references
+            @created_objects = grep { $_ } @created_objects;
+
+            # however, the grep turned our weak references back into strong ones, so
+            # we have to reweaken them
+            weaken($_) foreach @created_objects;
+
+            # we've cleaned up at this point
+            $last_co_cleanup = $now;
+        }
+
+        # now add this one to our cleaned list and weaken it
+        push @created_objects, $self;
+        weaken($created_objects[-1]);
     }
 
     return $self;

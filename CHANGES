@@ -1,3 +1,8 @@
+    -- Perlbal::Socket now has the option to keep track of all objects that
+       are created.  new command to management interface 'leaks' will show
+       all objects currently in memory.  turn this functionality on by enabling
+       the TRACK_OBJECTS constant in Perlbal::Socket.
+
     -- split keep-alive logic into request and response methods and cleared
        up how that works
 

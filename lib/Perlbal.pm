@@ -355,6 +355,26 @@ sub run_manage_command {
         return 1;
     }
 
+    # iterates over active objects.  if you specify an argument, it is treated as code
+    # with $_ being the reference to the object.
+    if ($cmd =~ /^leaks(?:\s+(.+))?$/) {
+        # shows objects that we think might have been leaked
+        my $ref = Perlbal::Socket::get_created_objects_ref;
+        foreach (@$ref) {
+            next unless $_; # might be undef!
+            if ($1) {
+                my $rv = eval "$1";
+                return $err->("$@") if $@;
+                next unless defined $rv;
+                $out->($rv);
+            } else {
+                $out->($_->as_string);
+            }
+        }
+        $out->('.');
+        return 1;
+    }
+
     if ($cmd =~ /^show service (\w+)$/) {
         my $sname = $1;
         my Perlbal::Service $svc = $service{$sname};
