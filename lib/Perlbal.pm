@@ -42,6 +42,7 @@ our($last_error);
 our $foreground = 1; # default to foreground
 our $track_obj = 0;  # default to not track creation locations
 our $reqs = 0; # total number of requests we've done
+our $starttime = time(); # time we started
 our ($lastutime, $laststime, $lastreqs) = (0, 0, 0); # for deltas
 
 # setup XS status data structures
@@ -204,6 +205,13 @@ sub run_manage_command {
         $out->("stime: $st (+$sdelta)");
         $out->("reqs: $reqs (+$rdelta)");
         ($lastutime, $laststime, $lastreqs) = ($ut, $st, $reqs);
+        $out->('.');
+        return 1;
+    }
+
+    if ($cmd =~ /^uptime/) {
+        $out->("starttime $starttime");
+        $out->("uptime " . (time() - $starttime));
         $out->('.');
         return 1;
     }
