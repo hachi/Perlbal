@@ -10,6 +10,7 @@ use fields qw(service backend all_sent reproxy_file reconnect_count
 
 use constant READ_SIZE         => 4086;    # 4k, arbitrary
 use constant READ_AHEAD_SIZE   => 8192;    # 8k, arbitrary
+use Errno qw( EPIPE );
 
 # ClientProxy
 sub new {
@@ -98,7 +99,15 @@ sub event_write {
 					  0, # NULL offset means kernel moves filepos (apparently)
 					  $to_send);
 	print "REPROXY Sent: $sent\n" if Perlbal::DEBUG >= 2;
-	if ($sent < 0) { die "Error w/ sendfile: $!\n"; }
+	if ($sent < 0) { 
+	    if ($! == EPIPE) {
+		$self->close("epipe");
+		return;
+	    }
+	    print STDERR "Error w/ sendfile: $!\n"; 
+	    $self->close;
+	    return;
+	}
 	$self->{reproxy_file_offset} += $sent;
 
 	if ($sent >= $to_send) {
