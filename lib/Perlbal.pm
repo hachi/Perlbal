@@ -348,8 +348,9 @@ sub run_manage_command {
             my $rv = POSIX::nice($val);
             $err->("Unable to renice: $!")
                 unless defined $rv;
-                    
+
         } elsif ($key eq "aio_threads") {
+            Linux::AIO::min_parallel($val);
 
         }
 
