@@ -68,6 +68,7 @@ use fields (
             'queue_relief_chance', # int:0-100; % chance to take a standard priority
                                    # request when we're in pressure relief mode
             'trusted_upstreams', # Net::Netmask object containing netmasks for trusted upstreams
+            'always_trusted', # bool; if true, always trust upstreams
             'extra_headers', # { insert => [ [ header, value ], ... ], remove => [ header, header, ... ],
                              #   set => [ [ header, value ], ... ] }; used in header management interface
             );
@@ -123,6 +124,7 @@ sub new {
 
     # don't have an object for this yet
     $self->{trusted_upstreams} = undef;
+    $self->{always_trusted} = 0;
 
     # bare data structure for extra header info
     $self->{extra_headers} = { remove => [], insert => [] };
@@ -679,6 +681,13 @@ sub set {
         } else {
             return $err->("Error defining trusted upstream proxies: " . Net::Netmask::errstr());
         }
+    }
+
+    if ($key eq 'always_trusted') {
+        $val = $bool->($val);
+        return $err->("Expecting boolean value for option '$key'")
+            unless defined $val;
+        return $set->();
     }
 
     if ($key eq 'enable_put' || $key eq 'enable_delete') {
