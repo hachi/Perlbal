@@ -84,6 +84,15 @@ sub new {
     $self->{primary_res_headers} = $opts->{primary_res_headers};
     $self->state("connecting");
 
+    # setup callback in case we get stuck in connecting land
+    Perlbal::Socket::register_callback(15, sub {
+        if ($self->state eq 'connecting' || $self->state eq 'verifying_backend') {
+            # shouldn't still be connecting/verifying ~15 seconds after create
+            $self->close;
+        }
+        return 0;
+    });
+
     # for header reading:
     $self->{req_headers} = undef;
     $self->{res_headers} = undef;  # defined w/ headers object once all headers in
@@ -113,10 +122,8 @@ sub close {
         $client->backend(undef);
     }
 
-    # and our service
-    if (my $service = $self->{service}) {
-        $service->note_backend_close($self);
-    }
+    # and our reporter interface
+    $self->{reportto}->note_backend_close($self);
 
     $self->SUPER::close($reason);
 }

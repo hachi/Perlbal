@@ -29,6 +29,8 @@ use constant MAX_HTTP_HEADER_LENGTH => 102400;  # 100k, arbitrary
 # and closed idle connections.
 our $last_cleanup = 0;
 our %state_changes = (); # { "objref" => [ state, state, state, ... ] }
+our $last_callbacks = 0; # time last ran callbacks
+our $callbacks = []; # [ [ time, subref ], [ time, subref ], ... ]
 
 sub get_statechange_ref {
     return \%state_changes;
@@ -52,6 +54,12 @@ sub new {
     if ($now - 15 > $last_cleanup) {
         $last_cleanup = $now;
         _do_cleanup();
+    }
+
+    # time to run callbacks?
+    if ($now > $last_callbacks) {
+        $last_callbacks = $now;
+        run_callbacks();
     }
 
     return $self;
@@ -82,6 +90,41 @@ sub _do_cleanup {
     }
 
     $_->close("perlbal_timeout") foreach @to_close;
+}
+
+# CLASS METHOD: given a delay (in seconds) and a subref, this will call
+# that subref in AT LEAST delay seconds. if the subref returns 0, the
+# callback is discarded, but if it returns a positive number, the callback
+# is pushed onto the callback stack to be called again in at least that
+# many seconds.
+sub register_callback {
+    # adds a new callback to our list
+    my ($delay, $subref) = @_;
+    push @$callbacks, [ time + $delay, $subref ];
+    return 1;
+}
+
+# CLASS METHOD: runs through the list of registered callbacks and executes
+# any that need to be executed
+sub run_callbacks {
+    my $now = time;
+    my @destlist = ();
+
+    foreach my $ref (@$callbacks) {
+        # if their time is <= now...
+        if ($ref->[0] <= $now) {
+            # find out if they want to run again...
+            my $rv = $ref->[1]->();
+
+            # and if they do, push onto list...
+            push @destlist, [ $rv + $now, $ref->[1] ]
+                if defined $rv && $rv > 0;
+        } else {
+            # not time for this one, just shove it
+            push @destlist, $ref;
+        }
+    }
+    $callbacks = \@destlist;
 }
 
 # CLASS METHOD:
