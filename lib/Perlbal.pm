@@ -3,9 +3,9 @@
 
 package Perlbal;
 
-use constant DEBUG => 0;
-use constant DEBUG_OBJ => 1;
-use constant TRACK_STATES => 0; # if on, track states for "state changes" command
+use constant DEBUG => $ENV{PERLBAL_DEBUG} || 0;
+use constant DEBUG_OBJ => $ENV{PERLBAL_DEBUG_OBJ} || 0;
+use constant TRACK_STATES => $ENV{PERLBAL_TRACK_STATES} || 0; # if on, track states for "state changes" command
 
 use strict;
 use warnings;

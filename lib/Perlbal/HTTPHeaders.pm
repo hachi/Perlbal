@@ -203,6 +203,12 @@ sub request_uri {
     return $self->{uri};
 }
 
+sub version_number {
+    my Perlbal::HTTPHeaders $self = $_[0];
+    return $self->{vernum} unless $_[1];
+    return $self->{vernum} = $_[1];
+}
+
 sub header {
     my Perlbal::HTTPHeaders $self = shift;
     my $key = shift;
@@ -304,7 +310,7 @@ sub req_keep_alive {
     my $conn = lc ($self->header('Connection') || '');
 
     # check the client
-    if ($self->{vernum} < 1001) {
+    if ($self->version_number < 1001) {
         # they must specify a keep-alive header
         return 0 unless $conn =~ /\bkeep-alive\b/i;
     }
@@ -330,7 +336,7 @@ sub res_keep_alive {
     my Perlbal::HTTPHeaders $req = $_[1];
 
     # handle the http 1.0/0.9 case
-    if ($self->{vernum} < 1001) {
+    if ($self->version_number < 1001) {
         # get the connection header now (saves warnings later)
         my $conn = lc ($self->header('Connection') || '');
 
