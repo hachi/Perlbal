@@ -159,6 +159,7 @@ sub _parse_nodefile {
 
     # prepare for adding nodes
     $self->{nodes} = [];
+    $self->{node_used} = {};
 
     foreach (@nodes) {
         s/\#.*//;
