@@ -81,7 +81,9 @@ sub new {
 
         my ($method, $uri, $ver) = ($1, $2, $3);
         print "Method: [$method] URI: [$uri] Version: [$ver]\n" if Perlbal::DEBUG >= 1;
-        $self->{requestLine} = "$method $uri HTTP/1.0";
+        $ver ||= "1.0";
+
+        $self->{requestLine} = "$method $uri HTTP/$ver";
         $self->{method} = $method;
         $self->{uri} = $uri;
     }
