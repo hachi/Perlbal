@@ -41,6 +41,8 @@ our(%plugins);   # plugin => 1 (shows loaded plugins)
 our($last_error);
 our $foreground = 1; # default to foreground
 our $track_obj = 0;  # default to not track creation locations
+our $reqs = 0; # total number of requests we've done
+our ($lastutime, $laststime, $lastreqs) = (0, 0, 0); # for deltas
 
 # setup XS status data structures
 our %XSModules; # ( 'headers' => 'Perlbal::XS::HTTPHeaders' )
@@ -156,7 +158,7 @@ sub run_manage_command {
             # command? verify
             my ($cmd, $module) = ($1, $2);
             return $err->('Known XS modules: ' . join(', ', sort keys %XSModules) . '.')
-                unless $XSModules{$module}; # FIXME: make this dynamic
+                unless $XSModules{$module};
 
             # okay, so now enable or disable this module
             if ($cmd eq 'enable') {
@@ -187,6 +189,20 @@ sub run_manage_command {
             $out->("To enable a module: xs enable <module>");
             $out->("To disable a module: xs disable <module>");
         }
+        $out->('.');
+        return 1;
+    }
+
+    if ($cmd =~ /^proc/) {
+        my $ru = getrusage();
+        my ($ut, $st) = ($ru->utime, $ru->stime);
+        my ($udelta, $sdelta) = ($ut - $lastutime, $st - $laststime);
+        my $rdelta = $reqs - $lastreqs;
+        $out->('time: ' . time());
+        $out->("utime: $ut (+$udelta)");
+        $out->("stime: $st (+$sdelta)");
+        $out->("reqs: $reqs (+$rdelta)");
+        ($lastutime, $laststime, $lastreqs) = ($ut, $st, $reqs);
         $out->('.');
         return 1;
     }

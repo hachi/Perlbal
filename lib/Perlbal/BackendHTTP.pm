@@ -420,7 +420,7 @@ sub next_request {
     # if backend told us, keep track of when the backend
     # says it's going to boot us, so we don't use it within
     # a few seconds of that time
-    if ($hd->header("Keep-Alive") =~ /\btimeout=(\d+)/i) {
+    if (($hd->header("Keep-Alive") || '') =~ /\btimeout=(\d+)/i) {
         $self->{disconnect_at} = $now + $1;
     } else {
         $self->{disconnect_at} = undef;

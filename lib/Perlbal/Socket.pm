@@ -176,6 +176,8 @@ sub read_headers {
     my Perlbal::Socket $self = shift;
     my $is_res = shift;
 
+    $Perlbal::reqs++ unless $is_res;
+
     my $sock = $self->{sock};
 
     my $to_read = MAX_HTTP_HEADER_LENGTH - length($self->{headers_string});

@@ -427,6 +427,7 @@ sub as_string {
     $ret .= "; responded" if $self->{responded};
     $ret .= "; waiting_for=" . $self->{content_length_remain}
         if defined $self->{content_length_remain};
+    $ret .= "; reproxying" if $self->{currently_reproxying};
 
     return $ret;
 }
