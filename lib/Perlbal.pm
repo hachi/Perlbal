@@ -483,8 +483,17 @@ sub run {
           },
     );
 
-    # wait for activity
-    Perlbal::Socket->EventLoop();
+    # begin the overall loop to try to capture if Perlbal dies at some point
+    # so we can have a log of it
+    eval {
+        # wait for activity
+        Perlbal::Socket->EventLoop();
+    };
+
+    # closing messages
+    if ($@) {
+        Perlbal::log('critical', "crash log: $_") foreach split(/\r?\n/, $@);
+    }
     Perlbal::log('info', 'ending run');
     closelog();
 }
