@@ -13,7 +13,11 @@ use IO::Socket;
 use IO::Handle;
 use IO::File;
 
-use Linux::AIO '1.3';
+# Try and use Linux::AIO, if it's around.  If not, worst 
+BEGIN {
+    $Perlbal::OPTMOD_LINUX_AIO = eval "use Linux::AIO '1.3'; 1;";
+}
+
 use Sys::Syslog;
 
 use Getopt::Long;
@@ -550,7 +554,8 @@ sub run_manage_command {
                 unless defined $rv;
 
         } elsif ($key eq "aio_threads") {
-            Linux::AIO::min_parallel($val);
+            Linux::AIO::min_parallel($val)
+                if $Perlbal::OPTMOD_LINUX_AIO;
 
         } elsif ($key =~ /^track_obj/) {
             return $err->("Expected 1 or 0") unless $val eq '1' || $val eq '0';
@@ -653,7 +658,8 @@ sub daemonize {
     $foreground = 0;
 
     # required before fork: (as of Linux::AIO 1.1, but may change)
-    Linux::AIO::max_parallel(0);
+    Linux::AIO::max_parallel(0)
+        if $Perlbal::OPTMOD_LINUX_AIO;
 
     ## Fork and exit parent
     if ($pid = fork) { exit 0; }
@@ -690,19 +696,19 @@ sub run {
     
     # number of AIO threads.  the number of outstanding requests isn't
     # affected by this
-    Linux::AIO::min_parallel(3);
+    Linux::AIO::min_parallel(3) if $Perlbal::OPTMOD_LINUX_AIO;
 
     # register Linux::AIO's pipe which gets written to from threads
     # doing blocking IO
-    my $aio_fd = Linux::AIO::poll_fileno;
+    if ($Perlbal::OPTMOD_LINUX_AIO) {
+        my $aio_fd = Linux::AIO::poll_fileno();
 
-    # add, so we don't clobber
-    Perlbal::Socket->AddOtherFds(
-        $aio_fd => sub {
+        # add, so we don't clobber
+        Perlbal::Socket->AddOtherFds($aio_fd => sub {
             # run any callbacks on async file IO operations
             Linux::AIO::poll_cb();
-          },
-    );
+        });
+    }
 
     # begin the overall loop to try to capture if Perlbal dies at some point
     # so we can have a log of it

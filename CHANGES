@@ -1,3 +1,6 @@
+    -- work partially without Linux::AIO (does sync stat of node file in reverse
+       proxy mode, and webserver mode doesn't work) --brad
+
 1.2 (2005-03-07)
     -- add new stats command 'nodes' that shows information on each node that we've
        been connecting to -- last connect time, last attempt time, a breakdown of
