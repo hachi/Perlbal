@@ -88,10 +88,13 @@ sub run_manage_command {
         return 1;
     }
 
+    exit(0) if $cmd eq "shutdown";
+
     if ($cmd =~ /^socks$/) {
         my $sf = Perlbal::Socket->get_sock_ref;
         foreach (sort { $a <=> $b } keys %$sf) {
-            $out->("$_ = $sf->{$_}");
+            my $sock = $sf->{$_};
+            $out->("$_ = " . $sock->as_string);
         }
         return 1;
     }
@@ -210,16 +213,12 @@ unless (Perlbal::Socket->WatchedSockets() > 0) {
 }
 
 if ($opt_daemonize) {
+    # required before fork: (as of Linux::AIO 1.1, but may change)
+    Linux::AIO::max_parallel(0);
     daemonize();
 } else {
     print "Running.\n";
 }
-
-$SIG{'INT'} = $SIG{'TERM'} = sub {
-    Linux::AIO::max_parallel(0);
-    # FIXME: unlink pid file
-    exit(0);
-};
 
 # number of AIO threads.  the number of outstanding requests isn't
 # affected by this
