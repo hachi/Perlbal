@@ -1,0 +1,23 @@
+* Keep track of how many times we couldn't do keep-alive from the backend.  This
+  happens if the backend server is doing chunked encoding or doesn't provide a
+  content length.
+
+* Allow option to say O_EXCL for PUTs
+
+* Investigate/fix error with "no mapping for fd" when a socket abruptly closes
+  during the connect process.  (Run ab against perlbal, then Ctrl+C it.)
+
+* Investigate when BackendHTTP fails on a call to get_res_headers?
+
+* Fix shutdown graceful to close off persistent clients and bored backends (reproxy too?)
+
+* Document the 'reproxy bored' queue [old...new] self cleaning on the old side, but
+  uses the new side when it needs a connection
+
+* Investigate why Perlbal is slow to accept connections
+
+* Lots of work can be done to reduce system calls:
+  - coalesce epoll_ctl calls
+  - make socket by hand without IO::Socket::INET
+  - edge-triggered epoll in Danga::Socket
+  - don't cork twice on reproxy & send
