@@ -9,6 +9,7 @@ use warnings;
 use base "Perlbal::Socket";
 use fields ('client',  # Perlbal::ClientProxy connection, or undef
             'service', # Perlbal::Service
+            'pool',    # Perlbal::Pool; whatever pool we spawned from
             'ip',      # IP scalar
             'port',    # port scalar
             'ipport',  # "$ip:$port"
@@ -74,6 +75,7 @@ sub new {
     $self->{port}    = $port;     # backend port
     $self->{ipport}  = "$ip:$port";  # often used as key
     $self->{service} = $svc;      # the service we're serving for
+    $self->{pool}    = $opts->{pool}; # what pool we came from.
     $self->{reportto} = $opts->{reportto} || $svc; # reportto if specified
     $self->state("connecting");
 
@@ -430,6 +432,10 @@ sub next_request {
     # verify that we have keep-alive support
     return $self->close('next_request_no_persist')
         unless $hd->res_keep_alive($self->{req_headers});
+
+    # and now see if we should closed based on the pool we're from
+    return $self->close('pool_requested_closure')
+        if $self->{pool} && ! $self->{pool}->backend_should_live($self);
 
     # we've been used
     $self->{use_count}++ unless $initial;

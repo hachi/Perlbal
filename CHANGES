@@ -1,3 +1,7 @@
+    -- add pools; a way of having different sets of nodes and instantly switching
+       between them, so traffic stops going to old nodes; see the example config
+       file for usage
+
     -- work partially without Linux::AIO (does sync stat of node file in reverse
        proxy mode, and webserver mode doesn't work) --brad
 

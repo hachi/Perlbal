@@ -10,27 +10,12 @@ use Net::Netmask;
 
 use Perlbal::BackendHTTP;
 
-# how often to reload the nodefile
-use constant NODEFILE_RELOAD_FREQ => 3;
-
-use constant BM_SENDSTATS => 1;
-use constant BM_ROUNDROBIN => 2;
-use constant BM_RANDOM => 3;
-
 use fields (
             'name',
             'enabled', # bool
             'role',    # currently 'reverse_proxy' or 'management'
             'listen',  # scalar: "$ip:$port"
-            'balance_method',  # BM_ constant from above
-            'nodefile',
-            'nodes',              # arrayref of [ip, port] values (port defaults to 80)
-            'node_count',         # number of nodes
-            'nodefile.lastmod',   # unix time nodefile was last modified
-            'nodefile.lastcheck', # unix time nodefile was last stated
-            'nodefile.checking',  # boolean; if true AIO is stating the file for us
-            'sendstats.listen',        # what IP/port the stats listener runs on
-            'sendstats.listen.socket', # Perlbal::StatsListener object
+            'pool',      # Perlbal::Pool that we're using to allocate nodes if we're in proxy mode
             'docroot',            # document root for webserver role
             'dirindexing',        # bool: direcotry indexing?  (for webserver role)  not async.
             'index_files',        # arrayref of filenames to try for index files
@@ -43,7 +28,6 @@ use fields (
             'pending_connect_count',   # number of outstanding backend connects
             'high_priority_cookie',          # cookie name to check if client can 'cut in line' and get backends faster
             'high_priority_cookie_contents', # aforementioned cookie value must contain this substring
-            'node_used',               # hashref of "ip:port" -> use count
             'connect_ahead',           # scalar: number of spare backends to connect to in advance all the time
             'backend_persist_cache',   # scalar: max number of persistent backends to hold onto while no clients
             'bored_backends',          # arrayref of backends we've already connected to, but haven't got clients
@@ -87,8 +71,6 @@ sub new {
     $self->{verify_backend} = 0;
     $self->{max_backend_uses} = 0;
     $self->{backend_persist_cache} = 2;
-
-    $self->{nodes} = [];   # no configured nodes
 
     $self->{hooks} = {};
     $self->{plugins} = {};
@@ -254,104 +236,6 @@ sub clear_pending_connect {
     }
 }
 
-# returns string of balance method
-sub balance_method {
-    my Perlbal::Service $self = shift;
-    my $methods = {
-        &BM_SENDSTATS => "sendstats",
-        &BM_ROUNDROBIN => "round_robin",
-        &BM_RANDOM => "random",
-    };
-    return $methods->{$self->{balance_method}} || $self->{balance_method};
-}
-
-sub populate_sendstats_hosts {
-    my Perlbal::Service $self = shift;
-
-    # tell the sendstats listener about the new list of valid
-    # IPs to listen from
-    if ($self->{balance_method} == BM_SENDSTATS) {
-        my $ss = $self->{'sendstats.listen.socket'};
-        $ss->set_hosts(map { $_->[0] } @{$self->{nodes}}) if $ss;
-    }
-}
-
-sub load_nodefile {
-    my Perlbal::Service $self = shift;
-    return 0 unless $self->{'nodefile'};
-
-    if ($Perlbal::OPTMOD_LINUX_AIO) {
-        return $self->_load_nodefile_async;
-    } else {
-        return $self->_load_nodefile_sync;
-    }
-}
-
-sub _parse_nodefile {
-    my Perlbal::Service $self = shift;
-    my $dataref = shift;
-
-    my @nodes = split(/\r?\n/, $$dataref);
-
-    # prepare for adding nodes
-    $self->{nodes} = [];
-
-    foreach (@nodes) {
-        s/\#.*//;
-        if (/(\d+\.\d+\.\d+\.\d+)(?::(\d+))?/) {
-            my ($ip, $port) = ($1, $2);
-            push @{$self->{nodes}}, [ $ip, $port || 80 ];
-        }
-    }
-    
-    # setup things using new data
-    $self->{node_count} = scalar @{$self->{nodes}};
-    $self->populate_sendstats_hosts;
-}
-
-sub _load_nodefile_sync {
-    my Perlbal::Service $self = shift;
-    
-    my $mod = (stat($self->{nodefile}))[9];
-    return if $mod == $self->{'nodefile.lastmod'};
-    $self->{'nodefile.lastmod'} = $mod;
-    
-    open NODEFILE, $self->{nodefile} or return;
-    my $nodes;
-    { local $/ = undef; $nodes = <NODEFILE>; }
-    close NODEFILE;
-    $self->_parse_nodefile(\$nodes);
-}
-
-
-sub _load_nodefile_async {
-    my Perlbal::Service $self = shift;
-
-    return if $self->{'nodefile.checking'};
-    $self->{'nodefile.checking'} = 1;
-
-    Linux::AIO::aio_stat($self->{nodefile}, sub {
-        $self->{'nodefile.checking'} = 0;
-        return unless -e _;
-
-        my $mod = (stat(_))[9];
-        return if $mod == $self->{'nodefile.lastmod'};
-        $self->{'nodefile.lastmod'} = $mod;
-
-        # construct a filehandle (we only have a descriptor here)
-        open NODEFILE, $self->{nodefile}
-            or return;
-        my $nodes;
-        { local $/ = undef; $nodes = <NODEFILE>; }
-        close NODEFILE;
-
-        $self->_parse_nodefile(\$nodes);
-        return;
-    });
-
-    return 1;
-}
-
 # called by BackendHTTP when it's closed by any means
 sub note_backend_close {
     my Perlbal::Service $self = shift;
@@ -372,9 +256,8 @@ sub note_client_close {
 }
 
 sub mark_node_used {
-    my Perlbal::Service $self = shift;
-    my $hostport = shift;
-    $self->{node_used}{$hostport}++;
+    my Perlbal::Service $self = $_[0];
+    $self->{pool}->mark_node_used($_[1]) if $self->{pool};
 }
 
 sub get_client {
@@ -433,6 +316,13 @@ sub register_boredom {
         $self->clear_pending_connect($be);
     }
 
+    # it is possible that this backend is part of a different pool that we're
+    # no longer using... if that's the case, we want to close it
+    return $be->close('pool_switch')
+        unless $be->{pool} && $self->{pool} &&
+               $be->{pool}->name eq $self->{pool}->name;
+
+    # now try to fetch a client for it
     my Perlbal::ClientProxy $cp = $self->get_client;
     if ($cp) {
         if ($be->assign_client($cp)) {
@@ -549,6 +439,9 @@ sub request_backend_connection {
 sub spawn_backends {
     my Perlbal::Service $self = shift;
 
+    # to spawn we must have a pool
+    return unless $self->{pool};
+
     # check our lock and set it if we can
     return if $self->{spawn_lock};
     $self->{spawn_lock} = 1;
@@ -567,7 +460,7 @@ sub spawn_backends {
     my $to_create = $backends_needed - $backends_created;
 
     # can't create more than this, assuming one pending connect per node
-    my $max_creatable = $self->{node_count} - $self->{pending_connect_count};
+    my $max_creatable = $self->{pool}->node_count - $self->{pending_connect_count};
     $to_create = $max_creatable if $to_create > $max_creatable;
 
     # cap number of attempted connects at once
@@ -577,7 +470,7 @@ sub spawn_backends {
 
     while ($to_create > 0) {
         $to_create--;
-        my ($ip, $port) = $self->get_backend_endpoint;
+        my ($ip, $port) = $self->{pool}->get_backend_endpoint;
         unless ($ip) {
             Perlbal::log('crit', "No backend IP for service $self->{name}");
             # FIXME: register desperate flag, so load-balancer module can callback when it has a node
@@ -597,39 +490,13 @@ sub spawn_backends {
         }
 
         # now actually spawn a backend and add it to our pending list
-        if (my $be = Perlbal::BackendHTTP->new($self, $ip, $port)) {
+        if (my $be = Perlbal::BackendHTTP->new($self, $ip, $port, { pool => $self->{pool} })) {
             $self->add_pending_connect($be);
         }
     }
 
     # clear our spawn lock
     $self->{spawn_lock} = 0;
-}
-
-sub get_backend_endpoint {
-    my Perlbal::Service $self = shift;
-
-    my @endpoint;  # (IP,port)
-
-    # re-load nodefile if necessary
-    my $now = time;
-    if ($now > $self->{'nodefile.lastcheck'} + NODEFILE_RELOAD_FREQ) {
-        $self->{'nodefile.lastcheck'} = $now;
-        $self->load_nodefile;
-    }
-
-    if ($self->{balance_method} == BM_SENDSTATS) {
-        my $ss = $self->{'sendstats.listen.socket'};
-        if ($ss && (@endpoint = $ss->get_endpoint)) {
-            return @endpoint;
-        }
-    }
-
-    # no nodes?
-    return () unless $self->{node_count};
-
-    # pick one randomly
-    return @{$self->{nodes}[int(rand($self->{node_count}))]};
 }
 
 # getter only
@@ -680,6 +547,14 @@ sub set {
     my ($key, $val, $out) = @_;
     my $err = sub { $out->("ERROR: $_[0]"); return 0; };
     my $set = sub { $self->{$key} = $val;   return 1; };
+
+    my $vivify_pool = sub {
+        # if we don't have a pool, automatically create one named $NAME_pool
+        unless ($self->{pool}) {
+            Perlbal::run_manage_command("CREATE POOL $self->{name}_pool", $out);
+            Perlbal::run_manage_command("SET $self->{name}.pool = $self->{name}_pool");
+        }
+    };
 
     if ($key eq "role") {
         return $err->("Unknown service role")
@@ -741,17 +616,14 @@ sub set {
         return $set->();
     }
 
-
+    # this is now handled by Perlbal::Pool, so we pass this set command on
+    # through in case people try to use it on us like the old method.
     if ($key eq "balance_method") {
         return $err->("Can only set balance method on a reverse_proxy service")
             unless $self->{role} eq "reverse_proxy";
-        $val = {
-            'sendstats' => BM_SENDSTATS,
-            'random' => BM_RANDOM,
-        }->{$val};
-        return $err->("Unknown balance method")
-            unless $val;
-        return $set->();
+        $vivify_pool->();
+        return $err->("No pool defined for service") unless $self->{pool};
+        return $self->{pool}->set($key, $val, $out);
     }
 
     if ($key eq "high_priority_cookie" || $key eq "high_priority_cookie_contents") {
@@ -780,18 +652,14 @@ sub set {
         return $set->();
     }
 
+    # nowadays services don't manage nodefiles themselves.  they are only
+    # responsible for handling backends allocated out of a pool.  but old
+    # style config files using a nodefile still need to work out of the box,
+    # so we transform them into pool creations.
     if ($key eq "nodefile") {
-        return $err->("File not found")
-            unless -e $val;
-
-        # force a reload
-        $self->{'nodefile'} = $val;
-        $self->{'nodefile.lastmod'} = 0;
-        $self->{'nodefile.checking'} = 0;
-        $self->load_nodefile;
-        $self->{'nodefile.lastcheck'} = time;
-
-        return 1;
+        $vivify_pool->();
+        return $err->("No pool defined for service") unless $self->{pool};
+        return $self->{pool}->set($key, $val, $out);
     }
 
     if ($key eq "docroot") {
@@ -820,24 +688,9 @@ sub set {
     }
 
     if ($key =~ /^sendstats\./) {
-        return $err->("Can only set sendstats listening address on service with balancing method 'sendstats'")
-            unless $self->{balance_method} == BM_SENDSTATS;
-        if ($key eq "sendstats.listen") {
-            return $err->("Invalid host:port")
-                unless $val =~ m!^\d+\.\d+\.\d+\.\d+:\d+$!;
-
-            if (my $pbs = $self->{"sendstats.listen.socket"}) {
-                $pbs->close;
-            }
-
-            unless ($self->{"sendstats.listen.socket"} =
-                    Perlbal::StatsListener->new($val, $self)) {
-                return $err->("Error creating stats listener: $Perlbal::last_error");
-            }
-
-            $self->populate_sendstats_hosts;
-        }
-        return $set->();
+        $vivify_pool->();
+        return $err->("No pool defined for service") unless $self->{pool};
+        return $self->{pool}->set($key, $val, $out);
     }
 
     if ($key eq 'plugins') {
@@ -876,6 +729,15 @@ sub set {
     if ($key =~ /^extra\.(.+)$/) {
         # set some extra configuration data data
         $self->{extra_config}->{$1} = $val;
+        return 1;
+    }
+
+    if ($key eq 'pool') {
+        my $pl = Perlbal->pool($val);
+        return $err->("Pool '$val' not found") unless $pl;
+        $self->{pool}->decrement_use_count if $self->{pool};
+        $self->{pool} = $pl;
+        $self->{pool}->increment_use_count;
         return 1;
     }
 
@@ -959,17 +821,18 @@ sub stats_info
     if ($self->{role} eq "reverse_proxy") {
         my $bored_count = scalar @{$self->{bored_backends}};
         $out->(" connect-ahead: $bored_count/$self->{connect_ahead}");
-        $out->("balance method: " . $self->balance_method);
-        $out->("         nodes:");
-        foreach my $n (@{ $self->{nodes} }) {
-            my $hostport = "$n->[0]:$n->[1]";
-            $out->(sprintf("                %-21s %7d", $hostport, $self->{node_used}{$hostport} || 0));
+        if ($self->{pool}) {
+            $out->("          pool: " . $self->{pool}->name);
+            $out->("balance method: " . $self->{pool}->balance_method);
+            $out->("         nodes:");
+            foreach my $n (@{ $self->{pool}->nodes }) {
+                my $hostport = "$n->[0]:$n->[1]";
+                $out->(sprintf("                %-21s %7d", $hostport, $self->{pool}->node_used($hostport) || 0));
+            }
         }
     } elsif ($self->{role} eq "web_server") {
         $out->("        docroot: $self->{docroot}");
     }
-
-    
 }
 
 # simple passthroughs to the run_hook mechanism.  part of the reportto interface.

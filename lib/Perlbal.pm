@@ -37,11 +37,13 @@ use Perlbal::ClientProxy;
 use Perlbal::ClientHTTP;
 use Perlbal::BackendHTTP;
 use Perlbal::ReproxyManager;
+use Perlbal::Pool;
 
 $SIG{'PIPE'} = "IGNORE";  # handled manually
 
 our(%hooks);     # hookname => subref
 our(%service);   # servicename -> Perlbal::Service
+our(%pool);      # poolname => Perlbal::Pool
 our(%plugins);   # plugin => 1 (shows loaded plugins)
 our($last_error);
 our $foreground = 1; # default to foreground
@@ -130,6 +132,11 @@ sub service_names {
 sub service {
     my $class = shift;
     return $service{$_[0]};
+}
+
+sub pool {
+    my $class = shift;
+    return $pool{$_[0]};
 }
 
 # returns 1 if command succeeded, 0 otherwise
@@ -578,7 +585,45 @@ sub run_manage_command {
     if ($cmd =~ /^create service (\w+)$/) {
         my $name = $1;
         return $err->("service '$name' already exists") if $service{$name};
+        return $err->("pool '$name' already exists") if $pool{$name};
         $service{$name} = Perlbal::Service->new($name);
+        return 1;
+    }
+
+    if ($cmd =~ /^create pool (\w+)$/) {
+        my $name = $1;
+        return $err->("pool '$name' already exists") if $pool{$name};
+        return $err->("service '$name' already exists") if $service{$name};
+        $pool{$name} = Perlbal::Pool->new($name);
+        return 1;
+    }
+
+    if ($cmd =~ /^pool (add|remove) (\w+) (\d+.\d+.\d+.\d+)(?::(\d+))?$/) {
+        my ($cmd, $name, $ip, $port) = ($1, $2, $3, $4 || 80);
+        my $pl = $pool{$name};
+        return $err->("Pool '$name' not found") unless $pl;
+        $pl->$cmd($ip, $port);
+        return 1;
+    }
+
+    if ($cmd =~ /^show pool(?:\s+(\w+))?$/) {
+        my $pool = $1;
+        if ($pool) {
+            my $pl = $pool{$pool};
+            return $err->("pool '$pool' does not exist") unless $pl;
+
+            foreach my $node (@{ $pl->nodes }) {
+                my $ipport = "$node->[0]:$node->[1]";
+                $out->($ipport . " " . $pl->node_used($ipport));
+            }
+        } else {
+            foreach my $name (sort keys %pool) {
+                my Perlbal::Pool $pl = $pool{$name};
+                $out->("$name nodes $pl->{node_count}");
+                $out->("$name services $pl->{use_count}");
+            }
+        }        
+        $out->('.');
         return 1;
     }
 
@@ -593,14 +638,17 @@ sub run_manage_command {
 
     if ($cmd =~ /^set (\w+)\.([\w\.]+) ?= ?(.+)$/) {
         my ($name, $key, $val) = ($1, $2, $3);
-        my $svc = $service{$name};
-        return $err->("service '$name' does not exist") unless $svc;
-        return $svc->set($key, $val, $out);
+        if (my Perlbal::Service $svc = $service{$name}) {
+            return $svc->set($key, $val, $out);
+        } elsif (my Perlbal::Pool $pl = $pool{$name}) {
+            return $pl->set($key, $val, $out);
+        }
+        return $err->("service/pool '$name' does not exist");
     }
 
     if ($orig =~ /^header\s+(\w+)\s+(\w+)\s+(.+?)(?:\s*:\s*(.+))?$/i) {
         my ($mode, $name, $header, $val) = (lc $1, lc $2, $3, $4);
-        return $err->("format: header <'insert|remove> <service> <header>[: <value>]")
+        return $err->("format: header <insert|remove> <service> <header>[: <value>]")
             unless $mode =~ /^(?:insert|remove)$/;
         my $svc = $service{$name};
         return $err->("service '$name' does not exist") unless $svc;
