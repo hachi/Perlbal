@@ -113,6 +113,11 @@ sub close {
         $client->backend(undef);
     }
 
+    # and our service
+    if (my $service = $self->{service}) {
+        $service->note_backend_close($self);
+    }
+
     $self->SUPER::close($reason);
 }
 
