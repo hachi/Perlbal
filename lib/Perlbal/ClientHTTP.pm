@@ -133,7 +133,7 @@ sub _simple_response {
 
     my $en = $res->http_code_english;
     my $body = "<h1>$code" . ($en ? " - $en" : "") . "</h1>\n";
-    $body .= $msg;
+    $body .= $msg if $msg;
 
     $self->tcp_cork(1);  # cork writes to self
     $self->write($res->to_string_ref);
