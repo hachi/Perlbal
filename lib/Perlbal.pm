@@ -253,13 +253,26 @@ sub run_manage_command {
         return 1;
     }
 
-    if ($cmd =~ /^states$/) {
+    if ($cmd =~ /^states(?:\s+(.+))?$/) {
         my $sf = Perlbal::Socket->get_sock_ref;
+
+        my $svc;
+        if (defined $1) {
+            $svc = $service{$1};
+            return $err->("Service not found.")
+                unless defined $svc;
+        }
 
         my %states; # { "Class" => { "State" => int count; } }
         foreach my $sock (values %$sf) {
             my $state = $sock->state;
             next unless defined $state;
+            if (defined $svc) {
+                next unless $sock->isa('Perlbal::ClientProxy') ||
+                            $sock->isa('Perlbal::BackendHTTP') ||
+                            $sock->isa('Perlbal::ClientHTTP');
+                next unless $sock->{service} == $svc;
+            }
             $states{ref $sock}->{$state}++;
         }
 
