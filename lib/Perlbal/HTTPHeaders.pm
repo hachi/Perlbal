@@ -3,6 +3,7 @@
 ######################################################################
 
 package Perlbal::HTTPHeaders;
+use strict;
 
 sub fail {
     return undef unless Perlbal::DEBUG >= 1;

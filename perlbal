@@ -33,9 +33,9 @@ use Perlbal::TCPListener;
 use Perlbal::HTTPHeaders;
 use Perlbal::StatsListener;
 use Perlbal::Service;
+use Perlbal::ClientProxy;
 use Perlbal::BackendHTTP;
 use Perlbal::ClientManage;
-use Perlbal::ClientProxy;
 
 
 ######################################################################

@@ -3,6 +3,7 @@
 ######################################################################
 
 package Perlbal::Service;
+use strict;
 
 # how often to reload the nodefile
 use constant NODEFILE_RELOAD_FREQ => 3;
@@ -91,19 +92,15 @@ sub get_backend_endpoint {
     if ($self->{balance_method} == BM_SENDSTATS) {
 	my $ss = $self->{'sendstats.listen.socket'};
 	if ($ss && (@endpoint = $ss->get_endpoint)) {
-	    print "Returning sendstats endpoint: @endpoint\n";
 	    return @endpoint;
 	}
     }
 
-    
-    unless ($self->{node_count}) {
-	print "sendstats didn't help.  and no nodes.\n";
-	return ();
-    }
-    @endpoint = @{$self->{nodes}[int(rand($self->{node_count}))]};
-    print "For lack of options, returning random of $self->{node_count}: @endpoint\n";
-    return @endpoint;
+    # no nodes?
+    return () unless $self->{node_count};
+
+    # pick one randomly
+    return @{$self->{nodes}[int(rand($self->{node_count}))]};
 }
 
 # getter only

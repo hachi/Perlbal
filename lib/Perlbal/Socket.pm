@@ -3,6 +3,7 @@
 ######################################################################
 
 package Perlbal::Socket;
+use strict;
 use IO::Epoll;
 
 use fields qw(sock fd write_buf write_buf_offset write_buf_size

@@ -3,6 +3,7 @@
 ######################################################################
 
 package Perlbal::TCPListener;
+use strict;
 use base "Perlbal::Socket";
 use fields qw(service);
 

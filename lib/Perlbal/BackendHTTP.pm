@@ -2,10 +2,8 @@
 # HTTP connection to backend node
 ######################################################################
 
-use Perlbal::Socket;
-use Perlbal::ClientProxy;
-
 package Perlbal::BackendHTTP;
+use strict;
 use base "Perlbal::Socket";
 use fields qw(client ip port req_sent);
 

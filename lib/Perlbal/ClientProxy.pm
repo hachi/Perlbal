@@ -3,6 +3,7 @@
 ######################################################################
 
 package Perlbal::ClientProxy;
+use strict;
 use base "Perlbal::Socket";
 use fields qw(service backend all_sent reproxy_file reconnect_count
 	      reproxy_file_offset reproxy_file_size );

@@ -3,6 +3,7 @@
 ######################################################################
 
 package Perlbal::ClientManage;
+use strict;
 use base "Perlbal::Socket";
 
 # ClientManage
