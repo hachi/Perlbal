@@ -212,6 +212,25 @@ sub run_manage_command {
         return 1;
     }
 
+    if ($cmd =~ /^queues$/) {
+        my $sf = Perlbal::Socket->get_sock_ref;
+
+        my $now = time;
+        my %oldest; # { "class" => oldest age }
+        foreach my $sock (values %$sf) {
+            my $age = $now - $sock->{create_time};
+            $oldest{ref $sock} = $age
+                if $age > ($oldest{ref $sock} || 0);
+        }
+
+        # now print
+        foreach my $type (sort keys %oldest) {
+            $out->("$type $oldest{$type}");
+        }
+        $out->('.');
+        return 1;
+    }
+
     if ($cmd =~ /^state changes$/) {
         my $hr = Perlbal::Socket->get_statechange_ref;
         my %final; # { "state" => count }
