@@ -106,24 +106,40 @@ sub load_nodefile {
 
     return 0 unless $self->{'nodefile'};
 
-    my $mod = (stat($self->{'nodefile'}))[9];
-    return 1 if $mod == $self->{'nodefile.lastmod'};
+    Linux::AIO::aio_stat($self->{nodefile}, sub {
+        return unless -e _;
 
-    if (open (NF, $self->{nodefile})) {
-        $self->{'nodefile.lastmod'} = $mod;
-        $self->{nodes} = [];
-        while (<NF>) {
-            s/\#.*//;
-            if (/(\d+\.\d+\.\d+\.\d+)(?::(\d+))?/) {
-                my ($ip, $port) = ($1, $2);
-                push @{$self->{nodes}}, [ $ip, $port || 80 ];
+        my $mod = (stat(_))[9];
+        return if $mod == $self->{'nodefile.lastmod'};
+
+        Linux::AIO::aio_open($self->{nodefile}, 0, 0, sub {
+            my $fd = shift;
+            return if $fd < 0;
+
+            # construct a filehandle (we only have a descriptor here)
+            open NODEFILE, "<&=$fd" or return;
+
+            # prepare for adding nodes
+            $self->{'nodefile.lastmod'} = $mod;
+            $self->{nodes} = [];
+
+            # now parse contents
+            while (<NODEFILE>) {
+                s/\#.*//;
+                if (/(\d+\.\d+\.\d+\.\d+)(?::(\d+))?/) {
+                    my ($ip, $port) = ($1, $2);
+                    push @{$self->{nodes}}, [ $ip, $port || 80 ];
+                }
             }
-        }
-        close NF;
+            close NODEFILE;
 
-        $self->{node_count} = scalar @{$self->{nodes}};
-        $self->populate_sendstats_hosts;
-    }
+            # setup things using new data
+            $self->{node_count} = scalar @{$self->{nodes}};
+            $self->populate_sendstats_hosts;
+            return;
+        });
+    });
+
     return 1;
 }
 
