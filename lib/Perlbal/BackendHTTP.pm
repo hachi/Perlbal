@@ -413,7 +413,8 @@ sub event_err {
         return;
     }
 
-    if ($self->{state} eq "connecting") {
+    if ($self->{state} eq "connecting" ||
+        $self->{state} eq "verifying_backend") {
         # then tell the service manager that this connection
         # failed, so it can spawn a new one and note the dead host
         $self->{service}->note_bad_backend_connect($self->{ip}, $self->{port});
