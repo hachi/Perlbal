@@ -51,6 +51,8 @@ use fields (
             'plugins',  # hashref: name => 1
             'plugin_order', # arrayref: name, name, name...
             'extra_config', # hashref: extra config options; name => values
+            'enable_put', # bool: whether PUT is supported
+            'max_put_size', # int: max size in bytes of a put file
             );
 
 sub new {
@@ -73,6 +75,9 @@ sub new {
     $self->{hooks} = {};
     $self->{plugins} = {};
     $self->{plugin_order} = [];
+
+    $self->{enable_put} = 0;
+    $self->{max_put_size} = 0; # 0 means no max size
 
     # track pending connects to backend
     $self->{pending_connects} = {};
@@ -510,6 +515,15 @@ sub set {
         return undef;
     };
 
+    if ($key eq 'enable_put') {
+        return $err->("This can only be used on web_server service")
+            unless $self->{role} eq 'web_server';
+        $val = $bool->($val);
+        return $err->("Expecting boolean value for option '$key'.")
+            unless defined $val;
+        return $set->();
+    }
+
     if ($key eq "persist_client" || $key eq "persist_backend" ||
         $key eq "verify_backend") {
         $val = $bool->($val);
@@ -542,7 +556,8 @@ sub set {
         return 1;
     }
 
-    if ($key eq "max_backend_uses" || $key eq "backend_persist_cache") {
+    if ($key eq "max_backend_uses" || $key eq "backend_persist_cache" ||
+        $key eq "max_put_size") {
         return $err->("Expected integer value") unless $val =~ /^\d+$/;
         return $set->();
     }
