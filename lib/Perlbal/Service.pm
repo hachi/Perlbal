@@ -53,6 +53,7 @@ use fields (
             'extra_config', # hashref: extra config options; name => values
             'enable_put', # bool: whether PUT is supported
             'max_put_size', # int: max size in bytes of a put file
+            'min_put_directory', # int: number of directories required to exist at beginning of URIs in put
             );
 
 sub new {
@@ -78,6 +79,7 @@ sub new {
 
     $self->{enable_put} = 0;
     $self->{max_put_size} = 0; # 0 means no max size
+    $self->{min_put_directory} = 0;
 
     # track pending connects to backend
     $self->{pending_connects} = {};
@@ -557,7 +559,7 @@ sub set {
     }
 
     if ($key eq "max_backend_uses" || $key eq "backend_persist_cache" ||
-        $key eq "max_put_size") {
+        $key eq "max_put_size" || $key eq "min_put_directory") {
         return $err->("Expected integer value") unless $val =~ /^\d+$/;
         return $set->();
     }

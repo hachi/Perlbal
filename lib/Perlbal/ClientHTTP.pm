@@ -19,7 +19,10 @@ use HTTP::Date ();
 use File::Path;
 
 use Errno qw( EPIPE );
-use POSIX qw( O_CREAT O_TRUNC O_WRONLY ENOENT );
+use POSIX qw( O_CREAT O_TRUNC O_WRONLY O_RDONLY ENOENT );
+
+# class list of directories we know exist
+our (%VerifiedDirs);
 
 sub new {
     my $class = shift;
@@ -149,16 +152,50 @@ sub setup_put {
     if ($uri =~ m!^((?:/[\w\-\.]+)*)/([\w\-\.]+)$!) {
         # sanitize uri into path and file into a disk path and filename
         my ($path, $filename) = ($1 || '', $2);
-        $path = $self->{service}->{docroot} . '/' . $path;
-        $path = '/' . join('/', grep { defined $_ && length $_ } split('/', $path));
+
+        # verify minput if necessary
+        if ($self->{service}->{min_put_directory}) {
+            my @elems = grep { defined $_ && length $_ } split '/', $path;
+            return $self->send_response(400, 'Does not meet minimum directory requirement');
+                unless scalar(@elems) >= $self->{service}->{min_put_directory};
+            my $minput = '/' . join('/', @elems[0..$self->{service}->{min_put_directory}-1]);
+            my $path = '/' . join('/', @elems[$self->{service}->{min_put_directory}..@elems] || ());
+            return unless $self->verify_put($minput, $path, $filename);
+        }
 
         # now we want to open this directory
-        return $self->attempt_open($path, $filename);
+        my $lpath = $self->{service}->{docroot} . '/' . $path;
+        return $self->attempt_open($lpath, $filename);
     } else {
         # bad URI, don't accept the put
-        $self->watch_read(0);
         return $self->send_response(400, 'Invalid filename');
     }
+}
+
+# verify that a minimum put directory exists
+# return value: 1 means the directory is okay, continue
+#               0 means we must verify the directory, stop processing
+sub verify_put {
+    my Perlbal::ClientHTTP $self = shift;
+    my ($minput, $extrapath, $filename) = @_;
+
+    my $mindir = $self->{service}->{docroot} . '/' . $minput;
+    return 1 if $VerifiedDirs{$mindir};
+    
+    $self->{put_in_progress} = 1;
+    
+    Linux::AIO::aio_open($mindir, O_RDONLY, 0755, sub {
+        $self->{put_in_progress} = 0;
+
+        # if error return failure
+        return $self->send_response(404, "Base directory does not exist") if $!;
+
+        # mindir existed, mark it as so and start the open for the rest of the path
+        POSIX::close(shift);
+        $VerifiedDirs{$mindir} = 1;
+        return $self->attempt_open($mindir . $extrapath, $filename);
+    });
+    return 0;
 }
 
 # attempt to open a file
