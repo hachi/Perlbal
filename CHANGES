@@ -1,3 +1,8 @@
+    -- rewrote reproxy URI support.  new class Perlbal::ReproxyManager does all
+       of the work relating to reproxies.  it's basically a service class but
+       stripped down and dealing with single endpoints instead of pools.  much
+       much much more robust under heavy load.  (Junior, Brad)
+
     -- now that we support persistent connections, the 'queues' command didn't
        have an accurate time; added ClientProxy member last_request_time so
        we can accurately tell how long requests have been waiting for
