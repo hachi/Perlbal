@@ -94,6 +94,7 @@ sub run_manage_command {
         foreach (sort keys %ObjCount) {
             $out->("$_ = $ObjCount{$_} (tot=$ObjTotal{$_})");
         }
+        $out->('.');
         return 1;
     }
 

@@ -97,7 +97,10 @@ sub start_reproxy_file {
 sub backend {
     my Perlbal::ClientProxy $self = shift;
     return $self->{backend} unless @_;
-    return $self->{backend} = shift;
+
+    my $backend = shift;
+    $self->{state} = 'draining_res' unless $backend;
+    return $self->{backend} = $backend;
 }
 
 
@@ -178,8 +181,13 @@ sub as_string {
     my Perlbal::ClientProxy $self = shift;
 
     my $ret = $self->SUPER::as_string;
-    my $ipport = $self->{backend} ? $self->{backend}->{ipport} : 'unknown';
-    $ret .= "; backend=$ipport";
+    if ($self->{backend}) {
+        my $ipport = $self->{backend}->{ipport};
+        $ret .= "; backend=$ipport";
+    } else {
+        my $bufsize = $self->{write_buf_size} - $self->{write_buf_offset};
+        $ret .= "; write buffer: $bufsize";
+    }
 
     return $ret;
 }

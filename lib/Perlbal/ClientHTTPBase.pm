@@ -2,7 +2,7 @@
 # Common HTTP functionality for ClientProxy and ClientHTTP
 # possible states: 
 #   reading_headers (initial state, then follows one of two paths)
-#     wait_backend, backend_req_sent, wait_res, xfer_res
+#     wait_backend, backend_req_sent, wait_res, xfer_res, draining_res
 #     wait_stat, wait_open, xfer_disk
 ######################################################################
 
