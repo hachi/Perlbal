@@ -300,8 +300,12 @@ sub event_read {
 
             return if $self->{service}->run_hook('start_proxy_request', $self);
 
-            # if defined we're waiting on some amount of data
+            # if defined we're waiting on some amount of data.  also, we have to
+            # subtract out read_size, which is the amount of data that was
+            # extra in the packet with the header that's part of the body.
             $self->{content_length_remain} = $hd->content_length;
+            $self->{content_length_remain} -= $self->{read_size}
+                if defined $self->{content_length_remain};
 
             $self->state('wait_backend');
             $self->{service}->request_backend_connection($self);
