@@ -69,7 +69,7 @@ sub new {
 
     $hstr =~ s!\r!!g;
     my @lines = split(/\n/, $hstr);
-    my $first = shift @lines;
+    my $first = (shift @lines) || "";
 
     $self->{headers} = {};
     $self->{origcase} = {};
