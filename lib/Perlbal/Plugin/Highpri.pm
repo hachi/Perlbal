@@ -35,13 +35,16 @@ sub register {
             return 0;
         };
 
-        # verify this regex works?  do it in an eval because qr will die
-        # if we give it something invalid
+        # if they said undef, that's not a regexp, that means use none
         my $temp;
-        eval {
-            $temp = qr{$val};
-        };
-        return $err->("Invalid regular expression") if $@ || !$temp;
+        unless ($val eq 'undef' || $val eq 'none' || $val eq 'null') {
+            # verify this regex works?  do it in an eval because qr will die
+            # if we give it something invalid
+            eval {
+                $temp = qr{$val};
+            };
+            return $err->("Invalid regular expression") if $@ || !$temp;
+        }
 
         # see what they want to set and set it
         if ($what =~ /^uri_pattern/i) {
