@@ -30,7 +30,7 @@ sub new {
     $self = fields::new($class) unless ref $self;
     $self->SUPER::new($service, $sock);       # init base fields
 
-    Perlbal::objctor();
+    Perlbal::objctor($self);
 
     $self->{read_buf} = [];        # scalar refs of bufs read from client
     $self->{read_ahead} = 0;       # bytes sitting in read_buf
@@ -450,7 +450,7 @@ sub as_string {
 }
 
 sub DESTROY {
-    Perlbal::objdtor();
+    Perlbal::objdtor($_[0]);
     $_[0]->SUPER::DESTROY;
 }
 

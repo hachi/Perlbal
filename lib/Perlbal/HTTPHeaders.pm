@@ -59,7 +59,7 @@ sub new_response {
     $self->{code} = $code;
     $self->{type} = "httpres";
 
-    Perlbal::objctor($self->{type});
+    Perlbal::objctor($self, $self->{type});
     return $self;
 }
 
@@ -81,7 +81,7 @@ sub new {
     $self->{method} = undef;
     $self->{uri} = undef;
     $self->{type} = ($is_response ? "res" : "req");
-    Perlbal::objctor($self->{type});
+    Perlbal::objctor($self, $self->{type});
 
     # check request line
     if ($is_response) {
@@ -232,7 +232,7 @@ sub clone {
     }
 
     # mark this object as constructed
-    Perlbal::objctor($new->{type});
+    Perlbal::objctor($new, $new->{type});
 
     $new->{headers} = { %{$self->{headers}} };
     $new->{origcase} = { %{$self->{origcase}} };
@@ -321,7 +321,7 @@ sub keep_alive {
 
 sub DESTROY {
     my Perlbal::HTTPHeaders $self = shift;
-    Perlbal::objdtor($self->{type});
+    Perlbal::objdtor($self, $self->{type});
 }
 
 1;

@@ -42,7 +42,7 @@ sub new {
     my Perlbal::Socket $self = shift;
     $self = fields::new( $self ) unless ref $self;
 
-    Perlbal::objctor();
+    Perlbal::objctor($self);
 
     $self->SUPER::new( @_ );
     $self->{headers_string} = '';
@@ -214,7 +214,7 @@ sub as_string_html {
 sub DESTROY {
     my Perlbal::Socket $self = shift;
     delete $state_changes{"$self"} if Perlbal::TRACK_STATES;
-    Perlbal::objdtor();
+    Perlbal::objdtor($self);
 }
 
 1;

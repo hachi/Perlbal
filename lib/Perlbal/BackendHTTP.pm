@@ -79,7 +79,7 @@ sub new {
     my $self = fields::new($class);
     $self->SUPER::new($sock);
 
-    Perlbal::objctor();
+    Perlbal::objctor($self);
 
     $self->{ip}      = $ip;       # backend IP
     $self->{port}    = $port;     # backend port
@@ -511,7 +511,7 @@ sub die_gracefully {
 }
 
 sub DESTROY {
-    Perlbal::objdtor();
+    Perlbal::objdtor($_[0]);
     $_[0]->SUPER::DESTROY;
 }
 

@@ -61,17 +61,17 @@ our(%ObjCount);  # classname -> instances
 our(%ObjTotal);  # classname -> instances
 sub objctor {
     if (DEBUG_OBJ) {
-        my $caller = (caller)[0];
-        $caller .= "-$_[0]" if $_[0];
-        $ObjCount{$caller}++;
-        $ObjTotal{$caller}++;
+        my $ref = ref $_[0];
+        $ref .= "-$_[1]" if $_[1];
+        $ObjCount{$ref}++;
+        $ObjTotal{$ref}++;
     }
 }
 sub objdtor {
     if (DEBUG_OBJ) {
-        my $caller = (caller)[0];
-        $caller .= "-$_[0]" if $_[0];
-        $ObjCount{$caller}--;
+        my $ref = ref $_[0];
+        $ref .= "-$_[1]" if $_[1];
+        $ObjCount{$ref}--;
     }
 }
 
