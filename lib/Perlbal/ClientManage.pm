@@ -113,12 +113,6 @@ sub handle_http {
     return;
 }
 
-sub die_gracefully {
-    # death
-    my $self = shift;
-    $self->close;
-}
-
 1;
 
 
