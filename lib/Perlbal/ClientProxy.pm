@@ -278,6 +278,7 @@ sub http_response_sent {
     $self->{reproxy_expected_size} = undef;
     $self->{currently_reproxying} = undef;
     $self->{content_length_remain} = undef;
+    $self->{primary_res_hdrs} = undef;
     $self->{responded} = 0;
     return 1;
 }
