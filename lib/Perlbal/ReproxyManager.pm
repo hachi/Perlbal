@@ -201,8 +201,11 @@ sub backend_response_received {
     my Perlbal::BackendHTTP $be = $_[1];
     my Perlbal::ClientProxy $cp = $be->{client};
 
-    # if no client, close backend
-    return $be->close("lost_client") unless $cp;
+    # if no client, close backend and return 1
+    unless ($cp) {
+        $be->close("lost_client");
+        return 1;
+    }
 
     # pass on to client
     return $cp->backend_response_received($be);
