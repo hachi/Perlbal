@@ -264,7 +264,7 @@ sub event_read {
             # other setup to mark being done with options checking
             $self->{waiting_options} = 0;
             $self->{has_attention} = 1;
-            $self->next_request;
+            $self->next_request(1); # initial
         }
         return;
     }
@@ -395,8 +395,10 @@ sub event_read {
     }
 }
 
+# if $initial is on, then don't increment use count
 sub next_request {
     my Perlbal::BackendHTTP $self = $_[0];
+    my $initial = $_[1];
 
     # don't allow this if we're closed
     return if $self->{closed};
@@ -412,7 +414,7 @@ sub next_request {
         unless $hd->res_keep_alive($self->{req_headers});
 
     # we've been used
-    $self->{use_count}++;
+    $self->{use_count}++ unless $initial;
 
     # service specific
     if (my Perlbal::Service $svc = $self->{service}) {
