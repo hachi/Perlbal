@@ -16,15 +16,22 @@ sub register {
         my Perlbal::BackendHTTP $obj = shift;
         my Perlbal::HTTPHeaders $hds = $obj->{req_headers};
         my Perlbal::Service $svc = $obj->{service};
-        return 0 unless defined $hds && defined $svc && $obj->{client}->{high_priority};
-
+        return 0 unless defined $hds && defined $svc;
+        
         # determine age of oldest (first in line)
+        my $now = time;
         my Perlbal::ClientProxy $cp = $svc->{waiting_clients}->[0];
-        my $age = defined $cp ? (time - $cp->{create_time}) : 0;
+        my $age = defined $cp ? ($now - $cp->{create_time}) : 0;
+
+        # now do the age of the high priority queue
+        $cp = $svc->{waiting_clients_highpri}->[0];
+        my $hpage = defined $cp ? ($now - $cp->{create_time}) : 0;
         
         # setup the queue length headers
         $hds->header('X-Queue-Count', scalar(@{$svc->{waiting_clients}}));
         $hds->header('X-Queue-Age', $age);
+        $hds->header('X-HP-Queue-Count', scalar(@{$svc->{waiting_clients_highpri}}));
+        $hds->header('X-HP-Queue-Age', $hpage);
         return 0;
     });
 
