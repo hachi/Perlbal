@@ -121,10 +121,10 @@ sub new {
 
     my $last_header = undef;
     foreach my $line (@lines) {
-        if ($line =~ /^(\s+.*)$/) {
+        if ($line =~ /^\s/) {
             next unless defined $last_header;
-            $self->{headers}{$last_header} .= $1;
-        } elsif ($line =~ /^([^\x00-\x20\x7f\(\)\<\>\@,;:\\\"\/\[\]\?=\{\}]+):\s*(.*)$/) {
+            $self->{headers}{$last_header} .= $line;
+        } elsif ($line =~ /^([^\x00-\x20\x7f()<>@,;:\\"\/\[\]?={}]+):\s*(.*)$/) {
             # RFC 2616:
             # sec 4.2:
             #     message-header = field-name ":" [ field-value ]
