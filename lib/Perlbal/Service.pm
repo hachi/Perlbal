@@ -196,7 +196,8 @@ sub add_pending_connect {
 sub clear_pending_connect {
     my Perlbal::Service $self = shift;
     my Perlbal::BackendHTTP $be = shift;
-    if ($self->{pending_connects}{$be->{ipport}} == $be) {
+    if (defined $self->{pending_connects}{$be->{ipport}} && defined $be &&
+            $self->{pending_connects}{$be->{ipport}} == $be) {
         $self->{pending_connects}{$be->{ipport}} = undef;
         $self->{pending_connect_count}--;
     }
