@@ -52,6 +52,18 @@ sub new {
     return $self;
 }
 
+sub close {
+    my Perlbal::BackendHTTP $self = shift;
+    my $reason = shift;
+
+    # tell our client that we're gone
+    if (my $client = $self->{client}) {
+	$client->backend(undef);
+    }
+
+    $self->SUPER::close($reason);
+}
+
 # Backend
 sub event_write {
     my Perlbal::BackendHTTP $self = shift;
@@ -161,11 +173,15 @@ sub event_err {
 
     # otherwise, retry connection up to 5 times (FIXME: arbitrary)
     my Perlbal::ClientProxy $client = $self->{client};
+
+    # close ourselves first (which tells the client we're gone)
+    $self->close("error");
+
+    # then try to make a new connection, which tells the client
+    # who the new connection is
     Perlbal::BackendHTTP->new($client)
 	if $client && ! $client->{closed} && 
 	++$client->{reconnect_count} < 5;
-
-    $self->close("error");
 }
 
 # Backend
