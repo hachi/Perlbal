@@ -19,6 +19,7 @@ use Sys::Syslog;
 use Getopt::Long;
 use BSD::Resource;
 use Carp qw(cluck croak);
+use Errno qw(EBADF);
 use POSIX ();
 
 use Perlbal::HTTPHeaders;
@@ -191,6 +192,29 @@ sub run_manage_command {
             $out->("To enable a module: xs enable <module>");
             $out->("To disable a module: xs disable <module>");
         }
+        $out->('.');
+        return 1;
+    }
+
+    if ($cmd =~ /^fd/) {
+        # called in list context on purpose, but we want the hard limit
+        my (undef, $max) = getrlimit(RLIMIT_NOFILE);
+        my $ct = 0;
+
+        # first try procfs if one exists, as that's faster than iterating
+        if (opendir(DIR, "/proc/self/fd")) {
+            my @dirs = readdir(DIR);
+            $ct = scalar(@dirs) - 2; # don't count . and ..
+            closedir(DIR);
+        } else {
+            # isatty() is cheap enough to do on everything
+            foreach (0..$max) {
+                my $res = POSIX::isatty($_);
+                $ct++ if $res || ($! != EBADF);
+            }
+        }
+        $out->("max $max");
+        $out->("cur $ct");
         $out->('.');
         return 1;
     }
