@@ -220,16 +220,19 @@ sub event_read {
             return $self->verify_failure unless $hd->keep_alive("n/a");
             $self->{content_length_remain} = $hd->header("Content-Length");
         }
-        unless ($self->{content_length_remain}) {
+
+        # if we've got the option response and read any response data
+        # if present:
+        if ($self->{headers} && ! $self->{content_length_remain}) {
             # other setup to mark being done with options checking
             $self->{waiting_options} = 0;
             $self->{has_attention} = 1;
             $self->watch_read(0);
             $self->state("bored");
-            $self->{service}->register_boredom($self);
             $self->{headers} = undef;
             $self->{headers_string} = '';
             $self->{content_length_remain} = undef;
+            $self->{service}->register_boredom($self);
         }
         return;
     }
