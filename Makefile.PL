@@ -13,7 +13,7 @@ use ExtUtils::MakeMaker;
 
 WriteMakefile(
     NAME                    => 'Perlbal',
-    VERSION                 => '1.01',
+    VERSION                 => '1.2',
     AUTHOR                  => 'Brad Fitzpatrick <brad@danga.com>',
     ABSTRACT_FROM           => 'perlbal',
 
@@ -25,7 +25,7 @@ WriteMakefile(
 
     PREREQ_PM               => {
         'Linux::AIO'  => '1.3',
-        'Danga::Socket' => '1.25',
+        'Danga::Socket' => '1.36',
         'BSD::Resource' => 0,
         'Net::Netmask' => 0,
         'Test::More' => 0,
