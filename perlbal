@@ -2,20 +2,18 @@
 #
 # Reverse-proxy load balancer w/ buffering, epoll, sendfile, etc
 #
-# (c) 1994, Brad Fitzpatrick, <brad@danga.com>
+# (c) 2004, Brad Fitzpatrick, <brad@danga.com>
 
 use strict;
 use lib 'lib';
 use Perlbal;
 
 my $opt_daemonize;
-my $opt_manage;
 my $opt_config;
 exit 1 unless
     Getopt::Long::GetOptions(
                'daemon' => \$opt_daemonize,
                'config=s' => \$opt_config,
-               'manage=s' => \$opt_manage,
                );
 
 my $default_config = "/etc/perlbal/perlbal.conf";
