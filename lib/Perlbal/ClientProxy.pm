@@ -5,8 +5,17 @@
 package Perlbal::ClientProxy;
 use strict;
 use base "Perlbal::Socket";
-use fields qw(service backend all_sent reproxy_fd reconnect_count
-	      reproxy_file_offset reproxy_file_size );
+use fields ('service',             # Perlbal::Service object
+	    'backend',             # Perlbal::BackendHTTP object (or undef if disconnected)
+	    'all_sent',            # scalar bool: if writing is done
+	    'reconnect_count',     # number of times we've tried to reconnect to backend
+
+	    # reproxy support
+	    'reproxy_file',        # filename the backend told us to start opening
+	    'reproxy_file_size',   # size of file, once we stat() it
+	    'reproxy_fd',          # integer fd of reproxying file, once we open() it
+	    'reproxy_file_offset', # how much we've sent from the file.
+	    );
 
 use constant READ_SIZE         => 4086;    # 4k, arbitrary
 use constant READ_AHEAD_SIZE   => 8192;    # 8k, arbitrary
@@ -39,6 +48,64 @@ sub new {
     return $self;
 }
 
+sub start_reproxy_file {
+    my Perlbal::ClientProxy $self = shift; 
+    my $file = shift;                      # filename to reproxy
+    my Perlbal::HTTPHeaders $hd = shift;   # headers from backend, in need of cleanup
+
+    # start an async stat on the file
+    Linux::AIO::aio_stat($file, sub {
+
+	# if the client's since disconnected by the time we get the stat,
+	# just bail.
+	return if $self->{closed};
+
+	my $size = -s _;
+
+	unless ($size) {
+	    # FIXME: POLICY: 404 or retry request to backend w/o reproxy-file capability?
+	    # for now we just close the connection, which is kinda lame.
+	    print STDERR "REPROXY: $file (bogus)\n";
+	    $self->close;
+	    return;
+	}
+
+	# fixup the Content-Length header with the correct size (application
+	# doesn't need to provide a correct value if it doesn't want to stat())
+	$hd->header("Content-Length", $size);
+	# don't send this internal header to the client:
+	$hd->header('X-REPROXY-FILE', undef);
+
+	# just send the header, now that we cleaned it.
+	$self->write($hd->to_string_ref);
+
+	if ($self->{headers}->request_method eq 'HEAD') {
+	    $self->all_sent(1);
+	    return;
+	}
+		
+	Linux::AIO::aio_open($file, 0, 0 , sub {
+	    my $rp_fd = shift;
+
+	    # if client's gone, just close filehandle and abort
+	    if ($self->{closed}) {
+		syscall(&SYS_close, $rp_fd) if $rp_fd >= 0;
+		return;
+	    }
+	    
+	    # handle errors
+	    if ($rp_fd < 0) {
+		# couldn't open the file we had already successfully stat'ed.
+		# FIXME: do 500 vs. 404 vs whatever based on $!
+		return $self->close();
+	    }
+
+	    $self->reproxy_fd($rp_fd, $size);
+	    $self->watch_write(1);
+	});
+    });
+}
+
 # Client
 # get/set backend proxy connection
 sub all_sent {
@@ -61,11 +128,6 @@ sub headers {
     my Perlbal::ClientProxy $self = shift;
     return $self->{headers} unless @_;
     return $self->{headers} = shift;
-}
-
-sub request_method {
-    my Perlbal::ClientProxy $self = shift;
-    return $self->{headers}->request_method;
 }
 
 # Client (overrides and calls super)

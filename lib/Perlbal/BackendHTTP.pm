@@ -96,54 +96,18 @@ sub event_read {
 	if (my $hd = $self->read_response_headers) {
 
 	    if (my $rep = $hd->header('X-REPROXY-FILE')) {
-		Linux::AIO::aio_stat($rep, sub {
-		    if (my $size = -s _) {
-			my $just_head = $client->request_method eq 'HEAD';
+		# make the client begin the async IO and reproxy
+		# process while we detach and die
+		$client->start_reproxy_file($rep, $hd);
+		$client->backend(undef);    # disconnect ourselves from it
 
-			# fixup the Content-Length header if it was undefined/0
-			$hd->header("Content-Length", $size);
-			# don't send this internal header to the client:
-			$hd->header('X-REPROXY-FILE', undef);
-
-			my $detach = sub {
-			    # setup the client's state:
-			    $client->write($hd->to_string_ref);
-			    $client->all_sent(1) if $just_head;
-			    
-			    $client->backend(undef);    # disconnect ourselves from it
-			    $self->{client} = undef;    # .. and it from us
-			    $self->close;               # close ourselves
-			    
-			    $client->watch_write(1);    # and kick-start it into writing
-			};
-
-			if ($just_head) {
-			    $detach->();
-			} else {
-			    Linux::AIO::aio_open($rep, 0, 0 , sub {
-				my $rp_fd = shift;
-				$client->reproxy_fd($rp_fd, $size);
-				$detach->();
-			    });
-			  }
-
-		    } else {
-			print STDERR "REPROXY: $rep (bogus)\n";
-			$client->close;
-		    }
-		});
-		  
-		# don't get back here.  our Linux::AIO callback will invoke the above
-		# FIXME: add a "aio in progress" state flag, just in case we get back here somehow
-		$self->watch_read(0);
+		$self->{client} = undef;    # .. and it from us
+		$self->close;               # close ourselves
 		return;
-
 	    } else {
 		$client->write($hd->to_string_ref);
 		$self->drain_read_buf_to($client);
 	    }
-
-
 	}
 	return;
     }

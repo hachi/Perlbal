@@ -322,16 +322,39 @@ sub event_write {
 
 # Socket
 sub wait_loop {
+
+    # register Linux::AIO's pipe which gets written to from threads
+    # doing blocking IO
+    my $aio_fd = Linux::AIO::poll_fileno;
+    epoll_ctl($epoll, EPOLL_CTL_ADD, $aio_fd, EPOLLIN);
+
+    my $other_fds = {
+	$aio_fd => sub {
+	    # run any callbacks on async file IO operations
+	    Linux::AIO::poll_cb();
+	},
+    };
+
     while (1) {
-	# get up to 50 events, not waiting longer than a second
-	while (my $events = epoll_wait($epoll, 50, 1_000)) {
+	# get up to 50 events, no timeout (-1)
+	while (my $events = epoll_wait($epoll, 50, -1)) {
 	  EVENT:
 	    foreach my $ev (@$events) {
 		# it's possible epoll_wait returned many events, including some at the end
 		# that ones in the front triggered unregister-interest actions.  if we
 		# can't find the %sock entry, it's because we're no longer interested
 		# in that event.
-		my Perlbal::Socket $pob = $sock{$ev->[0]} or next;  # it was probably closed
+		my Perlbal::Socket $pob = $sock{$ev->[0]};
+		my $code;
+
+		# if we didn't find a Perlbal::Socket subclass for that fd, try other
+		# pseudo-registered (above) fds.
+		if (! $pob) {
+		    if (my $code = $other_fds->{$ev->[0]}) {
+			$code->();
+		    } 
+		    next;
+		}
 
 		print "Event: fd=$ev->[0] (", ref($pob), "), state=$ev->[1] \@ " . time() . "\n"
 		    if Perlbal::DEBUG >= 1;
@@ -344,9 +367,6 @@ sub wait_loop {
 		    $pob->event_hup    if $state & EPOLLHUP && ! $pob->{closed};
 		}
 	    }
-
-	    # run any callbacks on async file IO operations
-	    Linux::AIO::poll_cb();
 
 	    # now we can close sockets that wanted to close during our event processing.
 	    # (we didn't want to close them during the loop, as we didn't want fd numbers
