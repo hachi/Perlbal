@@ -11,6 +11,20 @@ use fields ('client',  # Perlbal::ClientProxy connection, or undef
             'ip',      # IP scalar
             'port',    # port scalar
             'ipport',  # "$ip:$port"
+
+            'has_attention', # has been accepted by a webserver and
+                             # we know for sure we're not just talking
+                             # to the TCP stack
+
+            'disconnect_at', # time this connection will be disconnected,
+                             # if it's kept-alive and backend told us.
+                             # otherwise undef for unknown.
+
+            # The following only apply when the backend server sends
+            # a content-length header
+            'content_length',  # length of document being transferred
+            'content_length_remain',    # bytes remaining to be read
+
             );
 use Socket qw(PF_INET IPPROTO_TCP SOCK_STREAM);
 
@@ -58,6 +72,8 @@ sub new {
     $self->{client}   = undef;     # Perlbal::ClientProxy object, initially empty 
                                    #    until we ask our service for one
 
+    $self->{has_attention} = 0;
+
     bless $self, ref $class || $class;
     $self->watch_write(1);
     return $self;
@@ -85,14 +101,19 @@ sub assign_client {
     return 0 if $self->{client};
 
     # set our client, and the client's backend to us
-    $client->{service}->mark_node_used($self->{ipport});
+    $self->{service}->mark_node_used($self->{ipport});
     $self->{client} = $client;
     $self->{state}   = "sending_req";
     $self->{client}->backend($self);
 
-    my $hds = $client->headers;
+    my Perlbal::HTTPHeaders $hds = $client->headers->clone;
 
-    $hds->header("Connection", "close");
+    # Use HTTP/1.0 to backend (FIXME: use 1.1 and support chunking)
+    $hds->set_version("1.0");
+
+    my $persist = $self->{service}{persist_backend};
+
+    $hds->header("Connection", $persist ? "keep-alive" : "close");
 
     # FIXME: make this conditional
     $hds->header("X-Proxy-Capabilities", "reproxy-file");
@@ -148,6 +169,21 @@ sub event_read {
         if (my $hd = $self->read_response_headers) {
             $self->{state}   = "xfer_res";
             $client->{state} = "xfer_res";
+            $self->{has_attention} = 1;
+
+            # RFC 2616, Sec 4.4: Messages MUST NOT include both a
+            # Content-Length header field and a non-identity
+            # transfer-coding. If the message does include a non-
+            # identity transfer-coding, the Content-Length MUST be
+            # ignored.
+            my $te = $hd->header("Transfer-Encoding");
+            if ($te && $te !~ /\bidentity\b/i) {
+                $hd->header("Content-Length", undef);
+            }
+
+            if ($self->{content_length} = $hd->header("Content-Length")) {
+                $self->{content_length_remain} = $self->{content_length};
+            }
 
             if (my $rep = $hd->header('X-REPROXY-FILE')) {
                 # make the client begin the async IO and reproxy
@@ -160,7 +196,20 @@ sub event_read {
                 return;
             } else {
                 $client->write($hd->to_string_ref);
+
+                # if we over-read anything from backend (most likely)
+                # then decrement it from our count of bytes we need to read
+                if ($self->{content_length}) {
+                    $self->{content_length_remain} -= $self->{read_ahead};
+                }
                 $self->drain_read_buf_to($client);
+
+                if ($self->{content_length} && ! $self->{content_length_remain}) {
+                    # order important:  next_request detaches us from client, so
+                    # $client->close can't kill us
+                    $self->next_request;
+                    $client->write(sub { $client->close; });
+                }
             }
         }
         return;
@@ -177,6 +226,19 @@ sub event_read {
 
     if (defined $bref) {
         $client->write($bref);
+
+        # HTTP/1.0 keep-alive support to backend.  we just count bytes
+        # until we hit the end, then we know we can send another
+        # request on this connection
+        if ($self->{content_length}) {
+            $self->{content_length_remain} -= length($$bref);
+            if (! $self->{content_length_remain}) {
+                # order important:  next_request detaches us from client, so
+                # $client->close can't kill us
+                $self->next_request;
+                $client->write(sub { $client->close; });
+            }
+        }
         return;
     } else {
         # backend closed
@@ -186,9 +248,41 @@ sub event_read {
         $self->{client} = undef;    # .. and it from us
         $self->close;               # close ourselves
 
-        $client->write(sub { $client->close() });
+        $client->write(sub { $client->close; });
         return;
     }
+}
+
+sub next_request {
+    my Perlbal::BackendHTTP $self = shift;
+
+    my $hd = $self->{headers};  # response headers
+    unless ($self->{service}{persist_backend} &&
+            $hd->header("Connection") =~ /\bkeep-alive\b/i) {
+        return $self->close;
+    }
+
+    # if backend told us, keep track of when the backend
+    # says it's going to boot us, so we don't use it within
+    # a few seconds of that time
+    if ($hd->header("Keep-Alive") =~ /\btimeout=(\d+)/i) {
+        $self->{disconnect_at} = time() + $1;
+    } else {
+        $self->{disconnect_at} = undef;
+    }
+
+    my Perlbal::ClientProxy $client = $self->{client};
+    $client->backend(undef) if $client;
+    $self->{client} = undef;
+
+    $self->{state}   = "bored";
+    $self->watch_write(0);
+
+    $self->{headers} = undef;
+    $self->{headers_string} = "";
+
+    $self->{service}->register_boredom($self);
+    return;
 }
 
 # Backend: bad connection to backend

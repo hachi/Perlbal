@@ -41,6 +41,9 @@ use fields (
             'node_used',               # hashref of "ip:port" -> use count
             'connect_ahead',           # scalar: number of spare backends to connect to in advance all the time
             'bored_backends',          # arrayref of backends we've already connected to, but haven't got clients
+            'persist_client',  # bool: persistent connections for clients
+            'persist_backend', # bool: persistent connections for backends
+            'verify_backend',  # bool: get attention of backend before giving it clients (using OPTIONS)
             );
 
 sub new {
@@ -52,6 +55,9 @@ sub new {
     $self->{name} = $name;
     $self->{enabled} = 0;
     $self->{listen} = "";
+    $self->{persist_client} = 0;
+    $self->{persist_backend} = 0;
+    $self->{verify_backend} = 0;
 
     $self->{nodes} = [];   # no configured nodes
 
@@ -122,7 +128,7 @@ sub note_client_close {
     my Perlbal::Service $self;
     my Perlbal::ClientProxy $cp;
     ($self, $cp) = @_;
-    
+
     if (delete $self->{waiting_client_map}{$cp->{fd}}) {
         $self->{waiting_client_count}--;
     }
@@ -193,7 +199,12 @@ sub register_boredom {
         }
     }
 
-    if ($was_pending) {
+    # put backends which are known to be bound to processes
+    # and not to TCP stacks at the beginning where they'll
+    # be used first
+    if ($be->{has_attention}) {
+        unshift @{$self->{bored_backends}}, $be;
+    } else {
         push @{$self->{bored_backends}}, $be;
     }
 }
@@ -228,8 +239,18 @@ sub request_backend_connection {
     my $now = time;
     while ($be = shift @{$self->{bored_backends}}) {
         next if $be->{closed};
-        if ($be->{create_time} < $now - 5) {
+
+        # don't use connect-ahead connections when we haven't
+        # verified we have their attention
+        if (! $be->{has_attention} && $be->{create_time} < $now - 5) {
             $be->close("too_old_bored");
+            next;
+        }
+
+        # don't use keep-alive connections if we know the server's
+        # just about to kill the connection for being idle
+        if ($be->{disconnect_at} && $be->{disconnect_at} + 2 > $now) {
+            $be->close("too_close_disconnect");
             next;
         }
 
@@ -283,7 +304,7 @@ sub spawn_backends {
     # can't create more than this, assuming one pending connect per node
     my $max_creatable = $self->{node_count} - $self->{pending_connect_count};
     $to_create = $max_creatable if $to_create > $max_creatable;
-    
+
     # cap number of attempted connects at once
     $to_create = 10 if $to_create > 10;
 
@@ -354,7 +375,7 @@ sub set {
     if ($key eq "listen") {
         return $err->("Invalid host:port")
             unless $val =~ m!^\d+\.\d+\.\d+\.\d+:\d+$!;
-        
+
         # close/reopen listening socket
         if ($val ne $self->{listen} && $self->{enabled}) {
             $self->disable(undef, "force");
@@ -364,6 +385,22 @@ sub set {
 
         return $set->();
     }
+
+    my $bool = sub {
+        my $val = shift;
+        return 1 if $val =~ /^1|true|on|yes$/i;
+        return 0 if $val =~ /^0|false|off|no$/i;
+        return undef;
+    };
+
+    if ($key eq "persist_client" || $key eq "persist_backend" ||
+        $key eq "verify_backend") {
+        $val = $bool->($val);
+        return $err->("Expecting boolean value for option '$key'")
+            unless defined $val;
+        return $set->();
+    }
+
 
     if ($key eq "balance_method") {
         return $err->("Can only set balance method on a reverse_proxy service")

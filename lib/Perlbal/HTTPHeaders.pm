@@ -12,10 +12,10 @@ use fields (
             'uri',       # scalar; request URI (if GET request)
             'type',      # 'res' or 'req'
             'code',      # HTTP status code
+            'ver',       # version (string) "1.1"
+            'vernum',    # version (number: major*1000+minor): "1.1" => 1001
             'responseLine', # first line of HTTP response (if response)
             'requestLine',  # first line of HTTP request (if request)
-            'absoluteURIHost', # if the URI was absolute, contains the host (overrides host header)
-            'httpVersion', # string version of HTTP request
             );
 
 our $HTTPCode = {
@@ -69,8 +69,9 @@ sub new {
     # hstr: headers as a string
     # is_response: bool; is HTTP response (as opposed to request).  defaults to request.
 
-    $hstr =~ s!\r!!g;
-    my @lines = split(/\n/, $hstr);
+    my $absoluteURIHost = undef;
+
+    my @lines = split(/\r?\n/, $hstr);
     my $first = (shift @lines) || "";
 
     $self->{headers} = {};
@@ -78,7 +79,6 @@ sub new {
     $self->{hdorder} = [];
     $self->{method} = undef;
     $self->{uri} = undef;
-    $self->{absoluteURIHost} = undef;
     $self->{type} = ($is_response ? "res" : "req");
     Perlbal::objctor($self->{type});
 
@@ -93,31 +93,38 @@ sub new {
     } else {
         # check for valid request line
         return fail("Bogus request line") unless
-            $first =~ m!^(\w+) ((?:\*|(?:\S*?)))(?: HTTP/(\d+\.\d+))$!;
+            $first =~ m!^(\w+) ((?:\*|(?:\S*?)))(?: HTTP/(\d+)\.(\d+))$!;
 
-        my ($method, $uri, $ver) = ($1, $2, $3);
+        my ($method, $uri, $ver_ma, $ver_mi) = ($1, $2, $3, $4);
 
         # now check uri for not being a uri
         if ($uri =~ m!^http://([^/:]+?)(?::\d+)?(/.*)?$!) {
-            $self->{absoluteURIHost} = lc($1);
+            $absoluteURIHost = lc($1);
             $uri = $2 || "/"; # "http://www.foo.com" yields no path, so default to "/"
         }
 
-        print "Method: [$method] URI: [$uri] Version: [$ver]\n" if Perlbal::DEBUG >= 1;
-        $ver ||= "1.0";
+        print "Method: [$method] URI: [$uri]\n" if Perlbal::DEBUG >= 1;
 
-        $self->{requestLine} = "$method $uri HTTP/$ver";
-        $self->{httpVersion} = $ver;
+        # default to HTTP/0.9
+        unless (defined $ver_ma) {
+            ($ver_ma, $ver_mi) = (0, 9);
+        }
+
+        $self->{requestLine} = $first;
+
+        $self->{ver} = "$ver_ma.$ver_mi";
+        $self->{vernum} = $ver_ma*1000 + $ver_mi;
+
         $self->{method} = $method;
         $self->{uri} = $uri;
     }
 
     my $last_header = undef;
     foreach my $line (@lines) {
-        if ($line =~ /^(\s+.*?)$/) {
+        if ($line =~ /^(\s+.*)$/) {
             next unless defined $last_header;
             $self->{headers}{$last_header} .= $1;
-        } elsif ($line =~ /^([^\x00-\x20\x7f\(\)\<\>\@,;:\\\"\/\[\]\?=\{\}]+):\s*(.*?)$/) {
+        } elsif ($line =~ /^([^\x00-\x20\x7f\(\)\<\>\@,;:\\\"\/\[\]\?=\{\}]+):\s*(.*)$/) {
             # RFC 2616:
             # sec 4.2:
             #     message-header = field-name ":" [ field-value ]
@@ -149,12 +156,12 @@ sub new {
     }
 
     # override the host header if an absolute URI was provided
-    $self->header('Host', $self->{absoluteURIHost})
-        if defined $self->{absoluteURIHost};
+    $self->header('Host', $absoluteURIHost)
+        if defined $absoluteURIHost;
 
     # now error if no host
     return fail("HTTP 1.1 requires host header")
-        if !$is_response && $self->{httpVersion} eq '1.1' && !$self->header('Host');
+        if !$is_response && $self->{vernum} >= 1001 && !$self->header('Host');
 
     return $self;
 }
@@ -194,6 +201,65 @@ sub to_string_ref {
                    @{$self->{hdorder}}),
                   '', '');  # final \r\n\r\n
     return \$st;
+}
+
+sub clone {
+    my Perlbal::HTTPHeaders $self = shift;
+    my $new = fields::new($self);
+    foreach (qw(method uri type code ver vernum responseLine requestLine)) {
+        $new->{$_} = $self->{$_};
+    }
+
+    $new->{headers} = { %{$self->{headers}} };
+    $new->{origcase} = { %{$self->{origcase}} };
+    $new->{hdorder} = [ @{$self->{hdorder}} ];
+    return $new;
+}
+
+sub set_version {
+    my Perlbal::HTTPHeaders $self = shift;
+    my $ver = shift;
+
+    die "Bogus version" unless $ver =~ /^(\d+)\.(\d+)$/;
+    my ($ver_ma, $ver_mi) = ($1, $2);
+
+    $self->{requestLine} = "$self->{method} $self->{uri} HTTP/$ver";
+    $self->{ver} = "$ver_ma.$ver_mi";
+    $self->{vernum} = $ver_ma*1000 + $ver_mi;
+    return $self;
+}
+
+# logic for deciding to keep client connection open or not,
+# based on both client's advertised intent and version,
+# and whether or not the content we just sent to it had
+# a specified length in a form it could understand.  (1.0
+# clients don't know chunked-encoding, so we have to
+# dechunk and close the connection to tell it the end has come)
+sub keep_alive {
+    my Perlbal::HTTPHeaders $self = shift;
+    my $had_clen = shift;
+
+    # don't keep-alive if they don't want to
+    my $conn = lc($self->header("Connection") || "");
+    return 0 if $conn =~ /\bclose\b/;
+
+    # HTTP/1.0 case (and 0.9 I guess)
+    if ($self->{vernum} < 1001) {
+        # only keep alive if they asked for it, and we
+        # sent them an explicit content-length
+        return 1 if
+            $conn =~ /\bkeep-alive\b/i &&
+            $had_clen;
+        return 0;
+    }
+
+    # HTTP/1.1 case.  defaults to keep-alive, per spec, unless
+    # asked for otherwise (checked above)
+    # FIXME: make sure we handle a HTTP/1.1 response from backend
+    # with connection: close, no content-length, going to a
+    # HTTP/1.1 persistent client.  we'll have to add chunk markers.
+    # (not here, obviously)
+    return 1;
 }
 
 sub DESTROY {
