@@ -107,10 +107,22 @@ sub event_read {
             if !$clen ||
                ($self->{service}->{max_put_size} &&
                 $clen > $self->{service}->{max_put_size});
-        
-        # setup to read the file
-        $self->{read_buf} = '';
-        $self->{content_length} = $self->{content_length_remain} = $clen;
+
+        # if we have some data already from a header over-read, handle it by
+        # flattening it down to a single string as opposed to an array of stuff
+        if (defined $self->{read_size} && $self->{read_size} > 0) {
+            my $data = '';
+            foreach my $rdata (@{$self->{read_buf}}) {
+                $data .= ref $rdata ? $$rdata : $rdata;
+            }
+            $self->{read_buf} = $data;
+            $self->{content_length} = $clen;
+            $self->{content_length_remain} = $clen - $self->{read_size};
+        } else {
+            # setup to read the file
+            $self->{read_buf} = '';            
+            $self->{content_length} = $self->{content_length_remain} = $clen;
+        }
 
         # setup the directory asynchronously
         $self->setup_put;       
