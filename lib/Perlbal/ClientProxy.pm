@@ -20,9 +20,7 @@ use fields ('service',             # Perlbal::Service object
 use constant READ_SIZE         => 4086;    # 4k, arbitrary
 use constant READ_AHEAD_SIZE   => 8192;    # 8k, arbitrary
 use Errno qw( EPIPE );
-
-# to get the sysclose number:
-require 'syscall.ph';
+use POSIX ();
 
 # ClientProxy
 sub new {
@@ -89,7 +87,7 @@ sub start_reproxy_file {
 
 	    # if client's gone, just close filehandle and abort
 	    if ($self->{closed}) {
-		syscall(&SYS_close, $rp_fd) if $rp_fd >= 0;
+		POSIX::close($rp_fd) if $rp_fd >= 0;
 		return;
 	    }
 	    
@@ -178,7 +176,7 @@ sub event_write {
 
 	if ($sent >= $to_send) {
 	    # close the sendfile fd
-	    my $rv = syscall(&SYS_close, $self->{reproxy_fd});
+	    my $rv = POSIX::close($self->{reproxy_fd});
 
 	    $self->tcp_cork(0);
 	    $self->{reproxy_fd} = undef;
