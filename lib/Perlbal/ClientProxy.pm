@@ -82,6 +82,7 @@ sub register_boredom {
     }
 
     # now send request
+    $self->{backend} = $be;
     $be->{client} = $self;
     my $headers = "GET $datref->[2] HTTP/1.0\r\nConnection: close\r\n\r\n";
     $be->{req_headers} = Perlbal::HTTPHeaders->new(\$headers);
@@ -210,8 +211,11 @@ sub event_write {
     $self->SUPER::event_write;
 
     # trigger our backend to keep reading, if it's still connected
-    my $backend = $self->{backend};
-    $backend->watch_read(1) if $backend;
+    # FIXME constant (and in BackendHTTP)
+    if ($self->{write_buf_size} < 256_000) {
+        my $backend = $self->{backend};
+        $backend->watch_read(1) if $backend;
+    }
 }
 
 # ClientProxy
