@@ -1,3 +1,6 @@
+    -- fixed _simple_response to not return a body if we're serving
+       to a HEAD request
+
     -- bug fix: don't send Not-Modified responses to requests for dynamic
        directory listings.  it was messing up persistent connections
        since the directory serving code didn't get passed down whether we

@@ -384,7 +384,10 @@ sub _simple_response {
     $self->state('xfer_resp');
     $self->tcp_cork(1);  # cork writes to self
     $self->write($res->to_string_ref);
-    $self->write(\$body);
+    unless ($self->{req_headers} && $self->{req_headers}->request_method eq 'HEAD') {
+        # don't write body for head requests
+        $self->write(\$body);
+    }
     $self->write(sub { $self->http_response_sent; });
     return 1;
 }
