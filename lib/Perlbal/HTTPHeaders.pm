@@ -5,12 +5,26 @@
 package Perlbal::HTTPHeaders;
 use strict;
 
+our $HTTPCode = {
+    200 => 'OK',
+    400 => 'Bad request',
+    403 => 'Forbidden',
+    404 => 'Not Found',
+    500 => 'Internal Server Error',
+    501 => 'Not Implemented',
+};
+
 sub fail {
     return undef unless Perlbal::DEBUG >= 1;
 
     my $reason = shift;
     print "HTTP parse failure: $reason\n" if Perlbal::DEBUG >= 1;
     return undef;
+}
+
+sub http_code_english {
+    my $self = shift;
+    return $HTTPCode->{$self->{code}};
 }
 
 sub new_response {
@@ -24,7 +38,8 @@ sub new_response {
 	uri => undef,       # request URI (if GET request)
     };
 
-    $self->{responseLine} = "HTTP/1.0 $code HTTP/1.0";
+    my $msg = $HTTPCode->{$code} || "";
+    $self->{responseLine} = "HTTP/1.0 $code $msg";
     $self->{code} = $code;
 
     return bless $self, ref $class || $class;

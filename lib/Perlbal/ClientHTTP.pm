@@ -5,8 +5,8 @@
 package Perlbal::ClientHTTP;
 use strict;
 use base "Perlbal::Socket";
+use HTTP::Date ();
 use fields ('service',             # Perlbal::Service object
-	    'all_sent',            # scalar bool: if writing is done
 
 	    # reproxy support
 	    'reproxy_file',        # filename the backend told us to start opening
@@ -20,13 +20,25 @@ use constant READ_AHEAD_SIZE   => 8192;    # 8k, arbitrary
 use Errno qw( EPIPE );
 use POSIX ();
 
-our $MimeType = {
-    'png' => 'image/png',
-    'gif' => 'image/gif',
-    'jpg' => 'image/jpeg',
-    'html' => 'text/html',
-    'htm' => 'text/html',
-};
+# ghetto hard-coding.  should let siteadmin define or something.
+# maybe console/config command:  AddMime <ext> <mime-type>  (apache-style?)
+our $MimeType = {qw(
+		    css  text/css
+		    doc  application/msword
+		    gif  image/gif
+		    htm  text/html
+		    html text/html
+		    jpg  image/jpeg
+		    js   application/x-javascript
+		    mp3  audio/mpeg
+		    mpg  video/mpeg
+		    png  image/png
+		    tif   image/tiff
+		    tiff  image/tiff
+		    torrent  application/x-bittorrent
+		    txt   text/plain
+		    zip   application/zip
+)};
 
 # ClientHTTP
 sub new {
@@ -38,19 +50,11 @@ sub new {
     $self->{service} = $service;
     $self->{headers_string} = '';
 
-    $self->{all_sent} = 0;         # boolean: backend has written all data to client
-
     bless $self, ref $class || $class;
     $self->watch_read(1);
     return $self;
 }
 
-
-sub all_sent {
-    my Perlbal::ClientHTTP $self = shift;
-    return $self->{all_sent} unless @_;
-    return $self->{all_sent} = shift;
-}
 
 sub headers {
     my Perlbal::ClientHTTP $self = shift;
@@ -106,7 +110,6 @@ sub event_write {
 
 	    $self->{reproxy_fd} = undef;
 	    $self->close("sendfile_done");
-	    $self->all_sent(1);  # set our own flag that we're done
 	}
 	return;
     }
@@ -117,13 +120,26 @@ sub event_write {
 	# we've written all data in the queue, so stop waiting for write
 	# notifications:
 	$self->watch_write(0);
-
-	if ($self->all_sent) {
-	    $self->tcp_cork(0);  # cork writes to self
-	    $self->close("writing_done");
-	}
     }
 
+}
+
+sub _simple_response {
+    my Perlbal::ClientHTTP $self = shift;
+    my ($code, $msg) = @_;  # or bodyref
+    
+    my $res = Perlbal::HTTPHeaders->new_response($code);
+    $res->header("Content-Type", "text/html");
+
+    my $en = $res->http_code_english;
+    my $body = "<h1>$code" . ($en ? " - $en" : "") . "</h1>\n";
+    $body .= $msg;
+
+    $self->tcp_cork(1);  # cork writes to self
+    $self->write($res->to_string_ref);
+    $self->write(\$body);
+    $self->write(sub { $self->close; });
+    return 1;
 }
 
 sub event_read {
@@ -134,20 +150,20 @@ sub event_read {
 	return;
     }
 
+
     my $hd = $self->read_request_headers;
     return unless $hd;
 
-	    my $rm = $hd->request_method;
+    my $rm = $hd->request_method;
     unless ($rm eq "HEAD" || $rm eq "GET") {
-	# FIXME: send 'not-supported' method or something
-	return $self->close;
+	return $self->_simple_response(403, "Unimplemented method");
     }
 
     my $uri = _durl($hd->request_uri);
 
+    # don't allow directory traversal
     if ($uri =~ /\.\./ || $uri !~ m!^/!) {
-	# FIXME: send bogus URL error
-	return $self->close;
+	return $self->_simple_response(403, "Bogus URL");
     }
 
     my Perlbal::Service $svc = $self->{service};
@@ -156,15 +172,13 @@ sub event_read {
     Linux::AIO::aio_stat($file, sub {
 	# client's gone anyway
 	return if $self->{closed};
-
-	unless (-e _) {
-	    # FIXME: return 404
-	    return $self->close;
-	}
+	return $self->_simple_response(404) unless -e _;
 
 	my $res = Perlbal::HTTPHeaders->new_response(200);
 	$res->header("Connection", "close");
-	$res->header("Date", "FIXME");
+	$res->header("Date", HTTP::Date::time2str());
+	$res->header("Server", "Perlbal");
+	$res->header("Last-Modified", HTTP::Date::time2str((stat(_))[9]));
 
 	if (-f _) {
 	    my $size = -s _;
@@ -172,6 +186,14 @@ sub event_read {
 	    $res->header("Content-Type",
 			 (defined $ext && exists $MimeType->{$ext}) ? $MimeType->{$ext} : "text/plain");
 	    $res->header("Content-Length", $size);
+
+	    if ($rm eq "HEAD") {
+		# we can return already, since we know the size
+		$self->tcp_cork(1);
+                $self->write($res->to_string_ref);
+		$self->write(sub { $self->close; });		
+		return;
+	    }
 
 	    Linux::AIO::aio_open($file, 0, 0, sub {
 		my $rp_fd = shift;
@@ -208,7 +230,7 @@ sub event_read {
 			$body .= "<a href='$de'>$de</a><br />\n";
 		    }
 		}
-		close(D);
+		closedir(D);
 	    } else {
 		$res->header("Content-Type", "text/html");
 		$body = "Directory listing disabled";
