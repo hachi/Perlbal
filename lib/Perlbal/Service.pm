@@ -40,6 +40,7 @@ use fields (
             'high_priority_cookie_contents', # aforementioned cookie value must contain this substring
             'node_used',               # hashref of "ip:port" -> use count
             'connect_ahead',           # scalar: number of spare backends to connect to in advance all the time
+            'backend_persist_cache',   # scalar: max number of persistent backends to hold onto while no clients
             'bored_backends',          # arrayref of backends we've already connected to, but haven't got clients
             'persist_client',  # bool: persistent connections for clients
             'persist_backend', # bool: persistent connections for backends
@@ -60,6 +61,7 @@ sub new {
     $self->{persist_backend} = 0;
     $self->{verify_backend} = 0;
     $self->{max_backend_uses} = 0;
+    $self->{backend_persist_cache} = 0;
 
     $self->{nodes} = [];   # no configured nodes
 
@@ -200,6 +202,16 @@ sub register_boredom {
             # stick it at the end of the waiting queue.
             # fortunately, assign_client shouldn't ever fail.
             $self->request_backend_connection($cp);
+        }
+    }
+
+    # don't hang onto more bored, persistent connections than
+    # has been configured for connect-ahead
+    if ($be->{use_count}) {
+        my $current_bored = scalar @{$self->{bored_backends}};
+        if ($current_bored >= $self->{backend_persist_cache}) {
+            $be->close;
+            return;
         }
     }
 
