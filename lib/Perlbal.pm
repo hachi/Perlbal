@@ -326,13 +326,13 @@ sub run_manage_command {
 
             my ($age, $count) = (0, scalar(@{$svc->{waiting_clients}}));
             my Perlbal::ClientProxy $oldest = $svc->{waiting_clients}->[0];
-            $age = $now - $oldest->{create_time} if defined $oldest;
+            $age = $now - $oldest->{last_request_time} if defined $oldest;
             $out->("$svc->{name}-normal.age $age");
             $out->("$svc->{name}-normal.count $count");
 
             ($age, $count) = (0, scalar(@{$svc->{waiting_clients_highpri}}));
             $oldest = $svc->{waiting_clients_highpri}->[0];
-            $age = $now - $oldest->{create_time} if defined $oldest;
+            $age = $now - $oldest->{last_request_time} if defined $oldest;
             $out->("$svc->{name}-highpri.age $age");
             $out->("$svc->{name}-highpri.count $count");
         }

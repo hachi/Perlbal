@@ -1,3 +1,7 @@
+    -- now that we support persistent connections, the 'queues' command didn't
+       have an accurate time; added ClientProxy member last_request_time so
+       we can accurately tell how long requests have been waiting for
+
     -- Danga::Socket got an overhaul; close and steal_socket now share a lot
        of code by calling _cleanup.  some more paranoia on making sure the
        object isn't already closed when we try to do things.

@@ -15,6 +15,7 @@ use fields (
             'currently_reproxying',  # arrayref; the host info and URI we're reproxying right now
             'content_length_remain', # int: amount of data we're still waiting for
             'responded',           # bool: whether we've already sent a response to the user or not
+            'last_request_time',   # int: time that we last received a request
             );
 
 use constant READ_SIZE         => 4086;    # 4k, arbitrary
@@ -31,6 +32,8 @@ sub new {
     $self->SUPER::new($service, $sock);       # init base fields
 
     Perlbal::objctor($self);
+
+    $self->{last_request_time} = 0;
 
     $self->{read_buf} = [];        # scalar refs of bufs read from client
     $self->{read_ahead} = 0;       # bytes sitting in read_buf
@@ -381,6 +384,7 @@ sub event_read {
 
             # note that we've gotten a request
             $self->{requests}++;
+            $self->{last_request_time} = $self->{alive_time};
 
             $self->state('wait_backend');
             $self->{service}->request_backend_connection($self);
