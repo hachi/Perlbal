@@ -92,10 +92,34 @@ sub run_manage_command {
 
     if ($cmd =~ /^socks$/) {
         my $sf = Perlbal::Socket->get_sock_ref;
+
+        my $now = time;
+        $out->(sprintf("%5s %6s", "fd", "age"));
         foreach (sort { $a <=> $b } keys %$sf) {
             my $sock = $sf->{$_};
-            $out->("$_ = " . $sock->as_string);
+            my $age = $now - $sock->{create_time};
+            $out->(sprintf("%5d %5ds %s", $_, $age, $sock->as_string));
         }
+        return 1;
+    }
+
+    if ($cmd =~ /^show service (\w+)$/) {
+        my $sname = $1;
+        my Perlbal::Service $svc = $service{$sname};
+        return $err->("Unknown service") unless $sname;
+        
+        $out->("SERVICE $sname");
+        $out->("     listening: $svc->{listen}");
+        $out->("          role: $svc->{role}");
+        if ($svc->{role} eq "reverse_proxy") {
+            $out->("balance method: " . $svc->balance_method);
+            $out->("         nodes:");
+            foreach my $n (@{ $svc->{nodes} }) {
+                $out->("                $n->[0]:$n->[1]");
+            }
+            
+        }
+
         return 1;
     }
 

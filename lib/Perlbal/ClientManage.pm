@@ -65,26 +65,39 @@ sub handle_http {
     my $body;
     my $code = "200 OK";
 
+    my $prebox = sub {
+        my $cmd = shift;
+        my $alt = shift;
+        $body .= "<pre><div style='margin-bottom: 5px; background: #ddd'><b>$cmd</b></div>";
+        Perlbal::run_manage_command($cmd, sub {
+            my $line = $_[0];
+            $alt->(\$line) if $alt;
+            $body .= "$line\n"; 
+        });
+        $body .= "</pre>\n";
+
+    };
+
     if ($uri eq "/") {
-        $body .= "<h1>perlbal management interface</h1>";
-        $body .= "<a href='/stats'>Server Stats</a>";
-    } elsif ($uri eq "/stats") {
-        my $sf = Perlbal::Socket->get_sock_ref;
-        $body .= "<table border='1' cellpadding='2'>";
-        $body .= "<tr><th>fd</th><th>age</th><th>description</th></tr>\n";
-        my $now = time;
-        foreach (sort { $a <=> $b } keys %$sf) {
-            my $sock = $sf->{$_};
-            my $age = $now - $sock->{create_time};
-            $body .= "<tr><td>$_</td><td>$age</td><td>" . $sock->as_string_html . "</td></tr>\n";
-        }
-        $body .= "</table>";
+        $body .= "<h1>perlbal management interface</h1><ul>";
+        $body .= "<li><a href='/socks'>Sockets</a></li>";
+        $body .= "<li><a href='/obj'>Perl Objects in use</a></li>";
+        $body .= "</ul>";
+    } elsif ($uri eq "/socks") {
+        $prebox->('socks', sub {
+            ${$_[0]} =~ s!service \'(\w+)\'!<a href=\"/service?$1\">$1</a>!;
+        });
+    } elsif ($uri eq "/obj") {
+        $prebox->('obj');
+    } elsif ($uri =~ m!^/service\?(\w+)$!) {
+        my $service = $1;
+        $prebox->("show service $service");
     } else {
         $code = "404 Not found";
         $body .= "<h1>$code</h1>";
     }
 
-    $body .= "<hr />Go to <a href='/'>top-level</a>.\n";
+    $body .= "<hr style='margin-top: 10px' /><a href='/'>Perlbal management</a>.\n";
     $self->write("HTTP/1.0 $code\r\nContent-type: text/html\r\nContent-Length: " . length($body) . 
                  "\r\n\r\n$body");
     $self->write(sub { $self->close; });

@@ -64,6 +64,17 @@ sub new {
     return $self;
 }
 
+# returns string of balance method
+sub balance_method {
+    my Perlbal::Service $self = shift;
+    my $methods = {
+        &BM_SENDSTATS => "sendstats",
+        &BM_ROUNDROBIN => "round_robin",
+        &BM_RANDOM => "random",
+    };
+    return $methods->{$self->{balance_method}} || $self->{balance_method};
+}
+
 sub populate_sendstats_hosts {
     my Perlbal::Service $self = shift;
 
