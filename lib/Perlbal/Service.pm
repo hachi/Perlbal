@@ -216,12 +216,9 @@ sub get_reproxy_reusable_sock {
     my $now = time;
     while (my $row = shift(@{$self->{reproxy_sock_cache}->{$_[1]}})) {
         # $row = [ 0:good-until-time, 1:sock ]
-        if ($row->[0] < $now) {
-            $row->[1]->close;
-            next;
-        }
+        next if $row->[0] < $now || !getpeername($row->[1]);
 
-        # should be good, return it
+        # return this one if it's still connected
         return $row->[1];
     }
     return undef;
