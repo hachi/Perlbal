@@ -143,7 +143,7 @@ sub read_headers {
     my $to_read = MAX_HTTP_HEADER_LENGTH - length($self->{headers_string});
 
     my $bref = $self->read($to_read);
-    return $self->close if ! defined $bref;  # client disconnected
+    return $self->close('remote_closure') if ! defined $bref;  # client disconnected
 
     $self->{headers_string} .= $$bref;
     my $idx = index($self->{headers_string}, "\r\n\r\n");

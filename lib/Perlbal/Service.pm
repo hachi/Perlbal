@@ -325,7 +325,7 @@ sub register_boredom {
     if ($be->{use_count}) {
         my $current_bored = scalar @{$self->{bored_backends}};
         if ($current_bored >= $self->{backend_persist_cache}) {
-            $be->close;
+            $be->close('too_many_bored');
             return;
         }
     }
@@ -458,10 +458,10 @@ sub spawn_backends {
         if (my Perlbal::BackendHTTP $be = $self->{pending_connects}{"$ip:$port"}) {
             my $age = $now - $be->{create_time};
             if ($age >= 5 && $be->{state} eq "connecting") {
-                $be->close;
+                $be->close('connect_timeout');
             } elsif ($age >= 60 && $be->{state} eq "verifying_backend") {
                 # after 60 seconds of attempting to verify, we're probably already dead
-                $be->close;
+                $be->close('verify_timeout');
             } elsif (! $be->{closed}) {
                 next;
             }

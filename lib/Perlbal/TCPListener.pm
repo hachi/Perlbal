@@ -81,7 +81,7 @@ sub as_string_html {
 sub die_gracefully {
     # die off so we stop waiting for new connections
     my $self = shift;
-    $self->close;
+    $self->close('graceful_death');
 }
 
 

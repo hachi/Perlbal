@@ -89,7 +89,7 @@ sub new {
     Perlbal::Socket::register_callback(15, sub {
         if ($self->state eq 'connecting' || $self->state eq 'verifying_backend') {
             # shouldn't still be connecting/verifying ~15 seconds after create
-            $self->close;
+            $self->close('callback_timeout');
         }
         return 0;
     });
@@ -274,7 +274,7 @@ sub event_read {
     # to use the end of the stream, or because a bad request error,
     # which I can't totally understand.  in any case, we have
     # no client so all we can do is close this backend.
-    return $self->close unless $client;
+    return $self->close('read_with_no_client') unless $client;
 
     unless ($self->{res_headers}) {
         if (my $hd = $self->read_response_headers) {
@@ -392,7 +392,7 @@ sub event_read {
 
         $client->backend(undef);    # disconnect ourselves from it
         $self->{client} = undef;    # .. and it from us
-        $self->close;               # close ourselves
+        $self->close('backend_disconnect'); # close ourselves
 
         $client->write(sub { $client->close; });
         return;
@@ -406,7 +406,7 @@ sub next_request {
     unless (defined $self->{service} &&
             $self->{service}{persist_backend} &&
             $hd->header("Connection") =~ /\bkeep-alive\b/i) {
-        return $self->close;
+        return $self->close('next_request_no_persist');
     }
 
     my Perlbal::Service $svc = $self->{service};
@@ -416,7 +416,7 @@ sub next_request {
     # is configured for.
     if (++$self->{use_count} > $svc->{max_backend_uses} &&
         $svc->{max_backend_uses}) {
-        return $self->close;
+        return $self->close('exceeded_max_uses');
     }
 
     # if backend told us, keep track of when the backend
@@ -459,8 +459,8 @@ sub event_err {
         # we don't want to duplicate POST requests, so for now
         # just fail
         # TODO: if just a GET request, retry?
-        $self->{client}->close;
-        $self->close;
+        $self->close('error');
+        $self->{client}->close('backend_error');
         return;
     }
 
@@ -503,7 +503,7 @@ sub as_string {
 sub die_gracefully {
     # see if we need to die
     my Perlbal::BackendHTTP $self = shift;
-    $self->close if $self->state eq 'bored';
+    $self->close('graceful_death') if $self->state eq 'bored';
 }
 
 sub DESTROY {

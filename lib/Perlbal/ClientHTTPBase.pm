@@ -119,7 +119,7 @@ sub event_write {
             return $self->close("epipe") if $! == EPIPE;
             return $self->close("connreset") if $! == ECONNRESET;
             print STDERR "Error w/ sendfile: $!\n";
-            $self->close;
+            $self->close('sendfile_error');
             return;
         }
         $self->{reproxy_file_offset} += $sent;
@@ -197,7 +197,7 @@ sub _serve_request {
                 # we can return already, since we know the size
                 $self->tcp_cork(1);
                 $self->write($res->to_string_ref);
-                $self->write(sub { $self->close; });
+                $self->write(sub { $self->close('head_request'); });
                 return;
             }
 
@@ -217,7 +217,7 @@ sub _serve_request {
                 if ($rp_fd < 0) {
                     # couldn't open the file we had already successfully stat'ed.
                     # FIXME: do 500 vs. 404 vs whatever based on $!
-                    return $self->close();
+                    return $self->close('aio_open_failure');
                 }
 
                 $self->state('xfer_disk');
@@ -251,7 +251,7 @@ sub _serve_request {
             $self->tcp_cork(1);  # cork writes to self
             $self->write($res->to_string_ref);
             $self->write(\$body);
-            $self->write(sub { $self->close; });
+            $self->write(sub { $self->close('xfer_done'); });
         }
     });
     
@@ -273,15 +273,15 @@ sub _simple_response {
     $self->tcp_cork(1);  # cork writes to self
     $self->write($res->to_string_ref);
     $self->write(\$body);
-    $self->write(sub { $self->close; });
+    $self->write(sub { $self->close('xfer_done'); });
     return 1;
 }
 
 # FIXME: let this be configurable?
 sub max_idle_time { 30; }
 
-sub event_err {  my $self = shift; $self->close; }
-sub event_hup {  my $self = shift; $self->close; }
+sub event_err {  my $self = shift; $self->close('error'); }
+sub event_hup {  my $self = shift; $self->close('hup'); }
 
 sub as_string {
     my Perlbal::ClientHTTPBase $self = shift;

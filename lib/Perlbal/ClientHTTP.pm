@@ -78,7 +78,7 @@ sub event_read {
                 }
             } else {
                 # undefined read, user closed on us
-                $self->close;
+                $self->close('remote_closure');
             }
         } else {
             # since we have headers and we're not doing any special

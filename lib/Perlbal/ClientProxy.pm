@@ -151,7 +151,7 @@ sub start_reproxy_file {
         $self->write($hd->to_string_ref);
 
         if ($self->{req_headers}->request_method eq 'HEAD') {
-            $self->write(sub { $self->close; });
+            $self->write(sub { $self->close('head_request'); });
             return;
         }
 
