@@ -42,7 +42,7 @@ sub close {
     my Perlbal::ClientHTTP $self = shift;
 
     # don't close twice
-    return if $self->{closed}:
+    return if $self->{closed};
     
     $self->{put_fh} = undef;
 
