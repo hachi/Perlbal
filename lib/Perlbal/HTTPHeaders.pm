@@ -11,7 +11,7 @@ use fields (
             'method',    # scalar; request method (if GET request)
             'uri',       # scalar; request URI (if GET request)
             'type',      # 'res' or 'req'
-            'code',      # HTTP status code
+            'code',      # HTTP response status code
             'ver',       # version (string) "1.1"
             'vernum',    # version (number: major*1000+minor): "1.1" => 1001
             'responseLine', # first line of HTTP response (if response)
