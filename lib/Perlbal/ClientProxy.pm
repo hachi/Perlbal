@@ -109,6 +109,9 @@ sub close {
         print "Client ($self) closing backend ($backend)\n" if Perlbal::DEBUG >= 1;
         $self->backend(undef);
         $backend->close($reason ? "proxied_from_client_close:$reason" : "proxied_from_client_close");
+    } else {
+        # if no backend, tell our service that we don't care for one anymore
+        $self->{service}->note_client_close($self);
     }
 
     # call ClientHTTPBase's close
@@ -135,10 +138,7 @@ sub event_read {
             print "Got headers!  Firing off new backend connection.\n"
                 if Perlbal::DEBUG >= 2;
 
-            my $be = Perlbal::BackendHTTP->new($self);
-
-            # abort if we couldn't get a backend host
-            return $self->close unless $be;
+            $self->{service}->request_backend_connection($self);
 
             $self->tcp_cork(1);  # cork writes to self
         }

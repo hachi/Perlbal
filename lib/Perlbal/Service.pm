@@ -5,6 +5,8 @@
 package Perlbal::Service;
 use strict;
 
+use Perlbal::BackendHTTP;
+
 # how often to reload the nodefile
 use constant NODEFILE_RELOAD_FREQ => 3;
 
@@ -27,7 +29,13 @@ use fields (
             'sendstats.listen.socket', # Perlbal::StatsListener object
             'docroot',            # document root for webserver role
             'dirindexing',        # bool: direcotry indexing?  (for webserver role)  not async.
-            'listener'
+            'listener',
+            'waiting_clients',         # arrayref of clients waiting for backendhttp conns
+            'waiting_clients_highpri', # arrayref of high-priority clients waiting for backendhttp conns
+            'waiting_client_count',    # number of clients waiting for backendds
+            'waiting_client_map'  ,    # map of clientproxy fd -> 1 (if they're waiting for a conn)
+            'pending_connects',        # hashref of "ip:port" -> $time (only one pending connect to backend at a time)
+            'pending_connect_count',   # number of outstanding backend connects
             );
 
 sub new {
@@ -38,7 +46,18 @@ sub new {
 
     $self->{name} = $name;
     $self->{enabled} = 0;
+    $self->{listen} = "";
+
     $self->{nodes} = [];   # no configured nodes
+
+    # track pending connects to backend
+    $self->{pending_connects} = {};
+    $self->{pending_connect_count} = 0;
+
+    # waiting clients
+    $self->{waiting_clients} = [];
+    $self->{waiting_clients_highpri} = [];
+    $self->{waiting_client_count} = 0;
 
     return $self;
 }
@@ -80,6 +99,128 @@ sub load_nodefile {
     return 1;
 }
 
+# called by ClientProxy when it dies.
+sub note_client_close {
+    my Perlbal::Service $self;
+    my Perlbal::ClientProxy $cp;
+    ($self, $cp) = @_;
+    
+    if (delete $self->{waiting_client_map}{$cp->{fd}}) {
+        $self->{waiting_client_count}--;
+    }
+}
+
+# called by backend connection.  returns a ClientProxy object that's
+# waiting for a connection, or undef possibly, if client's gone away,
+# in which case the backend connection sticks around waiting for
+# a new connection later
+sub get_client {
+    my Perlbal::Service $self;
+    my Perlbal::BackendHTTP $be;
+    ($self, $be) = @_;
+
+    # note that this backend is no longer pending a connect
+    $self->{pending_connect_count}--;
+    $self->{pending_connects}{"$be->{ip}:$be->{port}"} = undef;
+
+    my $ret = sub {
+        my Perlbal::ClientProxy $cp = shift;
+        $self->{waiting_client_count}--;
+        delete $self->{waiting_client_map}{$cp->{fd}};
+
+        # before we return, start another round of connections
+        $self->pair_up_connections;
+
+        return $cp;
+    };
+
+    # find a high-priority client, or a regular one
+    my Perlbal::ClientProxy $cp;
+    while ($cp = shift @{$self->{waiting_clients_highpri}}) {
+        my $backlog = scalar @{$self->{waiting_clients}};
+        print "Got from fast queue, in front of $backlog others\n";
+        print "Backend $be->{fd} requesting client, got FAST = $cp->{fd}.\n" unless $cp->{closed};
+        return $ret->($cp) if ! $cp->{closed};
+    }
+    while ($cp = shift @{$self->{waiting_clients}}) {
+        print "Backend $be->{fd} requesting client, got normal = $cp->{fd}.\n" unless $cp->{closed};
+        return $ret->($cp) if ! $cp->{closed};
+    }
+
+    return undef;
+}
+
+sub note_bad_backend_connect {
+    my Perlbal::Service $self;
+    my ($ip, $port);
+
+    ($self, $ip, $port) = @_;
+
+    $self->{pending_connects}{"$ip:$port"} = undef;
+    $self->{pending_connect_count}--;
+
+    # FIXME: do something interesting (tell load balancer about dead host,
+    # and fire up a new connection, if warranted)
+    print STDERR "FIXME: note_bad_backend_connect not totally implemented\n";
+
+    # makes a new connection, if needed
+    $self->pair_up_connections;
+}
+
+sub request_backend_connection {
+    my Perlbal::Service $self;
+    my Perlbal::ClientProxy $cp;
+    ($self, $cp) = @_;
+
+    # decide what priority class this request is in
+    my $hd = $cp->{headers};
+
+    my %cookie;
+    foreach (split(/;\s+/, $hd->header("Cookie") || '')) {
+        next unless ($_ =~ /(.*)=(.*)/);
+        $cookie{_durl($1)} = _durl($2);
+    }
+
+    if ($cookie{'fastq'}) {
+        print "Client ($cp->{fd}) wants backend. (fast)\n";
+        push @{$self->{waiting_clients_highpri}}, $cp;
+    } else {
+        print "Client ($cp->{fd}) wants backend.\n";
+        push @{$self->{waiting_clients}}, $cp;
+    }
+
+    $self->{waiting_client_count}++;
+    $self->{waiting_client_map}{$cp->{fd}} = 1;
+
+    my $backlog = scalar @{$self->{waiting_clients}};
+    print "Slow queue = $backlog (", join(", ", map { $_->{fd} } @{$self->{waiting_clients}}), ")\n";
+
+    $self->pair_up_connections;
+}
+
+sub pair_up_connections {
+    my Perlbal::Service $self = shift;
+
+    # now start a connection to a host
+    my $tries = 0;
+
+    my $now = time;
+    while ($tries++ < 5 &&
+           $self->{waiting_client_count} > $self->{pending_connect_count} &&
+           $self->{pending_connect_count} < $self->{node_count}) {
+        my ($ip, $port) = $self->get_backend_endpoint;
+        unless ($ip) {
+            print "No backend IP.\n";
+            # FIXME: register desperate flag, so load-balancer module can callback when it has a node
+            return;
+        }
+        next if $self->{pending_connects}{"$ip:$port"};
+        $self->{pending_connects}{"$ip:$port"} = $now;
+        Perlbal::BackendHTTP->new($self, $ip, $port);
+        print "New backend spawned: $ip:$port\n";
+    }
+}
+
 sub get_backend_endpoint {
     my Perlbal::Service $self = shift;
 
@@ -101,6 +242,8 @@ sub get_backend_endpoint {
 
     # no nodes?
     return () unless $self->{node_count};
+
+    print "Random\n";
 
     # pick one randomly
     return @{$self->{nodes}[int(rand($self->{node_count}))]};
@@ -129,6 +272,14 @@ sub set {
     if ($key eq "listen") {
         return $err->("Invalid host:port")
             unless $val =~ m!^\d+\.\d+\.\d+\.\d+:\d+$!;
+        
+        # close/reopen listening socket
+        if ($val ne $self->{listen} && $self->{enabled}) {
+            $self->disable(undef, "force");
+            $self->{listen} = $val;
+            $self->enable(undef);
+        }
+
         return $set->();
     }
 
@@ -205,14 +356,14 @@ sub enable {
     ($self, $out) = @_;
 
     if ($self->{enabled}) {
-        $out->("ERROR: service $self->{name} is already enabled");
+        $out && $out->("ERROR: service $self->{name} is already enabled");
         return 0;
     }
 
     # create listening socket
     my $tl = Perlbal::TCPListener->new($self->{listen}, $self);
     unless ($tl) {
-        $out->("Can't start service '$self->{name}' on $self->{listen}: $Perlbal::last_error");
+        $out && $out->("Can't start service '$self->{name}' on $self->{listen}: $Perlbal::last_error");
         return 0;
     }
 
@@ -224,15 +375,16 @@ sub enable {
 # Service
 sub disable {
     my Perlbal::Service $self;
-    my $out;
-    ($self, $out) = @_;
+    my ($out, $force);
+
+    ($self, $out, $force) = @_;
 
     if (! $self->{enabled}) {
-        $out->("ERROR: service $self->{name} is already disabled");
+        $out && $out->("ERROR: service $self->{name} is already disabled");
         return 0;
     }
-    if ($self->{role} eq "management") {
-        $out->("ERROR: can't disable management service");
+    if ($self->{role} eq "management" && ! $force) {
+        $out && $out->("ERROR: can't disable management service");
         return 0;
     }
 
@@ -242,6 +394,14 @@ sub disable {
     $self->{listener} = undef;
     $self->{enabled} = 0;
     return 1;
+}
+
+sub _durl
+{
+    my ($a) = @_;
+    $a =~ tr/+/ /;
+    $a =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
+    return $a;
 }
 
 1;

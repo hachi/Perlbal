@@ -5,20 +5,20 @@
 package Perlbal::BackendHTTP;
 use strict;
 use base "Perlbal::Socket";
-use fields qw(client ip port req_sent);
+use fields qw(client service ip port);
 use Socket qw(PF_INET IPPROTO_TCP SOCK_STREAM);
+
+use Perlbal::ClientProxy;
 
 # if this is made too big, (say, 128k), then perl does malloc instead
 # of using its slab cache.
 use constant BACKEND_READ_SIZE => 61449;  # 60k, to fit in a 64k slab
 
-# Backend
+# constructor for a backend connection takes a service (pool) that it's
+# for, and uses that service to get its backend IP/port, as well as the
+# client that will be using this backend connection.
 sub new {
-    my ($class, $client) = @_;
-
-    my $svc = $client->{service};
-    my ($ip, $port) = $svc->get_backend_endpoint();
-    return undef unless $ip;
+    my ($class, $svc, $ip, $port) = @_;
 
     my $sock;
     socket $sock, PF_INET, SOCK_STREAM, IPPROTO_TCP;
@@ -36,11 +36,9 @@ sub new {
 
     Perlbal::objctor();
 
-    $self->{client} = $client;   # client Perlbal::Socket this backend conn is for
-    $self->{client}->backend($self);  # set client's backend to us
-
-    $self->{ip}     = $ip;       # backend IP
-    $self->{port}   = $port;     # backend port
+    $self->{ip}      = $ip;       # backend IP
+    $self->{port}    = $port;     # backend port
+    $self->{service} = $svc;      # the service we're serving for
 
     # for header reading:
     $self->{headers} = undef;      # defined w/ headers object once all headers in
@@ -49,7 +47,8 @@ sub new {
     $self->{read_ahead} = 0;       # bytes sitting in read_buf
     $self->{read_size} = 0;        # total bytes read from client
 
-    $self->{req_sent} = 0;         # boolean; request sent to backend?
+    $self->{client}   = undef;     # Perlbal::ClientProxy object, initially empty 
+                                   #    until we ask our service for one
 
     bless $self, ref $class || $class;
     $self->watch_write(1);
@@ -73,10 +72,22 @@ sub event_write {
     my Perlbal::BackendHTTP $self = shift;
     print "Backend $self is writeable!\n" if Perlbal::DEBUG >= 2;
 
-    my $done;
-    unless ($self->{req_sent}++) {
-        my Perlbal::ClientProxy $client = $self->{client};
+    unless ($self->{client}) {
+        my Perlbal::ClientProxy $client = $self->{service}->get_client($self);
+
+        # we have no client, so we'll just die.
+        if (! $client) {
+            $self->close("no_client");
+            return;
+        }
+
+        # set our client, and the client's backend to us
+        $self->{client} = $client;   
+        $self->{client}->backend($self);
+
         my $hds = $client->headers;
+
+        $hds->header("Connection", "close");
 
         # FIXME: make this conditional
         $hds->header("X-Proxy-Capabilities", "reproxy-file");
@@ -85,7 +96,7 @@ sub event_write {
         $hds->header("X-Forwarded-Host", undef);
 
         $self->tcp_cork(1);
-        $done = $self->write($hds->to_string_ref);
+        $self->write($hds->to_string_ref);
         $self->write(sub {
             $self->tcp_cork(0);
             if (my $client = $self->{client}) {
@@ -98,11 +109,18 @@ sub event_write {
         });
     }
 
-    $done = $self->write(undef);
+    my $done = $self->write(undef);
     if ($done) {
         $self->watch_read(1);
         $self->watch_write(0);
     }
+}
+
+sub watch_write {
+    my Perlbal::BackendHTTP $self = shift;
+    print "Backend::watch_write($_[0]) from " . caller() . "\n";
+    $self->SUPER::watch_write($_[0]);
+    
 }
 
 # Backend
@@ -167,27 +185,22 @@ sub event_err {
     print "BACKEND event_err\n" if
         Perlbal::DEBUG >= 2;
 
-    if ($self->{req_sent}) {
+    if ($self->{client}) {
         # request already sent to backend, then an error occurred.
         # we don't want to duplicate POST requests, so for now
         # just fail
         # TODO: if just a GET request, retry?
-        $self->{client}->close if $self->{client};
+        $self->{client}->close;
         $self->close;
         return;
     }
 
-    # otherwise, retry connection up to 5 times (FIXME: arbitrary)
-    my Perlbal::ClientProxy $client = $self->{client};
-
-    # close ourselves first (which tells the client we're gone)
+    # close ourselves first
     $self->close("error");
 
-    # then try to make a new connection, which tells the client
-    # who the new connection is
-    Perlbal::BackendHTTP->new($client)
-        if $client && ! $client->{closed} &&
-        ++$client->{reconnect_count} < 5;
+    # then tell the service manager that this connection
+    # failed, so it can spawn a new one and note the dead host
+    $self->{service}->note_bad_backend_connect($self->{ip}, $self->{port});
 }
 
 # Backend
@@ -195,6 +208,25 @@ sub event_hup {
     my Perlbal::BackendHTTP $self = shift;
     print "HANGUP for $self\n" if Perlbal::DEBUG;
 }
+
+sub as_string {
+    my Perlbal::BackendHTTP $self = shift;
+
+    my $name = getsockname($self->{sock});
+    my $lport = $name ? (Socket::sockaddr_in($name))[0] : undef;
+
+    return $self->SUPER::as_string . ": localport=$lport";
+}
+
+sub as_string_html {
+    my Perlbal::BackendHTTP $self = shift;
+
+    my $name = getsockname($self->{sock});
+    my $lport = $name ? (Socket::sockaddr_in($name))[0] : undef;
+
+    return $self->SUPER::as_string . ": localport=$lport";
+}
+
 
 sub DESTROY {
     Perlbal::objdtor();
