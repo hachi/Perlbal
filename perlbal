@@ -22,15 +22,17 @@ use Carp qw(cluck croak);
 use POSIX ();
 
 use lib 'lib';
+
+use Perlbal::HTTPHeaders;
+use Perlbal::Service;
 use Perlbal::Socket;
 use Perlbal::TCPListener;
-use Perlbal::HTTPHeaders;
 use Perlbal::StatsListener;
-use Perlbal::Service;
-use Perlbal::ClientProxy;
-use Perlbal::BackendHTTP;
-use Perlbal::ClientHTTP;
 use Perlbal::ClientManage;
+use Perlbal::ClientHTTPBase;
+use Perlbal::ClientProxy;
+use Perlbal::ClientHTTP;
+use Perlbal::BackendHTTP;
 
 $SIG{'PIPE'} = "IGNORE";  # handled manually
 

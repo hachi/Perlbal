@@ -8,7 +8,9 @@ use base "Perlbal::Socket";
 use fields qw(client ip port req_sent);
 use Socket qw(PF_INET IPPROTO_TCP SOCK_STREAM);
 
-use constant BACKEND_READ_SIZE => 131072;  # 128k; arbitrary
+# if this is made too big, (say, 128k), then perl does malloc instead
+# of using its slab cache.
+use constant BACKEND_READ_SIZE => 61449;  # 60k, to fit in a 64k slab
 
 # Backend
 sub new {
@@ -144,9 +146,7 @@ sub event_read {
         $self->{client} = undef;    # .. and it from us
         $self->close;               # close ourselves
 
-        $client->write(sub { $client->tcp_cork(0); });
-        $client->all_sent(1);      # tell our old client it has everything it needs
-        $client->watch_write(1);   # and kick-start it into writing (or shutting down)
+        $client->write(sub { $client->close() });
         return;
     }
 }

@@ -4,17 +4,10 @@
 
 package Perlbal::ClientProxy;
 use strict;
-use base "Perlbal::Socket";
-use fields ('service',             # Perlbal::Service object
+use base "Perlbal::ClientHTTPBase";
+use fields (
             'backend',             # Perlbal::BackendHTTP object (or undef if disconnected)
-            'all_sent',            # scalar bool: if writing is done
             'reconnect_count',     # number of times we've tried to reconnect to backend
-
-            # reproxy support
-            'reproxy_file',        # filename the backend told us to start opening
-            'reproxy_file_size',   # size of file, once we stat() it
-            'reproxy_fd',          # integer fd of reproxying file, once we open() it
-            'reproxy_file_offset', # how much we've sent from the file.
             );
 
 use constant READ_SIZE         => 4086;    # 4k, arbitrary
@@ -26,20 +19,15 @@ use POSIX ();
 sub new {
     my ($class, $service, $sock) = @_;
 
-    my $self = fields::new($class);
-    $self->SUPER::new($sock);       # init base fields
-
-    $self->{service} = $service;
-
-    $self->{headers} = undef;      # defined w/ headers object once all headers in
-    $self->{headers_string} = "";  # blank to start
+    my $self = $class;
+    $self = fields::new($class) unless ref $self;
+    $self->SUPER::new($service, $sock);       # init base fields
 
     $self->{read_buf} = [];        # scalar refs of bufs read from client
     $self->{read_ahead} = 0;       # bytes sitting in read_buf
     $self->{read_size} = 0;        # total bytes read from client
 
     $self->{backend} = undef;
-    $self->{all_sent} = 0;         # boolean: backend has written all data to client
 
     bless $self, ref $class || $class;
     $self->watch_read(1);
@@ -78,7 +66,7 @@ sub start_reproxy_file {
         $self->write($hd->to_string_ref);
 
         if ($self->{headers}->request_method eq 'HEAD') {
-            $self->all_sent(1);
+            $self->write(sub { $self->close; });
             return;
         }
 
@@ -106,27 +94,12 @@ sub start_reproxy_file {
 
 # Client
 # get/set backend proxy connection
-sub all_sent {
-    my Perlbal::ClientProxy $self = shift;
-    return $self->{all_sent} unless @_;
-    return $self->{all_sent} = shift;
-}
-
-# Client
-# get/set backend proxy connection
 sub backend {
     my Perlbal::ClientProxy $self = shift;
     return $self->{backend} unless @_;
     return $self->{backend} = shift;
 }
 
-# Client
-# get/set headers
-sub headers {
-    my Perlbal::ClientProxy $self = shift;
-    return $self->{headers} unless @_;
-    return $self->{headers} = shift;
-}
 
 # Client (overrides and calls super)
 sub close {
@@ -140,77 +113,20 @@ sub close {
         $backend->close($reason ? "proxied_from_client_close:$reason" : "proxied_from_client_close");
     }
 
-    # close the file we were reproxying, if any
-    POSIX::close($self->{reproxy_fd}) if $self->{reproxy_fd};
-
+    # call ClientHTTPBase's close
     $self->SUPER::close($reason);
 }
 
-# Client
-sub reproxy_fd {
-    my Perlbal::ClientProxy $self = shift;
-    return $self->{reproxy_fd} unless @_;
-
-    my ($fd, $size) = @_;
-    $self->{reproxy_file_offset} = 0;
-    $self->{reproxy_file_size} = $size;
-    return $self->{reproxy_fd} = $fd;
-}
 
 # Client
 sub event_write {
     my Perlbal::ClientProxy $self = shift;
 
-    if ($self->{reproxy_fd}) {
-        my $to_send = $self->{reproxy_file_size} - $self->{reproxy_file_offset};
-        $self->tcp_cork(1) if $self->{reproxy_file_offset} == 0;
-        my $sent = IO::SendFile::sendfile($self->{fd},
-                                          $self->{reproxy_fd},
-                                          0, # NULL offset means kernel moves filepos (apparently)
-                                          $to_send);
-        print "REPROXY Sent: $sent\n" if Perlbal::DEBUG >= 2;
-        if ($sent < 0) {
-            if ($! == EPIPE) {
-                $self->close("epipe");
-                return;
-            }
-            print STDERR "Error w/ sendfile: $!\n";
-            $self->close;
-            return;
-        }
-        $self->{reproxy_file_offset} += $sent;
-
-        if ($sent >= $to_send) {
-            # close the sendfile fd
-            my $rv = POSIX::close($self->{reproxy_fd});
-
-            $self->tcp_cork(0);
-            $self->{reproxy_fd} = undef;
-            $self->close("sendfile_done");
-            $self->all_sent(1);  # set our own flag that we're done
-        }
-        return;
-    }
-
-    if ($self->write(undef)) {
-        print "All writing done to $self\n" if Perlbal::DEBUG >= 2;
-
-        # we've written all data in the queue, so stop waiting for write
-        # notifications:
-        $self->watch_write(0);
-
-        if ($self->all_sent) {
-            # backend has notified us that it's pushed all its
-            # data into our queue.  so if we're caught up
-            # at this point, that means we're done.
-
-            $self->close("writing_done");
-        }
-    }
+    $self->SUPER::event_write;
 
     # trigger our backend to keep reading, if it's still connected
-    my $backend = $self->backend;
-    $backend->watch_read(1) if $backend && ! $self->all_sent;
+    my $backend = $self->{backend};
+    $backend->watch_read(1) if $backend;
 }
 
 # ClientProxy
@@ -258,11 +174,7 @@ sub event_read {
     }
 }
 
-sub event_err {  my $self = shift; $self->close; }
-sub event_hup {  my $self = shift; $self->close; }
-
 1;
-
 
 
 # Local Variables:
