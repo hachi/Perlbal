@@ -5,6 +5,7 @@
 # (c) 2004, Brad Fitzpatrick, <brad@danga.com>
 
 use strict;
+use warnings;
 use lib 'lib';
 use Perlbal;
 

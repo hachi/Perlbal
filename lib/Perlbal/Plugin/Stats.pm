@@ -5,6 +5,7 @@
 package Perlbal::Plugin::Stats;
 
 use strict;
+use warnings;
 use Time::HiRes qw(gettimeofday tv_interval);
 
 # setup our package variables

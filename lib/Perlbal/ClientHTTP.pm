@@ -5,6 +5,7 @@
 
 package Perlbal::ClientHTTP;
 use strict;
+use warnings;
 use base "Perlbal::ClientHTTPBase";
 
 use fields ('put_in_progress', # 1 when we're currently waiting for an async job to return

@@ -4,6 +4,7 @@
 
 package Perlbal::Service;
 use strict;
+use warnings;
 
 use Perlbal::BackendHTTP;
 

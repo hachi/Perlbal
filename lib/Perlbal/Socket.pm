@@ -4,6 +4,7 @@
 
 package Perlbal::Socket;
 use strict;
+use warnings;
 use Perlbal::HTTPHeaders;
 
 use Danga::Socket 1.17;

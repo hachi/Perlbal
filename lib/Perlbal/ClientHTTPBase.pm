@@ -8,6 +8,7 @@
 
 package Perlbal::ClientHTTPBase;
 use strict;
+use warnings;
 use base "Perlbal::Socket";
 use HTTP::Date ();
 use fields ('service',             # Perlbal::Service object

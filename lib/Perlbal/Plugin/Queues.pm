@@ -5,6 +5,7 @@
 package Perlbal::Plugin::Queues;
 
 use strict;
+use warnings;
 
 # called when we're being added to a service
 sub register {

@@ -8,6 +8,7 @@ use constant DEBUG_OBJ => 1;
 use constant TRACK_STATES => 0; # if on, track states for "state changes" command
 
 use strict;
+use warnings;
 use IO::Socket;
 use IO::Handle;
 use IO::SendFile;

@@ -4,6 +4,7 @@
 
 package Perlbal::StatsListener;
 use strict;
+use warnings;
 use base "Perlbal::Socket";
 use fields ('service',  # Perlbal::Service,
             'pos',           # index in ring.  this index has an empty value in it

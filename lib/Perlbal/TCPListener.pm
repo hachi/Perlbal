@@ -4,6 +4,7 @@
 
 package Perlbal::TCPListener;
 use strict;
+use warnings;
 use base "Perlbal::Socket";
 use fields qw(service hostport);
 use Socket qw(IPPROTO_TCP);

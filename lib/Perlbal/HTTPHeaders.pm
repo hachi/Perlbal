@@ -4,6 +4,7 @@
 
 package Perlbal::HTTPHeaders;
 use strict;
+use warnings;
 use fields (
             'headers',   # href; lowercase header -> comma-sep list of values
             'origcase',  # href; lowercase header -> provided case

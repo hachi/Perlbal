@@ -5,6 +5,7 @@
 
 package Perlbal::BackendHTTP;
 use strict;
+use warnings;
 use base "Perlbal::Socket";
 use fields ('client',  # Perlbal::ClientProxy connection, or undef
             'service', # Perlbal::Service

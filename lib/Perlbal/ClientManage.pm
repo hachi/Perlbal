@@ -4,6 +4,7 @@
 
 package Perlbal::ClientManage;
 use strict;
+use warnings;
 use base "Perlbal::Socket";
 use fields ('service',
             'buf',

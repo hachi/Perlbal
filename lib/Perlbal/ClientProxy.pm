@@ -4,6 +4,7 @@
 
 package Perlbal::ClientProxy;
 use strict;
+use warnings;
 use base "Perlbal::ClientHTTPBase";
 use fields (
             'backend',             # Perlbal::BackendHTTP object (or undef if disconnected)

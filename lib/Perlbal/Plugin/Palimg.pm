@@ -5,6 +5,7 @@
 package Perlbal::Plugin::Palimg;
 
 use strict;
+use warnings;
 
 # called when we're being added to a service
 sub register {
