@@ -311,13 +311,6 @@ sub event_read {
         return;
     }
 
-    # if we have no content length remaining, ignore this notice
-    if (defined $self->{content_length_remain} && !$self->{content_length_remain}) {
-        $self->watch_read(0);
-        $self->close('responded_done_reading') if $self->{responded};
-        return;
-    }
-
     # read data and send to backend (or buffer for later sending)
     if ($self->{read_ahead} < READ_AHEAD_SIZE) {
         my $bref = $self->read(READ_SIZE);
@@ -340,7 +333,16 @@ sub event_read {
         # reads from the client just need to be sent nowhere, because the
         # RFC2616 section 8.2.3 says: "the server SHOULD NOT close the
         # transport connection until it has read the entire request"
-        return if $self->{responded};
+        if ($self->{responded}) {
+            # in addition, if we're now out of data (clr == 0), then we should
+            # close ourselves
+            $self->close('responded_done_reading')
+                if defined $self->{content_length_remain} &&
+                          !$self->{content_length_remain};
+
+            # return since we're done here
+            return;
+        }
 
         if ($backend) {
             $backend->write($bref);
