@@ -45,7 +45,7 @@ sub event_read {
         return;
     }
 
-    if ($self->{buf} =~ s/^(.+?)\r?\n//) {
+    while ($self->{buf} =~ s/^(.+?)\r?\n//) {
         my $line = $1;
         Perlbal::run_manage_command($line, sub {
             $self->write(join("\r\n", map { ref $_ eq 'ARRAY' ? @$_ : $_ } @_) . "\r\n");
