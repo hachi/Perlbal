@@ -14,7 +14,7 @@ sub register {
     my ($class, $svc) = @_;
 
     # create a compiled regexp for very frequent use later
-    my $cr = qr{^/interface/(?:xmlrpc|flat)$};
+    my $cr = qr{^(?:/interface/(?:xmlrpc|flat)|/login\.bml)$};
 
     # more complicated statistics
     $svc->register_hook('Highpri', 'make_high_priority', sub {
