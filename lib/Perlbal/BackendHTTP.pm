@@ -241,7 +241,7 @@ sub event_read {
             $self->{content_length_remain} -= length($$bref);
         } elsif (my $hd = $self->read_response_headers) {
             # see if we have keep alive support
-            return $self->verify_failure unless $hd->keep_alive("n/a");
+            return $self->verify_failure unless $hd->res_keep_alive($self->{req_headers});
             $self->{content_length_remain} = $hd->header("Content-Length");
         }
 
