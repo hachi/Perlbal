@@ -21,3 +21,9 @@
   - make socket by hand without IO::Socket::INET
   - edge-triggered epoll in Danga::Socket
   - don't cork twice on reproxy & send
+
+* Support dictionary (scratch hash) per service
+  - can configure keys to send to backends
+  - backends can set keys in dictionary (so they propogate to other backends, etc)
+
+* Allow configurable response code that means "backend dead; replay request"
