@@ -333,6 +333,7 @@ sub event_read {
                     $thd->header('Content-Length', $hd->header('Content-Length'));
                     $thd->header('X-REPROXY-FILE', undef);
                     $thd->header('X-REPROXY-URL', undef);
+                    $thd->header('X-REPROXY-EXPECTED-SIZE', undef);
                 }
 
                 $client->write($thd->to_string_ref);
