@@ -15,6 +15,7 @@ use IO::SendFile;
 use IO::File;
 
 use Linux::AIO;
+use Sys::Syslog;
 
 use Getopt::Long;
 use BSD::Resource;
@@ -38,6 +39,18 @@ our(%hooks);     # hookname => subref
 our(%service);   # servicename -> Perlbal::Service
 our(%plugins);   # plugin => 1 (shows loaded plugins)
 our($last_error);
+our $foreground = 1; # default to foreground
+
+# setup a USR1 signal handler that tells us to dump some basic statistics
+# of how we're doing to the syslog
+$SIG{'USR1'} = sub {
+    my $dumper = sub { Perlbal::log('info', $_[0]); };
+    foreach my $svc (values %service) {
+        run_manage_command("show service $svc->{name}", $dumper);
+    }
+    run_manage_command('states', $dumper);
+    run_manage_command('queues', $dumper);
+};
 
 sub error {
     $last_error = shift;
@@ -398,6 +411,9 @@ sub load_config {
 sub daemonize {
     my($pid, $sess_id, $i);
 
+    # note that we're not in the foreground (for logging purposes)
+    $foreground = 0;
+
     # required before fork: (as of Linux::AIO 1.1, but may change)
     Linux::AIO::max_parallel(0);
 
@@ -430,6 +446,10 @@ sub daemonize {
 }
 
 sub run {
+    # setup for logging
+    openlog('perlbal', 'pid', 'daemon');
+    Perlbal::log('info', 'beginning run');
+    
     # number of AIO threads.  the number of outstanding requests isn't
     # affected by this
     Linux::AIO::min_parallel(3);
@@ -447,6 +467,20 @@ sub run {
 
     # wait for activity
     Perlbal::Socket->EventLoop();
+    Perlbal::log('info', 'ending run');
+    closelog();
+}
+
+sub log {
+    # simple logging functionality
+    if ($foreground) {
+        # syslog acts like printf so we have to use printf and append a \n
+        shift; # ignore the first parameter (info, warn, critical, etc)
+        printf(shift(@_) . "\n", @_);
+    } else {
+        # just pass the parameters to syslog
+        syslog(@_);
+    }
 }
 
 # Local Variables:

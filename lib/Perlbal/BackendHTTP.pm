@@ -65,7 +65,7 @@ sub new {
     socket $sock, PF_INET, SOCK_STREAM, IPPROTO_TCP;
 
     unless ($sock && defined fileno($sock)) {
-        print STDERR "Error creating socket: $!\n";
+        Perlbal::log('critical', "Error creating socket: $!");
         return undef;
     }
 
@@ -121,6 +121,11 @@ sub close {
     # tell our client that we're gone
     if (my $client = $self->{client}) {
         $client->backend(undef);
+    }
+
+    # tell our service that we're gone
+    if (my $service = $self->{service}) {
+        $service->note_backend_close($self);
     }
 
     $self->SUPER::close($reason);

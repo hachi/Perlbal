@@ -228,6 +228,20 @@ sub load_nodefile {
     return 1;
 }
 
+# called by BackendHTTP when it's closed by any means
+sub note_backend_close {
+    my Perlbal::Service $self;
+    my Perlbal::BackendHTTP $be;
+    ($self, $be) = @_;
+    if (my $pend_be = $self->{pending_connects}{$be->{ipport}}) {
+        if ($pend_be == $be) {
+            $self->{pending_connects}{$be->{ipport}} = undef;
+            $self->{pending_connect_count}--;
+            $self->spawn_backends;
+        }
+    }
+}
+
 # called by ClientProxy when it dies.
 sub note_client_close {
     my Perlbal::Service $self;
@@ -407,11 +421,17 @@ sub request_backend_connection {
     $self->spawn_backends;
 }
 
-# sees if it should spawn some backend connections
+# sees if it should spawn one or more backend connections
 sub spawn_backends {
     my Perlbal::Service $self = shift;
 
-    # now start a connection to a host
+    # sanity checks on our bookkeeping
+    if ($self->{pending_connect_count} < 0) {
+        Perlbal::log('critical', "Bogus: service $self->{name} has pending connect ".
+                     "count of $self->{pending_connect_count}?!  Resetting.");
+        $self->{pending_connect_count} = scalar
+            map { $_ && ! $_->{closed} } values %{$self->{pending_connects}};
+    }
 
     # keep track of the sum of existing_bored + bored_created
     my $backends_created = scalar(@{$self->{bored_backends}}) + $self->{pending_connect_count};
@@ -431,7 +451,7 @@ sub spawn_backends {
         $to_create--;
         my ($ip, $port) = $self->get_backend_endpoint;
         unless ($ip) {
-            print "No backend IP.\n";
+            Perlbal::log('critical', "No backend IP for service $self->{name}");
             # FIXME: register desperate flag, so load-balancer module can callback when it has a node
             return;
         }
@@ -445,15 +465,10 @@ sub spawn_backends {
             } elsif (! $be->{closed}) {
                 next;
             }
-
-            # TEMP: should we clean our bookkeeping here?  we really
-            # shouldn't get here.
-            $self->{pending_connects}{"$ip:$port"} = undef;
-            $self->{pending_connect_count}--;
         }
 
         if (my $be = Perlbal::BackendHTTP->new($self, $ip, $port)) {
-            $self->{pending_connects}{"$ip:$port"} = $be;
+            $self->{pending_connects}{$be->{ipport}} = $be;
             $self->{pending_connect_count}++;
         }
     }
