@@ -59,6 +59,11 @@ sub headers {
     return $self->{headers} = shift;
 }
 
+sub request_method {
+    my Perlbal::ClientProxy $self = shift;
+    return $self->{headers}->request_method;
+}
+
 # Client (overrides and calls super)
 sub close {
     my Perlbal::ClientProxy $self = shift;

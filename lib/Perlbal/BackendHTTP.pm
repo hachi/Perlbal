@@ -92,9 +92,13 @@ sub event_read {
 
 	    if (my $rep = $hd->header('X-REPROXY-FILE')) {
 		if (my $size = -s $rep) {
-		    my $fh = new IO::File;
-		    open($fh, $rep) or return $client->close("reproxy_file_open_error");
-		    $client->reproxy_file($fh, $size);
+		    my $just_head = $client->request_method eq 'HEAD';
+
+		    unless ($just_head) {
+			my $fh = new IO::File;
+			open($fh, $rep) or return $client->close("reproxy_file_open_error");
+			$client->reproxy_file($fh, $size);
+		    }
 
 		    # fixup the Content-Length header if it was undefined/0
 		    $hd->header("Content-Length", $size);
@@ -103,9 +107,12 @@ sub event_read {
 
 		    # setup the client's state:
 		    $client->write($hd->to_string_ref);
+		    $client->all_sent(1) if $just_head;
+
 		    $client->backend(undef);    # disconnect ourselves from it
 		    $self->{client} = undef;    # .. and it from us
 		    $self->close;               # close ourselves
+
 		    $client->watch_write(1);    # and kick-start it into writing
 		} else {
 		    print STDERR "REPROXY: $rep (bogus)\n";

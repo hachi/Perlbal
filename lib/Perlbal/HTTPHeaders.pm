@@ -26,6 +26,7 @@ sub new {
 	headers => {},      # lowercase header -> comma-sep list of values
 	origcase => {},     # lowercase header -> provided case
 	hdorder => [],      # order headers were received (canonical order)
+	method => undef,    # request method (if GET request)
     };
 
     # check request line
@@ -44,6 +45,7 @@ sub new {
 	my ($method, $uri, $ver) = ($1, $2, $3);
 	print "Method: [$method] URI: [$uri] Version: [$ver]\n" if Perlbal::DEBUG >= 1;
 	$self->{requestLine} = "$method $uri HTTP/1.0";
+	$self->{method} = $method;
     }
 
     my $last_header = undef;
@@ -76,6 +78,11 @@ sub new {
     }
 
     return bless $self, ref $class || $class;
+}
+
+sub request_method {
+    my $self = shift;
+    return $self->{method};
 }
 
 sub header {
