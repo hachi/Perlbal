@@ -127,8 +127,8 @@ sub event_write {
     print "Backend $self is writeable!\n" if Perlbal::DEBUG >= 2;
 
     if (! $self->{client} && $self->{state} eq "connecting") {
-        $self->{service}->register_boredom($self);
         $self->{state}   = "bored";
+        $self->{service}->register_boredom($self);
         $self->watch_write(0);
         return;
     }
