@@ -13,14 +13,14 @@ sub register {
 
     # verify that an incoming request is a palimg request
     $svc->register_hook('Palimg', 'start_serve_request', sub {
-        my Perlbal::ClientHTTPBase $obj = shift;
+        my Perlbal::ClientHTTPBase $obj = $_[0];
         my Perlbal::HTTPHeaders $hd = $obj->{req_headers};
-        my $uriref = shift;
+        my $uriref = $_[1];
 
         # if this is palimg, peel off the requested modifications and put in headers
         my ($fn, $ext, $extra) = $$uriref =~ m!^/palimg/(.+)\.(\w+)(.*)$!;
         my ($palspec) = $extra =~ m!^/p(.+)$!;
-        return $obj->_simple_response(404) unless $fn && $palspec;
+        return 0 unless $fn && $palspec;
         
         # must be ok, setup for it
         $$uriref = "/palimg/$fn.$ext";
@@ -31,7 +31,7 @@ sub register {
     
     # actually serve a palimg
     $svc->register_hook('Palimg', 'start_send_file', sub {
-        my Perlbal::ClientHTTPBase $obj = shift;
+        my Perlbal::ClientHTTPBase $obj = $_[0];
 
         # turn off writes
         $obj->watch_write(0);

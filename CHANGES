@@ -1,3 +1,6 @@
+    -- Palimg plugin now supports fallback to web server mode if the
+       requested URI doesn't fit our desired pattern
+
     -- did some cleanup; made a bunch of HTTPHeaders accesses use the
        accessor methods instead of referencing into the object's private
        store of data
