@@ -248,7 +248,6 @@ sub _serve_request {
         my $res = $self->{res_headers} = Perlbal::HTTPHeaders->new_response($not_mod ? 304 : 200);
 
         # now set whether this is keep-alive or not
-        $self->setup_keepalive($res);
         $res->header("Date", HTTP::Date::time2str());
         $res->header("Server", "Perlbal");
         $res->header("Last-Modified", $lastmod);
@@ -259,6 +258,9 @@ sub _serve_request {
             $res->header("Content-Type",
                          (defined $ext && exists $MimeType->{$ext}) ? $MimeType->{$ext} : "text/plain");
             $res->header("Content-Length", $size);
+
+            # has to happen after content-length is set to work:
+            $self->setup_keepalive($res);
 
             if ($rm eq "HEAD" || $not_mod) {
                 # we can return already, since we know the size
