@@ -44,6 +44,7 @@ sub new {
 # on failure it will try the second, then third, etc
 sub start_reproxy_uri {
     my Perlbal::ClientProxy $self = shift;
+    my Perlbal::HTTPHeaders $primary_res_hdrs = shift;
     my $urls = shift;
 
     # construct reproxy_uri list
@@ -63,7 +64,8 @@ sub start_reproxy_uri {
     # now build backend
     $self->state('wait_backend');
     my $datref = $self->{reproxy_uris}->[0];
-    my $be = Perlbal::BackendHTTP->new(undef, $datref->[0], $datref->[1], $self);
+    my $be = Perlbal::BackendHTTP->new(undef, $datref->[0], $datref->[1],
+                    { reportto => $self, primary_res_headers => $primary_res_hdrs });
 }
 
 # this is a callback for when a backend has been created and is
@@ -101,7 +103,10 @@ sub backend_response_received {
         # fall back to an alternate URL
         $be->{client} = undef;
         $be->close('non_200_reproxy');
-        $self->start_reproxy_uri;
+
+        # now call start_reproxy_uri, which, without a second parameter will
+        # try the next location in the list we were given originally
+        $self->start_reproxy_uri($be->{primary_res_headers});
         return 1;
     }
     return 0;

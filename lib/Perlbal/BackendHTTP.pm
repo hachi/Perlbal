@@ -31,6 +31,12 @@ use fields ('client',  # Perlbal::ClientProxy connection, or undef
 
             'use_count',  # number of requests this backend's been used for
 
+            'primary_res_headers',  # if defined, this instance of BackendHTTP
+                                    # is a transient reproxying-URL case
+                                    # and the headers we get back aren't necessarily
+                                    # the ones we want.  instead, get most headers
+                                    # from the provided res headers object here.
+
             );
 use Socket qw(PF_INET IPPROTO_TCP SOCK_STREAM);
 
@@ -46,9 +52,13 @@ our (%NoVerify); # { "ip:port" => next-verify-time }
 
 # constructor for a backend connection takes a service (pool) that it's
 # for, and uses that service to get its backend IP/port, as well as the
-# client that will be using this backend connection.
+# client that will be using this backend connection.  final parameter is
+# an options hashref that contains some options:
+#       primary_res_headers => HTTPHeaders object to draw primary headers from
+#       reportto => object obeying reportto interface
 sub new {
-    my ($class, $svc, $ip, $port, $reportto) = @_;
+    my ($class, $svc, $ip, $port, $opts) = @_;
+    $opts ||= {};
 
     my $sock;
     socket $sock, PF_INET, SOCK_STREAM, IPPROTO_TCP;
@@ -70,7 +80,8 @@ sub new {
     $self->{port}    = $port;     # backend port
     $self->{ipport}  = "$ip:$port";  # often used as key
     $self->{service} = $svc;      # the service we're serving for
-    $self->{reportto} = $reportto || $svc; # reportto if specified
+    $self->{reportto} = $opts->{reportto} || $svc; # reportto if specified
+    $self->{primary_res_headers} = $opts->{primary_res_headers};
     $self->state("connecting");
 
     # for header reading:
@@ -294,16 +305,24 @@ sub event_read {
                 $self->next_request;
                 return;
             } elsif (my $urls = $hd->header('X-REPROXY-URL')) {
-                $client->start_reproxy_uri($urls);
+                $client->start_reproxy_uri($self->{res_headers}, $urls);
                 $self->next_request;
                 return;
             } else {
-                my $thd = $client->{res_headers} = $hd->clone;
+                my $res_source = $self->{primary_res_headers} || $hd;
+                my $thd = $client->{res_headers} = $res_source->clone;
 
                 # for now, we don't support keep-alive and we force HTTP 1.0
                 $thd->set_version('1.0');
                 $thd->header('Connection', 'close');
                 $thd->header('Keep-Alive', undef);
+
+                # if we had an alternate primary response header, make sure
+                # we send the real content-length (from the reproxied URL)
+                # and not the one the first server gave us
+                $thd->header('Content-Length', $hd->header('Content-Length'))
+                    if $self->{primary_res_headers};
+
                 $client->write($thd->to_string_ref);
 
                 # if we over-read anything from backend (most likely)
