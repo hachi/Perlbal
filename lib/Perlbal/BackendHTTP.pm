@@ -23,7 +23,7 @@ sub new {
     my $sock;
     socket $sock, PF_INET, SOCK_STREAM, IPPROTO_TCP;
 
-    unless ($sock) {
+    unless ($sock && defined fileno($sock)) {
         print STDERR "Error creating socket: $!\n";
         return undef;
     }
@@ -114,13 +114,6 @@ sub event_write {
         $self->watch_read(1);
         $self->watch_write(0);
     }
-}
-
-sub watch_write {
-    my Perlbal::BackendHTTP $self = shift;
-    print "Backend::watch_write($_[0]) from " . caller() . "\n";
-    $self->SUPER::watch_write($_[0]);
-    
 }
 
 # Backend
