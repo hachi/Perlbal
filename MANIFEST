@@ -17,10 +17,13 @@ lib/Perlbal/Plugin/Palimg.pm
 lib/Perlbal/Plugin/Queues.pm
 lib/Perlbal/Plugin/Stats.pm
 lib/Perlbal/Plugin/Highpri.pm
+lib/Perlbal/ReproxyManager.pm
 META.yml                                 Module meta-data (added by MakeMaker)
 doc/Classes.txt
 doc/README.txt
 doc/Hooks.txt
 doc/Reproxying.txt
+doc/todo.txt
 conf/nodelist.dat
 conf/perlbal.conf
+t/00use.t

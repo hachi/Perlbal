@@ -1,0 +1,12 @@
+#!/bin/sh
+
+if [ "$1" = "purge" ] 
+	then
+		rm -f /etc/perlbal/perlbal.conf
+		rm -f /etc/perlbal/nodelist.dat
+		rmdir --ignore-fail-on-non-empty /etc/perlbal
+fi
+
+	rm -f /var/run/perlbal.pid
+
+#DEBHELPER#
