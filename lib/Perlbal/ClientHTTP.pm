@@ -314,6 +314,8 @@ sub handle_put {
     # okay, file is open, write some data
     $self->{put_in_progress} = 1;
     Linux::AIO::aio_write($self->{put_fh}, $self->{put_pos}, $count, $data, 0, sub {
+        return if $self->{closed};
+
         # see how many bytes written
         my $bytes = shift() + 0;
         $self->{put_pos} += $bytes;
@@ -327,7 +329,7 @@ sub handle_put {
             unless ($self->{content_length_remain}) {
                 # close it
                 # FIXME this should be done through AIO
-                if ($self->{put_fh}->close) {
+                if ($self->{put_fh} && $self->{put_fh}->close) {
                     $self->{put_fh} = undef;
                     return $self->send_response(200);
                 } else {
