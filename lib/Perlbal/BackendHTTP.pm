@@ -94,7 +94,6 @@ sub event_read {
 
 	    if (my $rep = $hd->header('X-REPROXY-FILE')) {
 		if (my $size = -s $rep) {
-		    print "REPROXY: $rep (size=$size)\n";
 		    my $fh = new IO::File;
 		    open($fh, $rep) or return $client->close("reproxy_file_open_error");
 		    $client->reproxy_file($fh, $size);
