@@ -175,7 +175,7 @@ sub new {
     return $self;
 }
 
-sub codetext {
+sub _codetext {
     my Perlbal::HTTPHeaders $self = shift;
     return $self->{codetext} if $self->{codetext};
     return $self->http_code_english;
@@ -257,7 +257,7 @@ sub set_version {
     if ($self->{type} eq 'req') {
         $self->{requestLine} = "$self->{method} $self->{uri} HTTP/$ver";
     } else {
-        $self->{responseLine} = "HTTP/$ver $self->{code} " . $self->codetext;
+        $self->{responseLine} = "HTTP/$ver $self->{code} " . $self->_codetext;
     }
     $self->{ver} = "$ver_ma.$ver_mi";
     $self->{vernum} = $ver_ma*1000 + $ver_mi;

@@ -42,6 +42,12 @@ our($last_error);
 our $foreground = 1; # default to foreground
 our $track_obj = 0;  # default to not track creation locations
 
+# setup XS status data structures
+our %XSModules; # ( 'headers' => 'Perlbal::XS::HTTPHeaders' )
+
+# now include XS files
+eval "use Perlbal::XS::HTTPHeaders;"; # if we have it, load it
+
 # setup a USR1 signal handler that tells us to dump some basic statistics
 # of how we're doing to the syslog
 $SIG{'USR1'} = sub {
@@ -144,6 +150,46 @@ sub run_manage_command {
     }
 
     exit(0) if $cmd eq "shutdown";
+
+    if ($cmd =~ /^xs(?:\s+(\w+)\s+(\w+))?$/) {
+        if ($1 && $2) {
+            # command? verify
+            my ($cmd, $module) = ($1, $2);
+            return $err->('Known XS modules: ' . join(', ', sort keys %XSModules) . '.')
+                unless $XSModules{$module}; # FIXME: make this dynamic
+
+            # okay, so now enable or disable this module
+            if ($cmd eq 'enable') {
+                my $res = eval "return $XSModules{$module}::enable();";
+                return $err->("Unable to enable module.")
+                    unless $res;
+                $out->("Module enabled.");
+            } elsif ($cmd eq 'disable') {
+                my $res = eval "return $XSModules{$module}::disable();";
+                return $err->("Unable to disable module.")
+                    unless $res;
+                $out->("Module disabled.");
+            } else {
+                return $err->('Usage: xs [ <enable|disable> <module> ]');
+            }
+        } else {
+            # no commands, so just check status
+            $out->('XS module status:', '');
+            foreach my $module (sort keys %XSModules) {
+                my $class = $XSModules{$module};
+                my $enabled = eval "return \$${class}::Enabled;";
+                my $status = defined $enabled ? ($enabled ? "installed, enabled" :
+                                                 "installed, disabled") : "not installed";
+                $out->("   $module: $status");
+            }
+            $out->('   No modules available.') unless %XSModules;
+            $out->('');
+            $out->("To enable a module: xs enable <module>");
+            $out->("To disable a module: xs disable <module>");
+        }
+        $out->('.');
+        return 1;
+    }
 
     if ($cmd =~ /^track/) {
         my $now = time();

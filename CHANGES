@@ -1,3 +1,6 @@
+    -- added Perlbal::XS interface for modules to use; also 'xs' management
+       command to see the status of XS modules
+
     -- bug in PalImg caused crash on files with no length (or when another
        error occurs that causes no data to be sent to new_gif_palette function)
 
