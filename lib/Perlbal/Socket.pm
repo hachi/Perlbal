@@ -76,12 +76,6 @@ sub new {
         _do_cleanup();
     }
 
-    # time to run callbacks?
-    if ($now > $last_callbacks) {
-        $last_callbacks = $now;
-        run_callbacks();
-    }
-
     # now put this item in the list of created objects
     if (TRACK_OBJECTS) {
         # clean the created objects list if necessary
@@ -147,10 +141,13 @@ sub register_callback {
 
 # CLASS METHOD: runs through the list of registered callbacks and executes
 # any that need to be executed
+# FIXME: this doesn't scale.  need a heap.
 sub run_callbacks {
     my $now = time;
-    my @destlist = ();
+    return if $last_callbacks == $now;
+    $last_callbacks = $now;
 
+    my @destlist = ();
     foreach my $ref (@$callbacks) {
         # if their time is <= now...
         if ($ref->[0] <= $now) {

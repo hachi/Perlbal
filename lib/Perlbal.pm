@@ -322,6 +322,9 @@ sub run_manage_command {
         Perlbal::Socket->SetPostLoopCallback(sub {
             my ($descmap, $otherfds) = @_;
 
+            # Ghetto: duplicate the code we already had for our postloopcallback
+            Perlbal::Socket::run_callbacks();
+
             # see what we have here; make sure we have no Clients and no unbored Backends
             foreach my $sock (values %$descmap) {
                 my $ref = ref $sock;
@@ -709,6 +712,12 @@ sub run {
             Linux::AIO::poll_cb();
         });
     }
+
+    Danga::Socket->SetLoopTimeout(1000);
+    Danga::Socket->SetPostLoopCallback(sub {
+        Perlbal::Socket::run_callbacks();
+        return 1;
+    });
 
     # begin the overall loop to try to capture if Perlbal dies at some point
     # so we can have a log of it
