@@ -320,7 +320,7 @@ sub run_manage_command {
 
     if ($cmd =~ /^server (\w+) ?= ?(.+)$/) {
         my ($key, $val) = ($1, $2);
-        return $err->("Expected numeric parameter") unless $val =~ /^\d+$/;
+        return $err->("Expected numeric parameter") unless $val =~ /^-?\d+$/;
 
         if ($key eq "max_connections") {
             my $rv = setrlimit(RLIMIT_NOFILE, $val, $val);
@@ -331,6 +331,11 @@ sub run_manage_command {
                     $err->("Need to be root to increase max connections.");
                 }
             }
+        } elsif ($key eq "nice_level") {
+            my $rv = POSIX::nice($val);
+            $err->("Unable to renice: $!")
+                unless defined $rv;
+                    
         } elsif ($key eq "aio_threads") {
 
         }
