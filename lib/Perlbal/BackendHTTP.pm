@@ -125,11 +125,13 @@ sub close {
     # tell our client that we're gone
     if (my $client = $self->{client}) {
         $client->backend(undef);
+        $self->{client} = undef;
     }
 
     # tell our owner that we're gone
     if (my $reportto = $self->{reportto}) {
         $reportto->note_backend_close($self);
+        $self->{reportto} = undef;
     }
 
     $self->SUPER::close($reason);
