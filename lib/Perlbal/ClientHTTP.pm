@@ -156,7 +156,7 @@ sub setup_delete {
             my $rv = shift;
             if ($rv && !$!) {
                 # delete was successful
-                return $self->send_response(202);
+                return $self->send_response(204);
             } elsif ($! == ENOENT) {
                 # no such file
                 return $self->send_response(404);
