@@ -5,7 +5,7 @@
 package Perlbal::BackendHTTP;
 use strict;
 use base "Perlbal::Socket";
-use fields qw(client service ip port);
+use fields qw(client service ip port ipport);
 use Socket qw(PF_INET IPPROTO_TCP SOCK_STREAM);
 
 use Perlbal::ClientProxy;
@@ -38,6 +38,7 @@ sub new {
 
     $self->{ip}      = $ip;       # backend IP
     $self->{port}    = $port;     # backend port
+    $self->{ipport}  = "$ip:$port";  # often used as key
     $self->{service} = $svc;      # the service we're serving for
 
     # for header reading:
@@ -67,53 +68,60 @@ sub close {
     $self->SUPER::close($reason);
 }
 
+# called by service when it's got a client for us, or by ourselves
+# when we asked for a client.
+# returns true if client assignment was accepted.
+sub assign_client {
+    my Perlbal::BackendHTTP $self = shift;
+    my Perlbal::ClientProxy $client = shift;
+    return 0 if $self->{client};
+
+    # set our client, and the client's backend to us
+    $client->{service}->mark_node_used($self->{ipport});
+    $self->{client} = $client;   
+    $self->{client}->backend($self);
+
+    my $hds = $client->headers;
+
+    $hds->header("Connection", "close");
+
+    # FIXME: make this conditional
+    $hds->header("X-Proxy-Capabilities", "reproxy-file");
+    $hds->header("X-Forwarded-For", $client->peer_addr_string);
+    $hds->header("X-Host", undef);
+    $hds->header("X-Forwarded-Host", undef);
+
+    $self->tcp_cork(1);
+    $self->write($hds->to_string_ref);
+    $self->write(sub {
+        $self->tcp_cork(0);
+        if (my $client = $self->{client}) {
+            # start waiting on a reply
+            $self->watch_read(1);
+            # make the client push its overflow reads (request body)
+            # to the backend
+            $client->drain_read_buf_to($self);
+            # and start watching for more reads
+            $client->watch_read(1);
+        }
+    });
+
+    return 1;
+}
+
 # Backend
 sub event_write {
     my Perlbal::BackendHTTP $self = shift;
     print "Backend $self is writeable!\n" if Perlbal::DEBUG >= 2;
 
     unless ($self->{client}) {
-        my Perlbal::ClientProxy $client = $self->{service}->get_client($self);
-
-        # we have no client, so we'll just die.
-        if (! $client) {
-            $self->close("no_client");
-            return;
-        }
-
-        # set our client, and the client's backend to us
-        $self->{client} = $client;   
-        $self->{client}->backend($self);
-
-        my $hds = $client->headers;
-
-        $hds->header("Connection", "close");
-
-        # FIXME: make this conditional
-        $hds->header("X-Proxy-Capabilities", "reproxy-file");
-        $hds->header("X-Forwarded-For", $client->peer_addr_string);
-        $hds->header("X-Host", undef);
-        $hds->header("X-Forwarded-Host", undef);
-
-        $self->tcp_cork(1);
-        $self->write($hds->to_string_ref);
-        $self->write(sub {
-            $self->tcp_cork(0);
-            if (my $client = $self->{client}) {
-                # make the client push its overflow reads (request body)
-                # to the backend
-                $client->drain_read_buf_to($self);
-                # and start watching for more reads
-                $client->watch_read(1);
-            }
-        });
+        $self->{service}->register_boredom($self);
+        $self->watch_write(0);
+        return;
     }
 
     my $done = $self->write(undef);
-    if ($done) {
-        $self->watch_read(1);
-        $self->watch_write(0);
-    }
+    $self->watch_write(0) if $done;
 }
 
 # Backend
@@ -207,17 +215,16 @@ sub as_string {
 
     my $name = getsockname($self->{sock});
     my $lport = $name ? (Socket::sockaddr_in($name))[0] : undef;
+    my $ret = $self->SUPER::as_string . ": localport=$lport";
+    if (my Perlbal::ClientProxy $cp = $self->{client}) {
+        $ret .= "; client=$cp->{fd}";
+    } elsif ($self->peer_addr_string) {
+        $ret .= "; bored";
+    } else {
+        $ret .= "; connecting";
+    }
 
-    return $self->SUPER::as_string . ": localport=$lport";
-}
-
-sub as_string_html {
-    my Perlbal::BackendHTTP $self = shift;
-
-    my $name = getsockname($self->{sock});
-    my $lport = $name ? (Socket::sockaddr_in($name))[0] : undef;
-
-    return $self->SUPER::as_string . ": localport=$lport";
+    return $ret;
 }
 
 

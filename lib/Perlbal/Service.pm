@@ -39,6 +39,8 @@ use fields (
             'high_priority_cookie',          # cookie name to check if client can 'cut in line' and get backends faster
             'high_priority_cookie_contents', # aforementioned cookie value must contain this substring
             'node_used',               # hashref of "ip:port" -> use count
+            'connect_ahead',           # scalar: number of spare backends to connect to in advance all the time
+            'bored_backends',          # arrayref of backends we've already connected to, but haven't got clients
             );
 
 sub new {
@@ -56,6 +58,7 @@ sub new {
     # track pending connects to backend
     $self->{pending_connects} = {};
     $self->{pending_connect_count} = 0;
+    $self->{bored_backends} = [];
 
     # waiting clients
     $self->{waiting_clients} = [];
@@ -124,30 +127,22 @@ sub note_client_close {
     }
 }
 
-# called by backend connection.  returns a ClientProxy object that's
-# waiting for a connection, or undef possibly, if client's gone away,
-# in which case the backend connection sticks around waiting for
-# a new connection later
+sub mark_node_used {
+    my Perlbal::Service $self = shift;
+    my $hostport = shift;
+    $self->{node_used}{$hostport}++;
+}
+
 sub get_client {
-    my Perlbal::Service $self;
-    my Perlbal::BackendHTTP $be;
-    ($self, $be) = @_;
-
-    my $hostport = "$be->{ip}:$be->{port}";
-
-    # note that this backend is no longer pending a connect
-    $self->{pending_connect_count}--;
-    $self->{pending_connects}{$hostport} = undef;
+    my Perlbal::Service $self = shift;
 
     my $ret = sub {
         my Perlbal::ClientProxy $cp = shift;
         $self->{waiting_client_count}--;
         delete $self->{waiting_client_map}{$cp->{fd}};
 
-        $self->{node_used}{$hostport}++;
-
         # before we return, start another round of connections
-        $self->pair_up_connections;
+        $self->spawn_backends;
 
         return $cp;
     };
@@ -158,18 +153,42 @@ sub get_client {
         my $backlog = scalar @{$self->{waiting_clients}};
         if (Perlbal::DEBUG >= 2) {
             print "Got from fast queue, in front of $backlog others\n";
-            print "Backend $be->{fd} requesting client, got FAST = $cp->{fd}.\n" unless $cp->{closed};
         }
         return $ret->($cp) if ! $cp->{closed};
     }
     while ($cp = shift @{$self->{waiting_clients}}) {
         if (Perlbal::DEBUG >= 2) {
-            print "Backend $be->{fd} requesting client, got normal = $cp->{fd}.\n" unless $cp->{closed};
+            print "Backend requesting client, got normal = $cp->{fd}.\n" unless $cp->{closed};
         }
         return $ret->($cp) if ! $cp->{closed};
     }
 
     return undef;
+}
+
+# called by backend connection after it becomes writable
+sub register_boredom {
+    my Perlbal::Service $self;
+    my Perlbal::BackendHTTP $be;
+    ($self, $be) = @_;
+
+    # note that this backend is no longer pending a connect
+    $self->{pending_connect_count}--;
+    $self->{pending_connects}{$be->{ipport}} = undef;
+
+    my Perlbal::ClientProxy $cp = $self->get_client;
+    if ($cp) {
+        if ($be->assign_client($cp)) {
+            return;
+        } else {
+            # don't want to lose client, so we (unfortunately)
+            # stick it at the end of the waiting queue.
+            # fortunately, assign_client shouldn't ever fail.
+            $self->request_backend_connection($cp);
+        }
+    }
+
+    push @{$self->{bored_backends}}, $be;
 }
 
 sub note_bad_backend_connect {
@@ -183,16 +202,34 @@ sub note_bad_backend_connect {
 
     # FIXME: do something interesting (tell load balancer about dead host,
     # and fire up a new connection, if warranted)
-    print STDERR "FIXME: note_bad_backend_connect not totally implemented\n";
 
     # makes a new connection, if needed
-    $self->pair_up_connections;
+    $self->spawn_backends;
 }
 
 sub request_backend_connection {
     my Perlbal::Service $self;
     my Perlbal::ClientProxy $cp;
     ($self, $cp) = @_;
+
+    # before we even consider spawning backends, let's see if we have
+    # some bored (pre-connected) backends that'd take this client
+    my Perlbal::BackendHTTP $be;
+    my $now = time;
+    while ($be = shift @{$self->{bored_backends}}) {
+        next if $be->{closed};
+        if ($be->{create_time} < $now - 5) {
+            $be->close("too_old_bored");
+            next;
+        }
+
+        # give the backend this client
+        if ($be->assign_client($cp)) {
+            # and make some extra bored backends, if configured as such
+            $self->spawn_backends;
+            return;
+        }
+    }
 
     my $hi_pri = 0;  # by default, low priority
 
@@ -219,19 +256,27 @@ sub request_backend_connection {
     $self->{waiting_client_count}++;
     $self->{waiting_client_map}{$cp->{fd}} = 1;
 
-    $self->pair_up_connections;
+    $self->spawn_backends;
 }
 
-sub pair_up_connections {
+# sees if it should spawn some backend connections
+sub spawn_backends {
     my Perlbal::Service $self = shift;
 
     # now start a connection to a host
     my $tries = 0;
 
+    # keep track of the sum of existing_bored + bored_created
+    my $bored_at = scalar @{$self->{bored_backends}};
+
     my $now = time;
     while ($tries++ < 5 &&
-           $self->{waiting_client_count} > $self->{pending_connect_count} &&
-           $self->{pending_connect_count} < $self->{node_count}) {
+           ( ($self->{waiting_client_count} > $self->{pending_connect_count} &&
+              $self->{pending_connect_count} < $self->{node_count}) 
+             ||
+             ( $bored_at < $self->{connect_ahead} )
+           ))
+    {
         my ($ip, $port) = $self->get_backend_endpoint;
         unless ($ip) {
             print "No backend IP.\n";
@@ -240,6 +285,7 @@ sub pair_up_connections {
         }
         next if $self->{pending_connects}{"$ip:$port"};
         if (Perlbal::BackendHTTP->new($self, $ip, $port)) {
+            $bored_at++ if $self->{waiting_client_count} <= $self->{pending_connect_count};
             $self->{pending_connects}{"$ip:$port"} = $now;
             $self->{pending_connect_count}++;
         }
@@ -320,6 +366,13 @@ sub set {
 
     if ($key eq "high_priority_cookie" || $key eq "high_priority_cookie_contents") {
         return $set->();
+    }
+
+    if ($key eq "connect_ahead") {
+        return $err->("Expected integer value") unless $val =~ /^\d+$/;
+        $set->();
+        $self->spawn_backends if $self->{enabled};
+        return 1;
     }
 
     if ($key eq "nodefile") {
@@ -437,6 +490,8 @@ sub stats_info
         $out->("  pend backend: $self->{pending_connect_count}");
     }
     if ($self->{role} eq "reverse_proxy") {
+        my $bored_count = scalar @{$self->{bored_backends}};
+        $out->(" connect-ahead: $bored_count/$self->{connect_ahead}");
         $out->("balance method: " . $self->balance_method);
         $out->("         nodes:");
         foreach my $n (@{ $self->{nodes} }) {
