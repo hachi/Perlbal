@@ -4,6 +4,17 @@
 
 package Perlbal::HTTPHeaders;
 use strict;
+use fields (
+            'headers',   # href; lowercase header -> comma-sep list of values
+            'origcase',  # href; lowercase header -> provided case
+            'hdorder',   # aref; order headers were received (canonical order)
+            'method',    # scalar; request method (if GET request)
+            'uri',       # scalar; request URI (if GET request)
+            'type',      # 'res' or 'req'
+            'code',      # HTTP status code
+            'responseLine', # first line of HTTP response (if response)
+            'requestLine',  # first line of HTTP request (if request)
+            );
 
 our $HTTPCode = {
     200 => 'OK',
@@ -24,20 +35,20 @@ sub fail {
 }
 
 sub http_code_english {
-    my $self = shift;
+    my Perlbal::HTTPHeaders $self = shift;
     return $HTTPCode->{$self->{code}};
 }
 
 sub new_response {
-    my ($class, $code) = @_;
+    my Perlbal::HTTPHeaders $self = shift;
+    $self = fields::new($self) unless ref $self;
 
-    my $self = {
-        headers => {},      # lowercase header -> comma-sep list of values
-        origcase => {},     # lowercase header -> provided case
-        hdorder => [],      # order headers were received (canonical order)
-        method => undef,    # request method (if GET request)
-        uri => undef,       # request URI (if GET request)
-    };
+    my $code = shift;
+    $self->{headers} = {};
+    $self->{origcase} = {};
+    $self->{hdorder} = [];
+    $self->{method} = undef;
+    $self->{uri} = undef;
 
     my $msg = $HTTPCode->{$code} || "";
     $self->{responseLine} = "HTTP/1.0 $code $msg";
@@ -45,11 +56,14 @@ sub new_response {
     $self->{type} = "httpres";
 
     Perlbal::objctor($self->{type});
-    return bless $self, ref $class || $class;
+    return $self;
 }
 
 sub new {
-    my ($class, $hstr, $is_response) = @_;
+    my Perlbal::HTTPHeaders $self = shift;
+    $self = fields::new($self) unless ref $self;
+
+    my ($hstr, $is_response) = @_;
     # hstr: headers as a string
     # is_response: bool; is HTTP response (as opposed to request).  defaults to request.
 
@@ -57,14 +71,12 @@ sub new {
     my @lines = split(/\n/, $hstr);
     my $first = shift @lines;
 
-    my $self = {
-        headers => {},      # lowercase header -> comma-sep list of values
-        origcase => {},     # lowercase header -> provided case
-        hdorder => [],      # order headers were received (canonical order)
-        method => undef,    # request method (if GET request)
-        uri => undef,       # request URI (if GET request)
-        type => ($is_response ? "res" : "req"),
-    };
+    $self->{headers} = {};
+    $self->{origcase} = {};
+    $self->{hdorder} = [];
+    $self->{method} = undef;
+    $self->{uri} = undef;
+    $self->{type} = ($is_response ? "res" : "req");
 
     # check request line
     if ($is_response) {
@@ -118,21 +130,21 @@ sub new {
     }
 
     Perlbal::objctor($self->{type});
-    return bless $self, ref $class || $class;
+    return $self;
 }
 
 sub request_method {
-    my $self = shift;
+    my Perlbal::HTTPHeaders $self = shift;
     return $self->{method};
 }
 
 sub request_uri {
-    my $self = shift;
+    my Perlbal::HTTPHeaders $self = shift;
     return $self->{uri};
 }
 
 sub header {
-    my $self = shift;
+    my Perlbal::HTTPHeaders $self = shift;
     my $key = shift;
     return $self->{headers}{lc($key)} unless @_;
 
@@ -148,13 +160,13 @@ sub header {
 }
 
 sub to_string_ref {
-    my $self = shift;
+    my Perlbal::HTTPHeaders $self = shift;
     my $st = join("\r\n",
                   $self->{requestLine} || $self->{responseLine},
-                  map { "$self->{origcase}{$_}: $self->{headers}{$_}" }
-                  grep { defined $self->{headers}{$_} }
-                  @{$self->{hdorder}},
-                  ) . "\r\n\r\n";
+                  (map { "$self->{origcase}{$_}: $self->{headers}{$_}" }
+                   grep { defined $self->{headers}{$_} }
+                   @{$self->{hdorder}}),
+                  '', '');  # final \r\n\r\n
     return \$st;
 }
 
