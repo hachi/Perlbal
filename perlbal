@@ -99,6 +99,25 @@ sub run_manage_command {
 
     exit(0) if $cmd eq "shutdown";
 
+    if ($cmd eq 'shutdown graceful') {
+        # tell all sockets we're doing a graceful stop
+        my $sf = Perlbal::Socket->get_sock_ref;
+        foreach my $k (keys %$sf) {
+            my Perlbal::Socket $v = $sf->{$k};
+            $v->die_gracefully();
+        }
+        
+        # register a post loop callback that will end the event loop when we only have
+        # a single socket left, the AIO socket
+        Perlbal::Socket->SetPostLoopCallback(sub {
+            my ($descmap, $otherfds) = @_;
+
+            # simple; if we have more than one descriptor left in %$descmap, we're not done yet
+            return (scalar(keys %$descmap) > 1) ? 1 : 0;
+        });
+        return 1;
+    }
+
     if ($cmd =~ /^socks(?: (\w+))?$/) {
         my $mode = $1 || "all";
         my $sf = Perlbal::Socket->get_sock_ref;

@@ -6,6 +6,7 @@ package Perlbal::Socket;
 use strict;
 use Perlbal::HTTPHeaders;
 
+use Danga::Socket 1.17;
 use base 'Danga::Socket';
 use fields (
             'headers_string',  # headers as they're being read
@@ -130,6 +131,11 @@ sub drain_read_buf_to {
         $self->{read_ahead} -= length($$bref);
     }
 }
+
+### (VIRTUAL) METHOD: die_gracefully()
+### Default behavior is to ignore the call.  Children can override if they want
+### to die now or do some other processing before death.
+sub die_gracefully { }
 
 sub read_request_headers  { read_headers(@_, 0); }
 sub read_response_headers { read_headers(@_, 1); }

@@ -73,6 +73,12 @@ sub as_string_html {
     return $ret;
 }
 
+sub die_gracefully {
+    # die off so we stop waiting for new connections
+    my $self = shift;
+    $self->close;
+}
+
 
 1;
 

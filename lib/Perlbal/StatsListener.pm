@@ -14,6 +14,7 @@ use fields ('service',  # Perlbal::Service,
             'total_free',    # int scalar: free listeners
             'need_parse',    # hashref:  ip -> pos
             'use_count',     # hashref:  ip -> times_used (ip can also be '' for empty case)
+            'dead',          # int; if 1 then we're dead (don't give out any more info)
             );
 
 use constant RING_SIZE => 30;
@@ -38,6 +39,7 @@ sub new {
     my $self = fields::new($class);
     $self->SUPER::new($sock);       # init base fields
 
+    $self->{dead} = 0;
     $self->{service} = $service;
     $self->reset_state;
 
@@ -84,6 +86,7 @@ sub event_read {
 
 sub get_endpoint {
     my Perlbal::StatsListener $self = shift;
+    return () if $self->{dead};
 
     # catch up on our parsing
     while (my ($from, $pos) = each %{$self->{need_parse}}) {
@@ -182,6 +185,13 @@ sub debug_dump {
 
 sub event_err { }
 sub event_hup { }
+
+sub die_gracefully {
+    # okay, let's actually die now
+    my $self = shift;
+    $self->{dead} = 1;
+    $self->close;
+}
 
 1;
 
