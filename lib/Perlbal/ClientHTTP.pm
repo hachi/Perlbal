@@ -93,6 +93,9 @@ sub event_read {
     my $hd = $self->read_request_headers;
     return unless $hd;
 
+    # fully formed request received
+    $self->{requests}++;
+
     # notify that we're about to serve
     return if $self->{service}->run_hook('start_web_request', $self);
 

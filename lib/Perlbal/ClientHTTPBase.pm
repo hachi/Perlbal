@@ -22,6 +22,8 @@ use fields ('service',             # Perlbal::Service object
             'reproxy_fd',          # integer fd of reproxying file, once we open() it
             'reproxy_fh',          # if needed, IO::Handle of fd
             'reproxy_file_offset', # how much we've sent from the file.
+
+            'requests',            # number of requests this object has performed for the user
             );
 
 use Errno qw( EPIPE ECONNRESET );
@@ -59,12 +61,12 @@ sub new {
     $self->{replacement_uri} = undef;
     $self->{headers_string} = '';
     $self->state('reading_headers');
+    $self->{requests} = 0;
 
     bless $self, ref $class || $class;
     $self->watch_read(1);
     return $self;
 }
-
 
 sub close {
     my Perlbal::ClientHTTPBase $self = shift;
@@ -74,6 +76,60 @@ sub close {
     POSIX::close($self->{reproxy_fd}) if $self->{reproxy_fd};
 
     $self->SUPER::close($reason);
+}
+
+# given our request headers, determine if we should be sending
+# keep-alive header information back to the client
+sub setup_keepalive {
+    my Perlbal::ClientHTTPBase $self = $_[0];
+
+    # now get the headers we're using
+    my Perlbal::HTTPHeaders $hd = $_[1];
+    my Perlbal::HTTPHeaders $rqhd = $self->{req_headers};
+
+    # do keep alive if they sent content-length or it's a head request
+    my $do_keepalive = $self->{service}->{persist_client} &&
+                       $rqhd->keep_alive($rqhd->{method} eq 'HEAD' ||
+                                         $hd->header('Content-length'));
+    if ($do_keepalive) {
+        my $timeout = $self->max_idle_time;
+        $hd->header('Connection', 'keep-alive');
+        $hd->header('Keep-Alive', $timeout ? "timeout=$timeout, max=100" : undef);
+    } else {
+        $hd->header('Connection', 'close');
+        $hd->header('Keep-Alive', undef);
+    }
+}
+
+# called when we've finished writing everything to a client and we need
+# to reset our state for another request
+sub http_response_sent {
+    my Perlbal::ClientHTTPBase $self = $_[0];
+
+    # close if we're supposed to
+    if ($self->{res_headers}->header('Connection') =~ m/\bclose\b/i) {
+        $self->close("no_keep_alive");
+        return;
+    }
+
+    # prepare!
+    $self->{replacement_uri} = undef;
+    $self->{headers_string} = '';
+    $self->{req_headers} = undef;
+    $self->{res_headers} = undef;
+    $self->{reproxy_fh} = undef;
+    $self->{reproxy_fd} = 0;
+    $self->{reproxy_file} = undef;
+    $self->{reproxy_file_size} = 0;
+    $self->{reproxy_file_offset} = 0;
+
+    # reset state
+    $self->state('reading_headers');
+
+    # NOTE: because we only speak 1.0 to clients they can't have
+    # pipeline in a read that we haven't read yet.
+    $self->watch_read(1);
+    $self->watch_write(0);
 }
 
 sub reproxy_fh {
@@ -134,7 +190,7 @@ sub event_write {
             
             $self->{reproxy_fd} = undef;
             $self->{reproxy_fh} = undef;
-            $self->close("sendfile_done");
+            $self->http_response_sent;
         }
         return;
     }
@@ -185,7 +241,8 @@ sub _serve_request {
 
         my $res = $self->{res_headers} = Perlbal::HTTPHeaders->new_response($not_mod ? 304 : 200);
 
-        $res->header("Connection", "close");
+        # now set whether this is keep-alive or not
+        $self->setup_keepalive($res);
         $res->header("Date", HTTP::Date::time2str());
         $res->header("Server", "Perlbal");
         $res->header("Last-Modified", $lastmod);
@@ -201,7 +258,7 @@ sub _serve_request {
                 # we can return already, since we know the size
                 $self->tcp_cork(1);
                 $self->write($res->to_string_ref);
-                $self->write(sub { $self->close('head_request'); });
+                $self->write(sub { $self->http_response_sent; });
                 return;
             }
 
@@ -260,12 +317,13 @@ sub try_index_files {
             closedir(D);
 
             $res->header("Content-Length", length($body));
+            $self->setup_keepalive($res);
 
             $self->state('xfer_resp');
             $self->tcp_cork(1);  # cork writes to self
             $self->write($res->to_string_ref);
             $self->write(\$body);
-            $self->write(sub { $self->close('xfer_done'); });
+            $self->write(sub { $self->http_response_sent; });
         } else {
             # just inform them that listing is disabled
             $self->_simple_response(200, "Directory listing disabled")
@@ -301,11 +359,14 @@ sub _simple_response {
     my $body = "<h1>$code" . ($en ? " - $en" : "") . "</h1>\n";
     $body .= $msg if $msg;
 
+    $res->header('Content-Length', length($body));
+    $self->setup_keepalive($res);
+
     $self->state('xfer_resp');
     $self->tcp_cork(1);  # cork writes to self
     $self->write($res->to_string_ref);
     $self->write(\$body);
-    $self->write(sub { $self->close('xfer_done'); });
+    $self->write(sub { $self->http_response_sent; });
     return 1;
 }
 
@@ -321,6 +382,7 @@ sub as_string {
     my $name = getsockname($self->{sock});
     my $lport = $name ? (Socket::sockaddr_in($name))[0] : undef;
     my $ret = $self->SUPER::as_string . ": localport=$lport";
+    $ret .= "; reqs=$self->{requests}";
     $ret .= "; $self->{state}";
 
     my $hd = $self->{req_headers};
