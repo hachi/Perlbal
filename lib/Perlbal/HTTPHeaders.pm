@@ -210,6 +210,9 @@ sub clone {
         $new->{$_} = $self->{$_};
     }
 
+    # mark this object as constructed
+    Perlbal::objctor($new->{type});
+
     $new->{headers} = { %{$self->{headers}} };
     $new->{origcase} = { %{$self->{origcase}} };
     $new->{hdorder} = [ @{$self->{hdorder}} ];
