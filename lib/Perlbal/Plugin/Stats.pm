@@ -34,7 +34,7 @@ sub register {
     
     # create hooks for %simple things
     while (my ($hook, $stat) = each %simple) {
-        eval "\$svc->register_hook('Stats', '$hook', sub { \$sobj->{'$stat'}++; });";
+        eval "\$svc->register_hook('Stats', '$hook', sub { \$sobj->{'$stat'}++; return 0; });";
         return undef if $@;
     }
 
