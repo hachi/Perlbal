@@ -59,6 +59,10 @@ use fields (
             'buffer_size', # int: specifies how much data a ClientProxy object should buffer from a backend
             'buffer_size_reproxy_url', # int: same as above but for backends that are reproxying for us
             'spawn_lock', # bool: if true, we're currently in spawn_backends
+            'queue_relief_size', # int; number of outstanding standard priority
+                                 # connections to activate pressure relief at
+            'queue_relief_chance', # int:0-100; % chance to take a standard priority
+                                   # request when we're in pressure relief mode
             );
 
 sub new {
@@ -86,6 +90,10 @@ sub new {
     $self->{max_put_size} = 0; # 0 means no max size
     $self->{min_put_directory} = 0;
     $self->{enable_delete} = 0;
+
+    # disable pressure relief by default
+    $self->{queue_relief_size} = 0;
+    $self->{queue_relief_chance} = 0;
 
     # set some default maximum buffer sizes
     $self->{buffer_size} = 256_000;
@@ -306,11 +314,21 @@ sub get_client {
         return $cp;
     };
 
+    # determine if we should jump straight to the high priority queue or
+    # act as pressure relief on the standard queue
+    my $hp_first = 1;
+    if (($self->{queue_relief_size} > 0) &&
+            (scalar(@{$self->{waiting_clients}}) >= $self->{queue_relief_size})) {
+        # if we're below the chance level, take a standard queue item
+        $hp_first = 0
+            if rand(100) < $self->{queue_relief_chance};
+    }
+
     # find a high-priority client, or a regular one
     my Perlbal::ClientProxy $cp;
-    while ($cp = shift @{$self->{waiting_clients_highpri}}) {
-        my $backlog = scalar @{$self->{waiting_clients}};
+    while ($hp_first && ($cp = shift @{$self->{waiting_clients_highpri}})) {
         if (Perlbal::DEBUG >= 2) {
+            my $backlog = scalar @{$self->{waiting_clients}};
             print "Got from fast queue, in front of $backlog others\n";
         }
         return $ret->($cp) if ! $cp->{closed};
@@ -621,8 +639,16 @@ sub set {
 
     if ($key eq "max_backend_uses" || $key eq "backend_persist_cache" ||
         $key eq "max_put_size" || $key eq "min_put_directory" ||
-        $key eq "buffer_size" || $key eq "buffer_size_reproxy_url") {
+        $key eq "buffer_size" || $key eq "buffer_size_reproxy_url" ||
+        $key eq "queue_relief_size") {
         return $err->("Expected integer value") unless $val =~ /^\d+$/;
+        return $set->();
+    }
+
+    if ($key eq "queue_relief_chance") {
+        return $err->("Expected integer value") unless $val =~ /^\d+$/;
+        return $err->("Expected integer value between 0 and 100 inclusive")
+            unless $val >= 0 && $val <= 100;
         return $set->();
     }
 
