@@ -107,7 +107,7 @@ sub run_manage_command {
     $cmd =~ s/\#.*//;
     $cmd =~ s/^\s+//;
     $cmd =~ s/\s+$//;
-    $cmd = lc($cmd);
+    $cmd =~ s/^([^=]+)/lc $1/e; # lowercase everything up to an =
     $cmd =~ s/\s+/ /g;
     return 1 unless $cmd =~ /\S/;
 
