@@ -379,6 +379,8 @@ sub as_string {
     }
     $ret .= "; highpri" if $self->{high_priority};
     $ret .= "; responded" if $self->{responded};
+    $ret .= "; waiting_for=" . $self->{content_length_remain}
+        if defined $self->{content_length_remain};
 
     return $ret;
 }
