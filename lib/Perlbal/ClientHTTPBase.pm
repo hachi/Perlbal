@@ -291,6 +291,7 @@ sub _serve_request {
             if ($rm eq "HEAD" || $not_mod) {
                 # we can return already, since we know the size
                 $self->tcp_cork(1);
+                $self->state('xfer_resp');
                 $self->write($res->to_string_ref);
                 $self->write(sub { $self->http_response_sent; });
                 return;
