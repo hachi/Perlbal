@@ -14,6 +14,8 @@ use fields (
             'code',      # HTTP status code
             'responseLine', # first line of HTTP response (if response)
             'requestLine',  # first line of HTTP request (if request)
+            'absoluteURIHost', # if the URI was absolute, contains the host (overrides host header)
+            'httpVersion', # string version of HTTP request
             );
 
 our $HTTPCode = {
@@ -76,6 +78,7 @@ sub new {
     $self->{hdorder} = [];
     $self->{method} = undef;
     $self->{uri} = undef;
+    $self->{absoluteURIHost} = undef;
     $self->{type} = ($is_response ? "res" : "req");
     Perlbal::objctor($self->{type});
 
@@ -90,13 +93,21 @@ sub new {
     } else {
         # check for valid request line
         return fail("Bogus request line") unless
-            $first =~ m!^(\w+) ((?:\*|(?:/\S*?)))(?: HTTP/(\d+\.\d+))$!;
+            $first =~ m!^(\w+) ((?:\*|(?:\S*?)))(?: HTTP/(\d+\.\d+))$!;
 
         my ($method, $uri, $ver) = ($1, $2, $3);
+
+        # now check uri for not being a uri
+        if ($uri =~ m!^http://([^/:]+?)(?::\d+)?(/.*)?$!) {
+            $self->{absoluteURIHost} = lc($1);
+            $uri = $2 || "/"; # "http://www.foo.com" yields no path, so default to "/"
+        }
+
         print "Method: [$method] URI: [$uri] Version: [$ver]\n" if Perlbal::DEBUG >= 1;
         $ver ||= "1.0";
 
         $self->{requestLine} = "$method $uri HTTP/$ver";
+        $self->{httpVersion} = $ver;
         $self->{method} = $method;
         $self->{uri} = $uri;
     }
@@ -136,6 +147,14 @@ sub new {
             return fail("unknown header line");
         }
     }
+
+    # override the host header if an absolute URI was provided
+    $self->header('Host', $self->{absoluteURIHost})
+        if defined $self->{absoluteURIHost};
+
+    # now error if no host
+    return fail("HTTP 1.1 requires host header")
+        if !$is_response && $self->{httpVersion} eq '1.1' && !$self->header('Host');
 
     return $self;
 }
