@@ -192,6 +192,40 @@ sub run_manage_command {
         return 1;   
     }
 
+    if ($cmd =~ /^noverify$/) {
+        # shows the amount of time left for each node marked as noverify
+        my $now = time;
+        foreach my $ipport (keys %Perlbal::BackendHTTP::NoVerify) {
+            my $until = $Perlbal::BackendHTTP::NoVerify{$ipport} - $now;
+            $out->("$ipport $until");
+        }
+        $out->('.');
+        return 1;
+    }
+
+    if ($cmd =~ /^pending$/) {
+        # shows pending backend connections by service, node, and age
+        my %pend; # { "service" => { "ip:port" => age } }
+        my $now = time;
+        
+        foreach my $svc (values %service) {
+            foreach my $ipport (keys %{$svc->{pending_connects}}) {
+                my Perlbal::BackendHTTP $be = $svc->{pending_connects}->{$ipport};
+                next unless defined $be;
+                $pend{$svc->role}->{$ipport} = $now - $be->{create_time};
+            }
+        }
+
+        foreach my $role (sort keys %pend) {
+            foreach my $ipport (sort keys %{$pend{$role}}) {
+                $out->("$role $ipport $pend{$role}{$ipport}");
+            }
+        }
+        $out->('.');
+        
+        return 1;
+    }
+
     if ($cmd =~ /^states$/) {
         my $sf = Perlbal::Socket->get_sock_ref;
 
@@ -213,14 +247,21 @@ sub run_manage_command {
     }
 
     if ($cmd =~ /^queues$/) {
-        my $sf = Perlbal::Socket->get_sock_ref;
-
         my $now = time;
-        my %oldest; # { "class" => oldest age }
-        foreach my $sock (values %$sf) {
-            my $age = $now - $sock->{create_time};
-            $oldest{ref $sock} = $age
-                if $age > ($oldest{ref $sock} || 0);
+        my %oldest; # { "service-PARM" => oldest age }
+        foreach my $svc (values %service) {
+            my $role = $svc->role;
+            foreach my $sock (@{$svc->{waiting_clients}}) {
+                my $age = $now - $sock->{create_time};
+                $oldest{$role} = $age
+                    if $age > ($oldest{$role} || 0);
+            }
+
+            foreach my $sock (@{$svc->{waiting_clients_highpri}}) {
+                my $age = $now - $sock->{create_time};
+                $oldest{"$role-highpri"} = $age
+                    if $age > ($oldest{"$role-highpri"} || 0);
+            }
         }
 
         # now print
@@ -248,7 +289,7 @@ sub run_manage_command {
     if ($cmd =~ /^show service (\w+)$/) {
         my $sname = $1;
         my Perlbal::Service $svc = $service{$sname};
-        return $err->("Unknown service") unless $sname;
+        return $err->("Unknown service") unless $svc;
         $svc->stats_info($out);
         $out->('.');
         return 1;
