@@ -4,14 +4,14 @@
 
 package Perlbal::Socket;
 use strict;
+use Perlbal::HTTPHeaders;
 
-use Perlbal::HTTPHeaders ();
-use base qw{Danga::Socket};
-
-use fields qw(headers_string headers);
-
-use Errno qw(EINPROGRESS EWOULDBLOCK EISCONN
-             EPIPE EAGAIN EBADF ECONNRESET);
+use base 'Danga::Socket';
+use fields (
+            'headers_string',  # headers as they're being read
+            'headers',         # the final Perlbal::HTTPHeaders object
+            'create_time',     # creation time
+            );
 
 use constant MAX_HTTP_HEADER_LENGTH => 102400;  # 100k, arbitrary
 
@@ -23,6 +23,7 @@ sub new {
 
     $self->SUPER::new( @_ );
     $self->{headers_string} = '';
+    $self->{create_time} = time();
 
     return $self;
 }
@@ -72,6 +73,10 @@ sub read_headers {
 sub read_request_headers  { read_headers(@_, 0); }
 sub read_response_headers { read_headers(@_, 1); }
 
+sub as_string_html {
+    my Perlbal::Socket $self = shift;
+    return $self->SUPER::as_string;
+}
 
 sub DESTROY {
     Perlbal::objdtor();
