@@ -12,7 +12,8 @@ our %statobjs; # { svc_name => [ service, statobj ], svc_name => [ service, stat
 
 # define all stats keys here
 our @statkeys = qw( files_sent      files_reproxied
-                    web_requests    proxy_requests    );
+                    web_requests    proxy_requests
+                    proxy_requests_highpri          );
 
 # called when we're being added to a service
 sub register {
@@ -40,7 +41,7 @@ sub register {
     $svc->register_hook('Stats', 'backend_client_assigned', sub {
         my Perlbal::BackendHTTP $be = shift;
         $sobj->{pending}->{"$be->{client}"} = [ gettimeofday() ];
-        $sobj->{proxy_requests}++;
+        ($be->{client}->{high_priority} ? $sobj->{proxy_requests_highpri} : $sobj->{proxy_requests})++;
         return 0;
     });
     $svc->register_hook('Stats', 'backend_response_received', sub {
@@ -86,14 +87,14 @@ sub load {
 
             # for now, simply dump the numbers we have
             foreach my $key (sort @statkeys) {
-                push @res, sprintf("%-15s %-20s %12d", $svc, $key, $sobj->{$key});
+                push @res, sprintf("%-15s %-25s %12d", $svc, $key, $sobj->{$key});
                 $gsobj->{$key} += $sobj->{$key};
             }
         }
         
         # global stats
         foreach my $key (sort @statkeys) {
-            push @res, sprintf("%-15s %-20s %12d", 'total', $key, $gsobj->{$key});
+            push @res, sprintf("%-15s %-25s %12d", 'total', $key, $gsobj->{$key});
         }
         
         return \@res;
@@ -135,7 +136,8 @@ use fields (
     'files_sent',         # files sent from disk (includes reproxies and regular web requests)
     'files_reproxied',    # files we've sent via reproxying (told to by backend)
     'web_requests',       # requests we sent ourselves (no reproxy, no backend)
-    'proxy_requests',     # requests that went to a backend to be served
+    'proxy_requests',     # regular requests that went to a backend to be served
+    'proxy_requests_highpri', # same as above, except high priority
 
     'pending',            # hashref; { "obj" => time_start }
     'recent',             # arrayref; strings of recent URIs and times

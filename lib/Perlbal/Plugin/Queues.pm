@@ -15,7 +15,7 @@ sub register {
         my Perlbal::BackendHTTP $obj = shift;
         my Perlbal::HTTPHeaders $hds = $obj->{req_headers};
         my Perlbal::Service $svc = $obj->{service};
-        return 0 unless defined $hds && defined $svc;
+        return 0 unless defined $hds && defined $svc && $obj->{client}->{high_priority};
 
         # determine age of oldest (first in line)
         my Perlbal::ClientProxy $cp = $svc->{waiting_clients}->[0];
