@@ -1,3 +1,6 @@
+    -- split keep-alive logic into request and response methods and cleared
+       up how that works
+
     -- rewrote reproxy URI support.  new class Perlbal::ReproxyManager does all
        of the work relating to reproxies.  it's basically a service class but
        stripped down and dealing with single endpoints instead of pools.  much

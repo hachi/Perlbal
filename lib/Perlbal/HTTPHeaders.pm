@@ -287,27 +287,45 @@ sub content_length {
     return undef;
 }
 
-# logic for deciding to keep client connection open or not,
-# based on both client's advertised intent and version,
-# and whether or not the content we just sent to it had
-# a specified length in a form it could understand.  (1.0
-# clients don't know chunked-encoding, so we have to
-# dechunk and close the connection to tell it the end has come)
-sub keep_alive {
-    my Perlbal::HTTPHeaders $self = shift;
-    my $had_clen = shift;
+# answers the question: "should a response to this person specify keep-alive,
+# given the request (self) and the backend response?"  this is used in proxy
+# mode to determine based on the client's request and the backend's response
+# whether or not the response from the proxy (us) should do keep-alive.
+sub req_keep_alive {
+    my Perlbal::HTTPHeaders $self = $_[0];
+    my Perlbal::HTTPHeaders $res = $_[1];
 
-    # don't keep-alive if they don't want to
-    my $conn = lc($self->header("Connection") || "");
-    return 0 if $conn =~ /\bclose\b/;
-
-    # HTTP/1.0 case (and 0.9 I guess)
+    # check the client
     if ($self->{vernum} < 1001) {
-        # only keep alive if they asked for it, and we
-        # sent them an explicit content-length
+        # they must specify a keep-alive header
+        return 0 unless $self->header('Connection') =~ /\bkeep-alive\b/i;
+    }
+
+    # so it must be 1.1 which means keep-alive is on, unless they say not to
+    return 0 if $self->header('Connection') =~ /\bclose\b/i;
+
+    # if we get here, the user wants keep-alive and seems to support it,
+    # so see if the response is wanting it
+    return 1 if $res->res_keep_alive($self);
+
+    # fail-safe, no keep-alive
+    return 0;
+}
+
+# for this method, we return a bool indicating whether this response is
+# expected to stay open for keep-alive.
+sub res_keep_alive {
+    my Perlbal::HTTPHeaders $self = $_[0];
+    my Perlbal::HTTPHeaders $req = $_[1];
+
+    # handle the http 1.0/0.9 case
+    if ($self->{vernum} < 1001) {
+        # must specify keep-alive, and must have a content length OR
+        # the request must be a head request
         return 1 if
-            $conn =~ /\bkeep-alive\b/i &&
-            $had_clen;
+            $self->header('Connection') =~ /\bkeep-alive\b/i &&
+            (defined $self->header('Content-length') ||
+             $req->request_method eq 'HEAD');
         return 0;
     }
 
