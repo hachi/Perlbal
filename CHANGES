@@ -1,3 +1,7 @@
+    -- Danga::Socket got an overhaul; close and steal_socket now share a lot
+       of code by calling _cleanup.  some more paranoia on making sure the
+       object isn't already closed when we try to do things.
+
     -- lots more paranoia in close events and event_err handling for backends
 
     -- added tracking mode for helping look for leaked objects; records a
