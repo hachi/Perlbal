@@ -61,7 +61,7 @@ sub new {
     $self->{persist_backend} = 0;
     $self->{verify_backend} = 0;
     $self->{max_backend_uses} = 0;
-    $self->{backend_persist_cache} = 0;
+    $self->{backend_persist_cache} = 2;
 
     $self->{nodes} = [];   # no configured nodes
 
