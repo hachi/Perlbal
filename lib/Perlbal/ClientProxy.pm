@@ -67,7 +67,9 @@ sub start_reproxy_uri {
         unless @{$self->{reproxy_uris} || []};
 
     # set the expected size if we got a content length in our headers
-    $self->{reproxy_expected_size} = $primary_res_hdrs->header('Content-length');
+    if (my $expected_size = $primary_res_hdrs->header('X-REPROXY-EXPECTED-SIZE')) {
+        $self->{reproxy_expected_size} = $expected_size;
+    }
 
     # now build backend
     $self->state('wait_backend');
@@ -126,6 +128,20 @@ sub backend_response_received {
     return 0;
 }
 
+# part of the reportto interface; this is called when a backend is unable to establish
+# a connection with a backend.  we simply try the next uri.
+sub note_bad_backend_connect {
+    my Perlbal::ClientProxy $self = shift;
+    my Perlbal::BackendHTTP $be = shift;
+    
+    # undef the backend's client and setup for the next try
+    $be->{client} = undef;
+    shift @{$self->{reproxy_uris}};
+    $self->start_reproxy_uri($be->{primary_res_headers});
+    
+    return 1;
+}
+
 sub start_reproxy_file {
     my Perlbal::ClientProxy $self = shift;
     my $file = shift;                      # filename to reproxy
@@ -135,7 +151,9 @@ sub start_reproxy_file {
     return if $self->{service}->run_hook("start_file_reproxy", $self, \$file);
 
     # set our expected size
-    $self->{reproxy_expected_size} = $hd->header('X-REPROXY-EXPECTED-SIZE');
+    if (my $expected_size = $hd->header('X-REPROXY-EXPECTED-SIZE')) {
+        $self->{reproxy_expected_size} = $expected_size;
+    }
 
     # start an async stat on the file
     $self->state('wait_stat');

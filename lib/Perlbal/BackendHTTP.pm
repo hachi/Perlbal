@@ -226,7 +226,7 @@ sub event_write {
 sub verify_failure {
     my Perlbal::BackendHTTP $self = shift;
     $NoVerify{$self->{ipport}} = time() + 60;
-    $self->{service}->note_bad_backend_connect($self->{ip}, $self->{port});
+    $self->{reportto}->note_bad_backend_connect($self);
     $self->close('no_keep_alive');
     return;
 }
@@ -468,7 +468,7 @@ sub event_err {
         $self->{state} eq "verifying_backend") {
         # then tell the service manager that this connection
         # failed, so it can spawn a new one and note the dead host
-        $self->{service}->note_bad_backend_connect($self->{ip}, $self->{port});
+        $self->{reportto}->note_bad_backend_connect($self);
     }
 
     # close ourselves first

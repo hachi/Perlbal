@@ -341,14 +341,12 @@ sub register_boredom {
 }
 
 sub note_bad_backend_connect {
-    my Perlbal::Service $self;
-    my ($ip, $port);
-    ($self, $ip, $port) = @_;
+    my Perlbal::Service $self = shift;
+    my Perlbal::BackendHTTP $be = shift;
 
-    my $ipport = "$ip:$port";
-    my $was_pending = $self->{pending_connects}{$ipport};
+    my $was_pending = $self->{pending_connects}{$be->{ipport}};
     if ($was_pending) {
-        $self->{pending_connects}{$ipport} = undef;
+        $self->{pending_connects}{$be->{ipport}} = undef;
         $self->{pending_connect_count}--;
     }
 
