@@ -1,3 +1,6 @@
+    -- fixed bug in HTTPHeaders that set_version would inadvertently
+       run into when used on a header created through new_response
+
     -- ClientProxy class now supports persistence; set persist_client on
        the proxy service in order to enable it.
 
