@@ -113,15 +113,9 @@ sub backend_response_received {
     return 0;
 }
 
-# called when a backend times out or otherwise closes for some reason.  we
-# simply want to recreate it and try again.  (this gets called on us by our
-# transient backends.)
-sub note_backend_close {
-    my Perlbal::ClientProxy $self = shift;
-    my Perlbal::BackendHTTP $be = shift;
-    my $newbe = Perlbal::BackendHTTP->new(undef, $be->{ip}, $be->{port},
-                    { reportto => $self, primary_res_headers => $be->{primary_res_headers} });
-}
+# responses are handled in the backend_response_received above.  we don't do anything
+# special when a backend closes.
+sub note_backend_close { }
 
 sub start_reproxy_file {
     my Perlbal::ClientProxy $self = shift;
