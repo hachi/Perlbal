@@ -10,6 +10,7 @@ use constant NODEFILE_RELOAD_FREQ => 3;
 
 use constant BM_SENDSTATS => 1;
 use constant BM_ROUNDROBIN => 2;
+use constant BM_RANDOM => 3;
 
 use fields (
 	    'name',
@@ -134,6 +135,7 @@ sub set {
 	    unless $self->{role} eq "reverse_proxy";
 	$val = {
 	    'sendstats' => BM_SENDSTATS,
+	    'random' => BM_RANDOM,
 	}->{$val};
 	return $err->("Unknown balance method")
 	    unless $val;
