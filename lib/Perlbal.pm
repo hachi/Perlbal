@@ -686,7 +686,7 @@ sub run {
 
     # closing messages
     if ($@) {
-        Perlbal::log('critical', "crash log: $_") foreach split(/\r?\n/, $@);
+        Perlbal::log('crit', "crash log: $_") foreach split(/\r?\n/, $@);
     }
     Perlbal::log('info', 'ending run');
     closelog();

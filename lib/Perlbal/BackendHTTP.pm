@@ -58,7 +58,7 @@ sub new {
     socket $sock, PF_INET, SOCK_STREAM, IPPROTO_TCP;
 
     unless ($sock && defined fileno($sock)) {
-        Perlbal::log('critical', "Error creating socket: $!");
+        Perlbal::log('crit', "Error creating socket: $!");
         return undef;
     }
 

@@ -521,7 +521,7 @@ sub spawn_backends {
 
     # sanity checks on our bookkeeping
     if ($self->{pending_connect_count} < 0) {
-        Perlbal::log('critical', "Bogus: service $self->{name} has pending connect ".
+        Perlbal::log('crit', "Bogus: service $self->{name} has pending connect ".
                      "count of $self->{pending_connect_count}?!  Resetting.");
         $self->{pending_connect_count} = scalar
             map { $_ && ! $_->{closed} } values %{$self->{pending_connects}};
@@ -545,7 +545,7 @@ sub spawn_backends {
         $to_create--;
         my ($ip, $port) = $self->get_backend_endpoint;
         unless ($ip) {
-            Perlbal::log('critical', "No backend IP for service $self->{name}");
+            Perlbal::log('crit', "No backend IP for service $self->{name}");
             # FIXME: register desperate flag, so load-balancer module can callback when it has a node
             $self->{spawn_lock} = 0;
             return;
