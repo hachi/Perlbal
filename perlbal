@@ -183,10 +183,9 @@ $SIG{'INT'} = $SIG{'TERM'} = sub {
     exit(0);
 };
 
-# FIXME: Linux::AIO doesn't auto-grow/shrink the helper threads according
-# to what you say here.  you do a one-time raise to some value, then its
-# END block brings them to 0 w/ max_parallel(0).  should make it auto-adjust.
-Linux::AIO::min_parallel(2);
+# number of AIO threads.  the number of outstanding requests isn't
+# affected by this
+Linux::AIO::min_parallel(3);
 
 # wait for activity
 Perlbal::Socket->wait_loop();
