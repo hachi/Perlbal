@@ -322,9 +322,17 @@ sub spawn_backends {
             # FIXME: register desperate flag, so load-balancer module can callback when it has a node
             return;
         }
-        next if $self->{pending_connects}{"$ip:$port"};
-        if (Perlbal::BackendHTTP->new($self, $ip, $port)) {
-            $self->{pending_connects}{"$ip:$port"} = $now;
+        if (my Perlbal::BackendHTTP $be = $self->{pending_connects}{"$ip:$port"}) {
+            next if ! $be->{closed} && $be->{state} eq "connecting";
+
+            # TEMP: should we clean our bookkeeping here?  we really
+            # shouldn't get here.
+            $self->{pending_connects}{"$ip:$port"} = undef;
+            $self->{pending_connect_count}--;
+        }
+
+        if (my $be = Perlbal::BackendHTTP->new($self, $ip, $port)) {
+            $self->{pending_connects}{"$ip:$port"} = $be;
             $self->{pending_connect_count}++;
         }
     }
@@ -539,6 +547,7 @@ sub stats_info
 {
     my Perlbal::Service $self = shift;
     my $out = shift;
+    my $now = time;
 
     $out->("SERVICE $self->{name}");
     $out->("     listening: $self->{listen}");
@@ -547,6 +556,12 @@ sub stats_info
         $self->{role} eq "web_server") {
         $out->("  pend clients: $self->{waiting_client_count}");
         $out->("  pend backend: $self->{pending_connect_count}");
+        foreach my $ipport (sort keys %{$self->{pending_connects}}) {
+            my $be = $self->{pending_connects}{$ipport};
+            next unless $be;
+            my $age = $now - $be->{create_time};
+            $out->("   $ipport - " . ($be->{closed} ? "(closed)" : $be->{state}) . " - ${age}s");
+        }
     }
     if ($self->{role} eq "reverse_proxy") {
         my $bored_count = scalar @{$self->{bored_backends}};
