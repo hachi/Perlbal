@@ -130,10 +130,45 @@ sub event_read {
         # setup the directory asynchronously
         $self->setup_put;       
         return;
+    } elsif ($self->{service}->{enable_delete} && $hd->request_method eq 'DELETE') {
+        # delete a file
+        $self->watch_read(0);
+        return $self->setup_delete;
     }
 
     # else, bad request
     return $self->send_response(400);
+}
+
+# called when we're requested to do a delete
+sub setup_delete {
+    my Perlbal::ClientHTTP $self = shift;
+
+    # error in filename?  (any .. is an error)
+    my $uri = $self->{req_headers}->request_uri;
+    return $self->send_response(400, 'Invalid filename')
+        if $uri =~ /\.\./;
+    
+    # now we want to get the URI
+    if ($uri =~ m!^(?:/[\w\-\.]+)+$!) {
+        # now attempt the unlink
+        Linux::AIO::aio_unlink($self->{service}->{docroot} . '/' . $uri, sub {
+            my $rv = shift;
+            if ($rv && !$!) {
+                # delete was successful
+                return $self->send_response(202);
+            } elsif ($! == ENOENT) {
+                # no such file
+                return $self->send_response(404);
+            } else {
+                # failure...
+                return $self->send_response(400, "$!");
+            }
+        });
+    } else {
+        # bad URI, don't accept the delete
+        return $self->send_response(400, 'Invalid filename');
+    }
 }
 
 # called when we've got headers and are about to start a put

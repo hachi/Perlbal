@@ -54,6 +54,7 @@ use fields (
             'enable_put', # bool: whether PUT is supported
             'max_put_size', # int: max size in bytes of a put file
             'min_put_directory', # int: number of directories required to exist at beginning of URIs in put
+            'enable_delete', # bool: whether DELETE is supported
             );
 
 sub new {
@@ -80,6 +81,7 @@ sub new {
     $self->{enable_put} = 0;
     $self->{max_put_size} = 0; # 0 means no max size
     $self->{min_put_directory} = 0;
+    $self->{enable_delete} = 0;
 
     # track pending connects to backend
     $self->{pending_connects} = {};
@@ -517,7 +519,7 @@ sub set {
         return undef;
     };
 
-    if ($key eq 'enable_put') {
+    if ($key eq 'enable_put' || $key eq 'enable_delete') {
         return $err->("This can only be used on web_server service")
             unless $self->{role} eq 'web_server';
         $val = $bool->($val);
