@@ -283,7 +283,7 @@ sub request_backend_connection {
     # is there a defined high-priority cookie?
     if (my $cname = $self->{high_priority_cookie}) {
         # decide what priority class this request is in
-        my $hd = $cp->{headers};
+        my $hd = $cp->{req_headers};
         my %cookie;
         foreach (split(/;\s+/, $hd->header("Cookie") || '')) {
             next unless ($_ =~ /(.*)=(.*)/);

@@ -10,7 +10,10 @@ use Danga::Socket 1.17;
 use base 'Danga::Socket';
 use fields (
             'headers_string',  # headers as they're being read
-            'headers',         # the final Perlbal::HTTPHeaders object
+            
+            'req_headers',     # the final Perlbal::HTTPHeaders object inbound
+            'res_headers',     # response headers outbound (Perlbal::HTTPHeaders object)
+
             'create_time',     # creation time
             'alive_time',      # last time noted alive
             'state',           # general purpose state; used by descendants.
@@ -108,8 +111,8 @@ sub read_headers {
         return 0;
     }
 
-    $self->{headers} = substr($self->{headers_string}, 0, $idx);
-    print "HEADERS: [$self->{headers}]\n" if Perlbal::DEBUG >= 2;
+    my $hstr = substr($self->{headers_string}, 0, $idx);
+    print "HEADERS: [$hstr]\n" if Perlbal::DEBUG >= 2;
 
     my $extra = substr($self->{headers_string}, $idx+4);
     if (my $len = length($extra)) {
@@ -118,12 +121,13 @@ sub read_headers {
         print "post-header extra: $len bytes\n" if Perlbal::DEBUG >= 2;
     }
 
-    unless ($self->{headers} = Perlbal::HTTPHeaders->new(\$self->{headers}, $is_res)) {
+    unless (($is_res ? $self->{res_headers} : $self->{req_headers}) = 
+                Perlbal::HTTPHeaders->new(\$hstr, $is_res)) {
         # bogus headers?  close connection.
         return $self->close("parse_header_failure");
     }
 
-    return $self->{headers};
+    return $is_res ? $self->{res_headers} : $self->{req_headers};
 }
 
 ### METHOD: drain_read_buf_to( $destination )

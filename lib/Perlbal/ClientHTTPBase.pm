@@ -60,12 +60,6 @@ sub new {
 }
 
 
-sub headers {
-    my Perlbal::ClientHTTPBase $self = shift;
-    return $self->{headers} unless @_;
-    return $self->{headers} = shift;
-}
-
 sub close {
     my Perlbal::ClientHTTPBase $self = shift;
     my $reason = shift;
@@ -162,7 +156,7 @@ sub _serve_request {
         my $lastmod = HTTP::Date::time2str((stat(_))[9]);
         my $not_mod = ($hd->header("If-Modified-Since") || "") eq $lastmod;
 
-        my $res = Perlbal::HTTPHeaders->new_response($not_mod ? 304 : 200);
+        my $res = $self->{res_headers} = Perlbal::HTTPHeaders->new_response($not_mod ? 304 : 200);
 
         $res->header("Connection", "close");
         $res->header("Date", HTTP::Date::time2str());
@@ -246,7 +240,7 @@ sub _simple_response {
     my Perlbal::ClientHTTPBase $self = shift;
     my ($code, $msg) = @_;  # or bodyref
 
-    my $res = Perlbal::HTTPHeaders->new_response($code);
+    my $res = $self->{res_headers} = Perlbal::HTTPHeaders->new_response($code);
     $res->header("Content-Type", "text/html");
 
     my $en = $res->http_code_english;
@@ -275,7 +269,7 @@ sub as_string {
     my $ret = $self->SUPER::as_string . ": localport=$lport";
     $ret .= "; $self->{state}";
 
-    my $hd = $self->headers;
+    my $hd = $self->{req_headers};
     if (defined $hd) {
         my $host = $hd->header('Host') || 'unknown';
         $ret .= "; http://$host" . $hd->request_uri;

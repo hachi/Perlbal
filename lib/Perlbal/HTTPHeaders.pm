@@ -12,6 +12,7 @@ use fields (
             'uri',       # scalar; request URI (if GET request)
             'type',      # 'res' or 'req'
             'code',      # HTTP response status code
+            'codetext',  # status text that for response code
             'ver',       # version (string) "1.1"
             'vernum',    # version (number: major*1000+minor): "1.1" => 1001
             'responseLine', # first line of HTTP response (if response)
@@ -87,10 +88,10 @@ sub new {
 
         # check for valid response line
         return fail("Bogus response line") unless
-            $self->{responseLine} =~ m!^HTTP\/(\d+)\.(\d+)\s+(\d+)!;
+            $self->{responseLine} =~ m!^HTTP\/(\d+)\.(\d+)\s+(\d+)\s+(.+)$!;
 
         my ($ver_ma, $ver_mi, $code) = ($1, $2, $3);
-        $self->{code} = $code;
+        $self->code($code, $4);
 
         # version work so we know what version the backend spoke
         unless (defined $ver_ma) {
@@ -172,6 +173,19 @@ sub new {
     return $self;
 }
 
+sub codetext {
+    my Perlbal::HTTPHeaders $self = shift;
+    return $self->{codetext} if $self->{codetext};
+    return $self->http_code_english;
+}
+
+sub code {
+    my Perlbal::HTTPHeaders $self = shift;
+    my ($code, $text) = @_;
+    $self->{code} = $code+0;
+    $self->{codetext} = $text;
+}
+
 sub request_method {
     my Perlbal::HTTPHeaders $self = shift;
     return $self->{method};
@@ -212,7 +226,7 @@ sub to_string_ref {
 sub clone {
     my Perlbal::HTTPHeaders $self = shift;
     my $new = fields::new($self);
-    foreach (qw(method uri type code ver vernum responseLine requestLine)) {
+    foreach (qw(method uri type code codetext ver vernum responseLine requestLine)) {
         $new->{$_} = $self->{$_};
     }
 
@@ -232,7 +246,11 @@ sub set_version {
     die "Bogus version" unless $ver =~ /^(\d+)\.(\d+)$/;
     my ($ver_ma, $ver_mi) = ($1, $2);
 
-    $self->{requestLine} = "$self->{method} $self->{uri} HTTP/$ver";
+    if ($self->{type} eq 'res') {
+        $self->{responseLine} = "HTTP/$ver $self->{code} " . $self->codetext;
+    } else {
+        $self->{requestLine} = "$self->{method} $self->{uri} HTTP/$ver";
+    }
     $self->{ver} = "$ver_ma.$ver_mi";
     $self->{vernum} = $ver_ma*1000 + $ver_mi;
     return $self;

@@ -62,10 +62,15 @@ sub start_reproxy_file {
         # don't send this internal header to the client:
         $hd->header('X-REPROXY-FILE', undef);
 
+        # rewrite some other parts of the header
+        $hd->set_version('1.0');
+        $hd->header('Connection', 'close');
+        $hd->header('Keep-Alive', undef);
+
         # just send the header, now that we cleaned it.
         $self->write($hd->to_string_ref);
 
-        if ($self->{headers}->request_method eq 'HEAD') {
+        if ($self->{req_headers}->request_method eq 'HEAD') {
             $self->write(sub { $self->close; });
             return;
         }
@@ -138,7 +143,7 @@ sub event_write {
 sub event_read {
     my Perlbal::ClientProxy $self = shift;
 
-    unless ($self->{headers}) {
+    unless ($self->{req_headers}) {
         if (my $hd = $self->read_request_headers) {
             print "Got headers!  Firing off new backend connection.\n"
                 if Perlbal::DEBUG >= 2;

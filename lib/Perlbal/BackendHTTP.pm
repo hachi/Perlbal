@@ -12,9 +12,6 @@ use fields ('client',  # Perlbal::ClientProxy connection, or undef
             'port',    # port scalar
             'ipport',  # "$ip:$port"
 
-            'req_headers',   # the HTTP request headers (as opposed to 'headers'
-                             # which is the response headers)
-
             'has_attention', # has been accepted by a webserver and
                              # we know for sure we're not just talking
                              # to the TCP stack
@@ -75,7 +72,8 @@ sub new {
     $self->state("connecting");
 
     # for header reading:
-    $self->{headers} = undef;      # defined w/ headers object once all headers in
+    $self->{req_headers} = undef;
+    $self->{res_headers} = undef;  # defined w/ headers object once all headers in
     $self->{headers_string} = "";  # blank to start
     $self->{read_buf} = [];        # scalar refs of bufs read from client
     $self->{read_ahead} = 0;       # bytes sitting in read_buf
@@ -119,7 +117,7 @@ sub assign_client {
     $self->state("sending_req");
     $self->{client}->backend($self);
 
-    my Perlbal::HTTPHeaders $hds = $client->headers->clone;
+    my Perlbal::HTTPHeaders $hds = $client->{req_headers}->clone;
     $self->{req_headers} = $hds;
 
     # Use HTTP/1.0 to backend (FIXME: use 1.1 and support chunking)
@@ -223,13 +221,14 @@ sub event_read {
 
         # if we've got the option response and read any response data
         # if present:
-        if ($self->{headers} && ! $self->{content_length_remain}) {
+        if ($self->{res_headers} && ! $self->{content_length_remain}) {
             # other setup to mark being done with options checking
             $self->{waiting_options} = 0;
             $self->{has_attention} = 1;
             $self->watch_read(0);
             $self->state("bored");
-            $self->{headers} = undef;
+            $self->{req_headers} = undef;
+            $self->{res_headers} = undef;
             $self->{headers_string} = '';
             $self->{content_length_remain} = undef;
             $self->{service}->register_boredom($self);
@@ -246,7 +245,7 @@ sub event_read {
     # no client so all we can do is close this backend.
     return $self->close unless $client;
 
-    unless ($self->{headers}) {
+    unless ($self->{res_headers}) {
         if (my $hd = $self->read_response_headers) {
             $self->state("xfer_res");
             $client->state("xfer_res");
@@ -286,7 +285,13 @@ sub event_read {
                 $self->next_request;
                 return;
             } else {
-                $client->write($hd->to_string_ref);
+                my $thd = $client->{res_headers} = $hd->clone;
+
+                # for now, we don't support keep-alive and we force HTTP 1.0
+                $thd->set_version('1.0');
+                $thd->header('Connection', 'close');
+                $thd->header('Keep-Alive', undef);
+                $client->write($thd->to_string_ref);
 
                 # if we over-read anything from backend (most likely)
                 # then decrement it from our count of bytes we need to read
@@ -347,7 +352,7 @@ sub event_read {
 sub next_request {
     my Perlbal::BackendHTTP $self = shift;
 
-    my $hd = $self->{headers};  # response headers
+    my $hd = $self->{res_headers};  # response headers
     unless ($self->{service}{persist_backend} &&
             $hd->header("Connection") =~ /\bkeep-alive\b/i) {
         return $self->close;
@@ -379,7 +384,8 @@ sub next_request {
     $self->state("bored");
     $self->watch_write(0);
 
-    $self->{headers} = undef;
+    $self->{req_headers} = undef;
+    $self->{res_headers} = undef;
     $self->{headers_string} = "";
     $self->{req_headers} = undef;
 

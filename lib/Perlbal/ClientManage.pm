@@ -60,7 +60,7 @@ sub event_hup {  my $self = shift; $self->close; }
 sub handle_http {
     my Perlbal::ClientManage $self = shift;
 
-    my $uri = $self->{headers}->request_uri;
+    my $uri = $self->{req_headers}->request_uri;
 
     my $body;
     my $code = "200 OK";

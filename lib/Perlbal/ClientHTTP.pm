@@ -17,7 +17,7 @@ sub event_read {
     # Because Perlbal's HTTP support is GET/HEAD-only, we never process
     # POST/PUT data in requests.  so if we've already got the headers,
     # there's nothing new of interest
-    if ($self->{headers}) {
+    if ($self->{req_headers}) {
         $self->watch_read(0);
         return;
     }
