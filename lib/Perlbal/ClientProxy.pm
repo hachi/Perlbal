@@ -22,7 +22,7 @@ use fields (
                                  # from the provided res headers object here.
             );
 
-use constant READ_SIZE         => 4086;    # 4k, arbitrary
+use constant READ_SIZE         => 4096;    # 4k, arbitrary
 use constant READ_AHEAD_SIZE   => 8192;    # 8k, arbitrary
 use Errno qw( EPIPE );
 use POSIX ();
