@@ -247,20 +247,33 @@ sub attempt_open {
         if ($! == ENOENT) {
             # directory doesn't exist, so let's manually create it
             eval { File::Path::mkpath($path, 0, 0755); };
-            return $self->send_response(500, 'Unable to create directory') if $@;
+            return $self->system_error("Unable to create directory", "path = $path, file = $file") if $@;
 
             # should be created, call self recursively to try
             return $self->attempt_open($path, $file);
         } elsif ($!) {
-            return $self->send_response(500, "Error: $!");
+            return $self->system_error("Internal error", "error = $!, path = $path, file = $file");
         }
 
         # associate descriptor from aio_open with filehandle for aio_write/aio_close
         $self->{put_fh} = IO::Handle->new_from_fd(shift(), "w")
-            or return $self->send_response(500, "Unable to create file: $!");
+            or return $self->system_error("Unable to create file", "error = $!, path = $path, file = $file");
         $self->{put_pos} = 0;
         $self->handle_put;
     });
+}
+
+# method that sends a 500 to the user but logs it and any extra information
+# we have about the error in question
+sub system_error {
+    my Perlbal::ClientHTTP $self = shift;
+    my ($msg, $info) = @_;
+
+    # log to syslog
+    Perlbal::log('warning', "system error: $msg ($info)");
+    
+    # and return a 500
+    return $self->send_response(500, $msg);
 }
 
 # called when we've got some put data to write out
