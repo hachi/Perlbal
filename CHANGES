@@ -1,3 +1,6 @@
+    -- add ability to use new Danga::Socket profiling; 'profile on', 'profile data'
+       to see the info so far, and 'profile off' to disable it
+
     -- graceful shutdown now flags sockets that are busy to die so they die when
        they're done with their current connection
 

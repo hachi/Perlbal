@@ -209,6 +209,25 @@ sub run_manage_command {
         return 1;
     }
 
+    if ($cmd =~ /^prof\w*\s+(on|off|data)/) {
+        my $which = $1;
+        if ($which eq 'on') {
+            Danga::Socket->EnableProfiling;
+            $out->('Profiling enabled.');
+        } elsif ($which eq 'off') {
+            Danga::Socket->DisableProfiling;
+            $out->('Profiling disabled.');
+        } elsif ($which eq 'data') {
+            my $href = Danga::Socket->ProfilingData;
+            foreach my $key (sort keys %$href) {
+                my ($utime, $stime, $calls) = @{$href->{$key}};
+                $out->("$key $utime $stime $calls");
+            }
+        }
+        $out->('.');
+        return 1;
+    }
+
     if ($cmd =~ /^uptime/) {
         $out->("starttime $starttime");
         $out->("uptime " . (time() - $starttime));
