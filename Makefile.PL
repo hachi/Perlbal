@@ -21,6 +21,7 @@ WriteMakefile(
         'Linux::AIO'  => '1.3',
         'Danga::Socket' => '1.25',
         'BSD::Resource' => 0,
+        'Net::Netmask' => 0,
     },
     dist                    => {
         CI                      => "cvs commit",

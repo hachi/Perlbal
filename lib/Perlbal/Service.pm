@@ -6,6 +6,8 @@ package Perlbal::Service;
 use strict;
 use warnings;
 
+use Net::Netmask;
+
 use Perlbal::BackendHTTP;
 
 # how often to reload the nodefile
@@ -65,6 +67,7 @@ use fields (
                                  # connections to activate pressure relief at
             'queue_relief_chance', # int:0-100; % chance to take a standard priority
                                    # request when we're in pressure relief mode
+            'trusted_upstreams', # Net::Netmask object containing netmasks for trusted upstreams
             );
 
 sub new {
@@ -115,6 +118,9 @@ sub new {
     # directory handling
     $self->{dirindexing} = 0;
     $self->{index_files} = [ 'index.html' ];
+
+    # don't have an object for this yet
+    $self->{trusted_upstreams} = undef;
 
     return $self;
 }
@@ -625,6 +631,15 @@ sub set {
         return 0 if $val =~ /^0|false|off|no$/i;
         return undef;
     };
+
+    if ($key eq 'trusted_upstream_proxies') {
+        if ($self->{trusted_upstreams} = Net::Netmask->new2($val)) {
+            # set, all good
+            return 1;
+        } else {
+            return $err->("Error defining trusted upstream proxies: " . Net::Netmask::errstr());
+        }
+    }
 
     if ($key eq 'enable_put' || $key eq 'enable_delete') {
         return $err->("This can only be used on web_server service")

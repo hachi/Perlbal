@@ -1,3 +1,8 @@
+    -- add dependency to Net::Netmask; now you can specify trusted_upstream_proxies
+       on a service (SET service.trusted_upstream_proxies = 10.0.0.0/8, etc)
+       which will allow requests from that range to set X-Forwarded-For, X-Host,
+       and X-Forwarded-Host headers.
+
     -- fixed a bug that caused connections to hang when the backend responded
        before the user was done sending data
 

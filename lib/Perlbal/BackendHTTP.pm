@@ -150,11 +150,21 @@ sub assign_client {
 
     $hds->header("Connection", $persist ? "keep-alive" : "close");
 
-    # FIXME: make this conditional
     $hds->header("X-Proxy-Capabilities", "reproxy-file");
-    $hds->header("X-Forwarded-For", $client->peer_ip_string);
-    $hds->header("X-Host", undef);
-    $hds->header("X-Forwarded-Host", undef);
+
+    # decide whether we trust the upstream or not
+    my $trust = 0; # don't trust
+    if ($self->{service} && $self->{service}->{trusted_upstreams}) {
+        $trust = 1
+            if $self->{service}->{trusted_upstreams}->match($client->peer_ip_string);
+    }
+
+    # if we're not going to trust the upstream, reset these for security reasons
+    unless ($trust) {
+        $hds->header("X-Forwarded-For", $client->peer_ip_string);
+        $hds->header("X-Host", undef);
+        $hds->header("X-Forwarded-Host", undef);
+    }
 
     $self->tcp_cork(1);
     $client->state('backend_req_sent');
