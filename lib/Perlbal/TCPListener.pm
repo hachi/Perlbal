@@ -34,22 +34,25 @@ sub new {
 sub event_read {
     my Perlbal::TCPListener $self = shift;
 
-    # new connection
-    my ($psock, $peeraddr) = $self->{sock}->accept();
-    unless ($psock) {
-	print STDERR "No remote sock?\n";
-	return;
+    # accept as many connections as we can
+    while (my ($psock, $peeraddr) = $self->{sock}->accept) {
+	my $service_role = $self->{service}->role;
+
+	if (Perlbal::DEBUG >= 1) {
+	    my ($pport, $pipr) = Socket::sockaddr_in($peeraddr);
+	    my $pip = Socket::inet_ntoa($pipr);
+	    print "Got new conn: $psock ($pip:$pport) for $service_role\n";
+	}
+
+	IO::Handle::blocking($psock, 0);
+
+	if ($service_role eq "reverse_proxy") {
+	    Perlbal::ClientProxy->new($self->{service}, $psock);
+	} elsif ($service_role eq "management") {
+	    Perlbal::ClientManage->new($self->{service}, $psock);
+	}
     }
 
-    print "Got new conn: $psock\n" if Perlbal::DEBUG >= 1;
-    IO::Handle::blocking($psock, 0);
-
-    my $service_role = $self->{service}->role;
-    if ($service_role eq "reverse_proxy") {
-	Perlbal::ClientProxy->new($self->{service}, $psock);
-    } elsif ($service_role eq "management") {
-	Perlbal::ClientManage->new($self->{service}, $psock);
-    }
 }
 
 1;
