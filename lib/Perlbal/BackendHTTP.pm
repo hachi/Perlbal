@@ -98,7 +98,6 @@ sub event_read {
 	    if (my $rep = $hd->header('X-REPROXY-FILE')) {
 		Linux::AIO::aio_stat($rep, sub {
 		    if (my $size = -s _) {
-			print "Got size: $size\n";
 			my $just_head = $client->request_method eq 'HEAD';
 
 			# fixup the Content-Length header if it was undefined/0
@@ -123,7 +122,6 @@ sub event_read {
 			} else {
 			    Linux::AIO::aio_open($rep, 0, 0 , sub {
 				my $rp_fd = shift;
-				print "Got open: $rp_fd\n";
 				$client->reproxy_fd($rp_fd, $size);
 				$detach->();
 			    });
@@ -134,9 +132,9 @@ sub event_read {
 			$client->close;
 		    }
 		});
-
+		  
 		# don't get back here.  our Linux::AIO callback will invoke the above
-		  # FIXME: add a "aio in progress" state flag, just in case we get back here somehow
+		# FIXME: add a "aio in progress" state flag, just in case we get back here somehow
 		$self->watch_read(0);
 		return;
 
