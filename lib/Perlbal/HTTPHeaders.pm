@@ -106,7 +106,14 @@ sub new {
         if ($line =~ /^(\s+.*?)$/) {
             next unless defined $last_header;
             $self->{headers}{$last_header} .= $1;
-        } elsif ($line =~ /^([\w\-]+):\s*(.*?)$/) {
+        } elsif ($line =~ /^([^\x00-\x20\x7f\(\)\<\>\@,;:\\\"\/\[\]\?=\{\}]+):\s*(.*?)$/) {
+            # RFC 2616:
+            # sec 4.2:
+            #     message-header = field-name ":" [ field-value ]
+            #     field-name     = token
+            # sec 2.2:
+            #     token          = 1*<any CHAR except CTLs or separators>
+
             $last_header = lc($1);
             if (defined $self->{headers}{$last_header}) {
                 if ($last_header eq "set-cookie") {
