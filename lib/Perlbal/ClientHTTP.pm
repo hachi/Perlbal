@@ -174,11 +174,15 @@ sub event_read {
 	return if $self->{closed};
 	return $self->_simple_response(404) unless -e _;
 
-	my $res = Perlbal::HTTPHeaders->new_response(200);
+	my $lastmod = HTTP::Date::time2str((stat(_))[9]);
+	my $not_mod = $hd->header("If-Modified-Since") eq $lastmod;
+
+	my $res = Perlbal::HTTPHeaders->new_response($not_mod ? 304 : 200);
+
 	$res->header("Connection", "close");
 	$res->header("Date", HTTP::Date::time2str());
 	$res->header("Server", "Perlbal");
-	$res->header("Last-Modified", HTTP::Date::time2str((stat(_))[9]));
+	$res->header("Last-Modified", $lastmod);
 
 	if (-f _) {
 	    my $size = -s _;
@@ -187,7 +191,7 @@ sub event_read {
 			 (defined $ext && exists $MimeType->{$ext}) ? $MimeType->{$ext} : "text/plain");
 	    $res->header("Content-Length", $size);
 
-	    if ($rm eq "HEAD") {
+	    if ($rm eq "HEAD" || $not_mod) {
 		# we can return already, since we know the size
 		$self->tcp_cork(1);
                 $self->write($res->to_string_ref);
