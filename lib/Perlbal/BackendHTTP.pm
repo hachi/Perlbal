@@ -243,6 +243,11 @@ sub as_string {
     return $ret;
 }
 
+sub die_gracefully {
+    # see if we need to die
+    my Perlbal::BackendHTTP $self = shift;
+    $self->close if $self->state eq 'bored';
+}
 
 sub DESTROY {
     Perlbal::objdtor();

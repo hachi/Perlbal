@@ -117,9 +117,15 @@ sub run_manage_command {
         Perlbal::Socket->SetPostLoopCallback(sub {
             my ($descmap, $otherfds) = @_;
 
-            # simple; if we have more than one descriptor left in %$descmap, we're not done yet
-            return (scalar(keys %$descmap) > 1) ? 1 : 0;
+            # see what we have here; make sure we have no Clients and no unbored Backends
+            foreach my $sock (values %$descmap) {
+                my $ref = ref $sock;
+                return 1 if $ref =~ /^Perlbal::Client/;
+                return 1 if $sock->isa('Perlbal::BackendHTTP') && $sock->{state} ne 'bored';
+            }
+            return 0; # end the event loop and thus we exit perlbal
         });
+        
         return 1;
     }
 
