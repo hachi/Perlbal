@@ -11,7 +11,6 @@
 package Perlbal;
 
 use constant DEBUG => 0;
-use constant SHUTDOWN_BY_CLIENT => 1;  # silly profiling option
 
 use strict;
 use IO::Socket;

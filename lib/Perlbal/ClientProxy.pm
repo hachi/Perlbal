@@ -150,7 +150,7 @@ sub event_read {
 		if Perlbal::DEBUG >= 2;
 
 	    # useful for profiling:
-	    exit 0 if Perlbal::SHUTDOWN_BY_CLIENT && $hd->header("X-TEMP-SHUTDOWN");
+	    #exit 0 if Perlbal::SHUTDOWN_BY_CLIENT && $hd->header("X-TEMP-SHUTDOWN");
 
 	    my $be = Perlbal::BackendHTTP->new($self);
 
