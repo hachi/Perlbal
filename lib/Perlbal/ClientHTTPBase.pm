@@ -263,10 +263,12 @@ sub _serve_request {
 
         if (-f _) {
             my $size = -s _;
-            my ($ext) = ($file =~ /\.(\w+)$/);
-            $res->header("Content-Type",
-                         (defined $ext && exists $MimeType->{$ext}) ? $MimeType->{$ext} : "text/plain");
-            $res->header("Content-Length", $size);
+            unless ($not_mod) {
+                my ($ext) = ($file =~ /\.(\w+)$/);
+                $res->header("Content-Type",
+                             (defined $ext && exists $MimeType->{$ext}) ? $MimeType->{$ext} : "text/plain");
+                $res->header("Content-Length", $size);
+            }
 
             # has to happen after content-length is set to work:
             $self->setup_keepalive($res);
