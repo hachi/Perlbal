@@ -289,7 +289,7 @@ sub spawn_backends {
 
     my $now = time;
 
-    while ($to_create) {
+    while ($to_create > 0) {
         $to_create--;
         my ($ip, $port) = $self->get_backend_endpoint;
         unless ($ip) {
