@@ -57,20 +57,24 @@ our (%NoVerify); # { "ip:port" => next-verify-time }
 # an options hashref that contains some options:
 #       primary_res_headers => HTTPHeaders object to draw primary headers from
 #       reportto => object obeying reportto interface
+#       reuse_sock => socket to use to talk to the backend
 sub new {
     my ($class, $svc, $ip, $port, $opts) = @_;
     $opts ||= {};
 
-    my $sock;
-    socket $sock, PF_INET, SOCK_STREAM, IPPROTO_TCP;
+    # see if we can reuse a socket?
+    my $sock = $opts->{reuse_sock};
+    unless ($sock) {
+        socket $sock, PF_INET, SOCK_STREAM, IPPROTO_TCP;
 
-    unless ($sock && defined fileno($sock)) {
-        Perlbal::log('critical', "Error creating socket: $!");
-        return undef;
+        unless ($sock && defined fileno($sock)) {
+            Perlbal::log('critical', "Error creating socket: $!");
+            return undef;
+        }
+
+        IO::Handle::blocking($sock, 0);
+        connect $sock, Socket::sockaddr_in($port, Socket::inet_aton($ip));
     }
-
-    IO::Handle::blocking($sock, 0);
-    connect $sock, Socket::sockaddr_in($port, Socket::inet_aton($ip));
 
     my $self = fields::new($class);
     $self->SUPER::new($sock);
@@ -123,9 +127,9 @@ sub close {
         $client->backend(undef);
     }
 
-    # tell our service that we're gone
-    if (my $service = $self->{service}) {
-        $service->note_backend_close($self);
+    # tell our owner that we're gone
+    if (my $reportto = $self->{reportto}) {
+        $reportto->note_backend_close($self);
     }
 
     $self->SUPER::close($reason);
@@ -395,13 +399,18 @@ sub event_read {
 }
 
 sub next_request {
-    my Perlbal::BackendHTTP $self = shift;
+    my Perlbal::BackendHTTP $self = $_[0];
 
     my $hd = $self->{res_headers};  # response headers
     unless (defined $self->{service} &&
             $self->{service}{persist_backend} &&
             $hd->header("Connection") =~ /\bkeep-alive\b/i) {
-        return $self->close('next_request_no_persist');
+        # if we have a reportto interface, notify it that we're ready for another
+        unless (defined $self->{service}) {
+            return $self->{reportto}->backend_next_request($self);
+        } else {            
+            return $self->close('next_request_no_persist');
+        }
     }
 
     my Perlbal::Service $svc = $self->{service};

@@ -12,6 +12,7 @@ use fields (
             'high_priority',       # boolean; 1 if we are or were in the high priority queue
             'reproxy_uris',        # arrayref; URIs to reproxy to, in order
             'reproxy_expected_size', # int: size of response we expect to get back for reproxy
+            'currently_reproxying',  # arrayref; the host info and URI we're reproxying right now
             'content_length_remain', # int: amount of data we're still waiting for
             'responded',           # bool: whether we've already sent a response to the user or not
             );
@@ -43,6 +44,7 @@ sub new {
 
     $self->{reproxy_uris} = undef;
     $self->{reproxy_expected_size} = undef;
+    $self->{currently_reproxying} = undef;
 
     bless $self, ref $class || $class;
     $self->watch_read(1);
@@ -53,18 +55,29 @@ sub new {
 # that will fetch the item at the first and return it to the user,
 # on failure it will try the second, then third, etc
 sub start_reproxy_uri {
-    my Perlbal::ClientProxy $self = shift;
-    my Perlbal::HTTPHeaders $primary_res_hdrs = shift;
-    my $urls = shift;
+    my Perlbal::ClientProxy $self = $_[0];
+    my Perlbal::HTTPHeaders $primary_res_hdrs = $_[1];
+    my $urls = $_[2];
+
+    # failure if we have no primary response headers
+    return unless $primary_res_hdrs;
 
     # construct reproxy_uri list
     if (defined $urls) {
         my @uris = split /\s+/, $urls;
+        $self->{currently_reproxying} = undef;
         $self->{reproxy_uris} = [];
         foreach my $uri (@uris) {
             next unless $uri =~ m!^http://(.+?)(?::(\d+))?(/.*)?$!;
             push @{$self->{reproxy_uris}}, [ $1, $2 || 80, $3 || '/' ];
         }
+    }
+
+    # if we get in here and we have currently_reproxying defined, then something
+    # happened and we want to retry that one
+    if ($self->{currently_reproxying}) {
+        unshift @{$self->{reproxy_uris}}, $self->{currently_reproxying};
+        $self->{currently_reproxying} = undef;
     }
 
     # if we have no uris in our list now, tell the user 404
@@ -79,18 +92,46 @@ sub start_reproxy_uri {
     # now build backend
     $self->state('wait_backend');
     my $datref = $self->{reproxy_uris}->[0];
+    my $reuse_sock = $self->{service}->get_reproxy_reusable_sock("$datref->[0]:$datref->[1]");
     my $be = Perlbal::BackendHTTP->new(undef, $datref->[0], $datref->[1],
-                    { reportto => $self, primary_res_headers => $primary_res_hdrs });
+        { reportto => $self, primary_res_headers => $primary_res_hdrs,
+          reuse_sock => $reuse_sock,
+        });
+}
+
+# called by a backend when it's ready to move on to the next request
+sub backend_next_request {
+    my Perlbal::ClientProxy $self = $_[0];
+    my Perlbal::BackendHTTP $be = $_[1];
+
+    # get the socket from the backend and put it back into the service
+    if ($be->{res_headers} && $be->{res_headers}->header('Connection') =~ /\bkeep-alive\b/i) {
+        my $sock = $be->steal_socket;
+        $self->{service}->put_reproxy_reusable_sock($be->{ipport}, $sock)
+            if $sock;
+    }
+    return;
+}
+
+# called by the backend when it closes, no matter what the reason
+sub note_backend_close {
+    my Perlbal::ClientProxy $self = $_[0];
+    my Perlbal::BackendHTTP $be = $_[1];
+
+    # if we were reproxying, try again with the next URI
+    if ($self->{currently_reproxying}) {
+        $self->start_reproxy_uri($be->{primary_res_headers});
+    }
 }
 
 # this is a callback for when a backend has been created and is
 # ready for us to do something with it
 sub register_boredom {
-    my Perlbal::ClientProxy $self = shift;
-    my Perlbal::BackendHTTP $be = shift;
+    my Perlbal::ClientProxy $self = $_[0];
+    my Perlbal::BackendHTTP $be = $_[1];
 
     # get a URI
-    my $datref = shift @{$self->{reproxy_uris}};
+    my $datref = $self->{currently_reproxying} = shift @{$self->{reproxy_uris}};
     unless (defined $datref) {
         # return 404 and close the backend
         $be->{client} = undef;
@@ -101,7 +142,7 @@ sub register_boredom {
     # now send request
     $self->{backend} = $be;
     $be->{client} = $self;
-    my $headers = "GET $datref->[2] HTTP/1.0\r\nConnection: close\r\n\r\n";
+    my $headers = "GET $datref->[2] HTTP/1.0\r\nConnection: keep-alive\r\n\r\n";
     $be->{req_headers} = Perlbal::HTTPHeaders->new(\$headers);
     $be->state('sending_req');
     $self->state('backend_req_sent');
@@ -113,8 +154,12 @@ sub register_boredom {
 # this is called when a transient backend getting a reproxied URI has received
 # a response from the server and is ready for us to deal with it
 sub backend_response_received {
-    my Perlbal::ClientProxy $self = shift;
-    my Perlbal::BackendHTTP $be = shift;
+    my Perlbal::ClientProxy $self = $_[0];
+    my Perlbal::BackendHTTP $be = $_[1];
+
+    # a response means that we are no longer currently waiting on a reproxy, and
+    # don't want to retry this URI
+    $self->{currently_reproxying} = undef;
 
     # we fail if we got something that's NOT a 2xx code, OR, if we expected
     # a certain size and got back something different
@@ -136,12 +181,13 @@ sub backend_response_received {
 # part of the reportto interface; this is called when a backend is unable to establish
 # a connection with a backend.  we simply try the next uri.
 sub note_bad_backend_connect {
-    my Perlbal::ClientProxy $self = shift;
-    my Perlbal::BackendHTTP $be = shift;
+    my Perlbal::ClientProxy $self = $_[0];
+    my Perlbal::BackendHTTP $be = $_[1];
     
     # undef the backend's client and setup for the next try
     $be->{client} = undef;
     shift @{$self->{reproxy_uris}};
+    $self->{currently_reproxying} = undef;
     $self->start_reproxy_uri($be->{primary_res_headers});
     
     return 1;
