@@ -236,14 +236,19 @@ sub backend {
 sub backend_finished {
     my Perlbal::ClientProxy $self = shift;
 
-    # at this point we probably don't actually have a backend anymore.
-    # we should definitely mark ourselves as having responded to the
-    # user, and close if we have no content length remaining, else
-    # we should let the reader close us.
+    # mark ourselves as having responded (presumeably if we're here,
+    # the backend has responded already)
     $self->{responded} = 1;
-    $self->close('backend_finished')
-        if defined $self->{content_length_remain} &&
-                  ($self->{content_length_remain} <= 0);
+
+    # now, two cases; undefined clr, or defined and zero, or defined and non-zero
+    if (defined $self->{content_length_remain}) {
+        # defined, so a POST, close if it's 0 or less
+        $self->close('backend_finished')
+            if $self->{content_length_remain} <= 0;
+    } else {
+        # not defined, so we simply close and we're done (GET requests, etc)        
+        $self->close('backend_finished');
+    }
 }
 
 # Client (overrides and calls super)
