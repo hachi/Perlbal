@@ -7,11 +7,12 @@ use strict;
 use warnings;
 use Perlbal::HTTPHeaders;
 
-use Danga::Socket 1.17;
+use Danga::Socket '1.25';
 use base 'Danga::Socket';
+
 use fields (
             'headers_string',  # headers as they're being read
-            
+
             'req_headers',     # the final Perlbal::HTTPHeaders object inbound
             'res_headers',     # response headers outbound (Perlbal::HTTPHeaders object)
 

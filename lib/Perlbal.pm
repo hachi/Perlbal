@@ -11,10 +11,9 @@ use strict;
 use warnings;
 use IO::Socket;
 use IO::Handle;
-use IO::SendFile;
 use IO::File;
 
-use Linux::AIO;
+use Linux::AIO '1.3';
 use Sys::Syslog;
 
 use Getopt::Long;

@@ -18,9 +18,8 @@ WriteMakefile(
     ABSTRACT_FROM           => 'perlbal',
     EXE_FILES               => [ 'perlbal' ],
     PREREQ_PM               => {
-        'IO::SendFile'  => '0.01',
         'Linux::AIO'  => '1.3',
-        'Danga::Socket' => '1.22',
+        'Danga::Socket' => '1.25',
     },
     dist                    => {
         CI                      => "cvs commit",

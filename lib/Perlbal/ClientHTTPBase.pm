@@ -1,10 +1,16 @@
 ######################################################################
 # Common HTTP functionality for ClientProxy and ClientHTTP
-# possible states: 
+# possible states:
 #   reading_headers (initial state, then follows one of two paths)
 #     wait_backend, backend_req_sent, wait_res, xfer_res, draining_res
 #     wait_stat, wait_open, xfer_disk
 ######################################################################
+
+package main;
+
+# loading syscall.ph into package main in case some other module wants
+# to use it (like Danga::Socket, or whoever else)
+eval { require 'syscall.ph'; 1 } || eval { require 'sys/syscall.ph'; 1 };
 
 package Perlbal::ClientHTTPBase;
 use strict;
@@ -28,6 +34,8 @@ use fields ('service',             # Perlbal::Service object
 
 use Errno qw( EPIPE ECONNRESET );
 use POSIX ();
+
+our $SYS_sendfile = &::SYS_sendfile;
 
 # ghetto hard-coding.  should let siteadmin define or something.
 # maybe console/config command:  AddMime <ext> <mime-type>  (apache-style?)
@@ -176,10 +184,11 @@ sub event_write {
     if ($self->{reproxy_fd}) {
         my $to_send = $self->{reproxy_file_size} - $self->{reproxy_file_offset};
         $self->tcp_cork(1) if $self->{reproxy_file_offset} == 0;
-        my $sent = IO::SendFile::sendfile($self->{fd},
-                                          $self->{reproxy_fd},
-                                          0, # NULL offset means kernel moves filepos (apparently)
-                                          $to_send);
+        my $sent = syscall($SYS_sendfile,
+                           $self->{fd},
+                           $self->{reproxy_fd},
+                           0, # NULL offset means kernel moves offset
+                           $to_send);
         print "REPROXY Sent: $sent\n" if Perlbal::DEBUG >= 2;
         if ($sent < 0) {
             return $self->close("epipe") if $! == EPIPE;
@@ -193,7 +202,7 @@ sub event_write {
         if ($sent >= $to_send) {
             # close the sendfile fd
             my $rv = POSIX::close($self->{reproxy_fd});
-            
+
             $self->{reproxy_fd} = undef;
             $self->{reproxy_fh} = undef;
             $self->http_response_sent;
