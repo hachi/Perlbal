@@ -15,7 +15,7 @@ use fields ('service',             # Perlbal::Service object
             'reproxy_file_offset', # how much we've sent from the file.
             );
 
-use Errno qw( EPIPE );
+use Errno qw( EPIPE ECONNRESET );
 use POSIX ();
 
 # ghetto hard-coding.  should let siteadmin define or something.
@@ -98,10 +98,8 @@ sub event_write {
                                           $to_send);
         print "REPROXY Sent: $sent\n" if Perlbal::DEBUG >= 2;
         if ($sent < 0) {
-            if ($! == EPIPE) {
-                $self->close("epipe");
-                return;
-            }
+            return $self->close("epipe") if $! == EPIPE;
+            return $self->close("connreset") if $! == ECONNRESET;
             print STDERR "Error w/ sendfile: $!\n";
             $self->close;
             return;
