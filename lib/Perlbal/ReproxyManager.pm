@@ -116,9 +116,9 @@ sub note_backend_close {
 
     # remove closed backends from our array. this is O(n) but n is small
     # and we're paranoid that just keeping a count would get corrupt over
-    # time.
+    # time.  also removes the backends that have clients that are closed.
     @{$ReproxyBackends{$be->{ipport}}} = grep {
-        ! $_->{closed}
+        ! $_->{closed} && (! $_->{client} || ! $_->{client}->{closed})
     } @{$ReproxyBackends{$be->{ipport}}};
 
     # spawn more if needed
