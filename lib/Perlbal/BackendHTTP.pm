@@ -87,7 +87,7 @@ sub assign_client {
 
     # FIXME: make this conditional
     $hds->header("X-Proxy-Capabilities", "reproxy-file");
-    $hds->header("X-Forwarded-For", $client->peer_addr_string);
+    $hds->header("X-Forwarded-For", $client->peer_ip_string);
     $hds->header("X-Host", undef);
     $hds->header("X-Forwarded-Host", undef);
 
