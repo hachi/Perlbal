@@ -182,11 +182,13 @@ sub register_boredom {
     ($self, $be) = @_;
 
     # note that this backend is no longer pending a connect,
-    # if we thought it was before
-    my $was_pending = $self->{pending_connects}{$be->{ipport}};
-    if ($was_pending) {
-        $self->{pending_connects}{$be->{ipport}} = undef;
-        $self->{pending_connect_count}--;
+    # if we thought it was before.  but not if it's a persistent
+    # connection asking to be re-used.
+    unless ($be->{use_count}) {
+        if ($self->{pending_connects}{$be->{ipport}}) {
+            $self->{pending_connects}{$be->{ipport}} = undef;
+            $self->{pending_connect_count}--;
+        }
     }
 
     my Perlbal::ClientProxy $cp = $self->get_client;
