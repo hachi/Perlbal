@@ -233,8 +233,11 @@ sub run_manage_command {
     if ($cmd =~ /^prof\w*\s+(on|off|data)/) {
         my $which = $1;
         if ($which eq 'on') {
-            Danga::Socket->EnableProfiling;
-            $out->('Profiling enabled.');
+            if (Danga::Socket->EnableProfiling) {
+                $out->('Profiling enabled.');
+            } else {
+                $out->('Unable to enable profiling.  Please ensure you have the BSD::Resource module installed.');
+            }
         } elsif ($which eq 'off') {
             Danga::Socket->DisableProfiling;
             $out->('Profiling disabled.');
