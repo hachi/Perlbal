@@ -23,6 +23,10 @@ sub new {
     return Perlbal::error("Error creating listening socket: $!")
         unless $sock;
 
+    # IO::Socket::INET's Blocking => 0 just doesn't seem to work
+    # on lots of perls.  who knows why.
+    IO::Handle::blocking($sock, 0);
+
     my $self = $class->SUPER::new($sock);
     $self->{service} = $service;
     $self->{hostport} = $hostport;
