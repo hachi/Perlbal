@@ -1,0 +1,1215 @@
+#!/usr/bin/perl -w
+#
+# Reverse-proxy load balancer w/ buffering, epoll, sendfile, etc
+#
+# (c) 1994, Brad Fitzpatrick, <brad@danga.com>
+
+
+# Control flow at bottom (after class declarations
+# and in particular, the @our declarations)
+
+use strict;
+use IO::Socket;
+use IO::Handle;
+use IO::SendFile;
+use IO::Epoll;
+use IO::File;
+use Getopt::Long;
+use Data::Dumper;
+use BSD::Resource;
+use Carp qw(cluck);
+
+$SIG{'PIPE'} = "IGNORE";  # handled manually
+$SIG{'INT'} = sub { print "Caught ^C, exiting.\n"; exit 0; };
+
+package Perlbal;
+
+use constant DEBUG => 0;
+use constant SHUTDOWN_BY_CLIENT => 1;  # silly profiling option
+
+my $opt_daemonize;
+my $opt_manage;
+my $opt_config;
+exit 1 unless
+    Getopt::Long::GetOptions(
+	       'daemon' => \$opt_daemonize,
+	       'config=s' => \$opt_config,
+	       'manage=s' => \$opt_manage,
+	       );
+
+my $default_config = "/etc/perlbal/perlbal.conf";
+$opt_config = $default_config if ! $opt_config && -e $default_config;
+
+# load user config
+load_config($opt_config, sub { print STDOUT "$_[0]\n"; }) if $opt_config;
+
+unless (Perlbal::Socket::watched_sockets() > 0) {
+    die "No services or management port configured.  Nothing to do.  Stopping.\n";
+}
+
+print "Ready.\n";
+
+# wait for activity
+Perlbal::Socket->wait_loop();
+
+######################################################################
+# HTTP header class (both request and response)
+######################################################################
+package Perlbal::HTTPHeaders;
+
+sub fail {
+    return undef unless Perlbal::DEBUG >= 1;
+
+    my $reason = shift;
+    print "HTTP parse failure: $reason\n" if Perlbal::DEBUG >= 1;
+    return undef;
+}
+
+sub new {
+    my ($class, $hstr, $is_response) = @_;
+    # hstr: headers as a string
+    # is_response: bool; is HTTP response (as opposed to request).  defaults to request.
+
+    $hstr =~ s!\r!!g;
+    my @lines = split(/\n/, $hstr);
+    my $first = shift @lines;
+
+    my $self = {
+	headers => {},      # lowercase header -> comma-sep list of values
+	origcase => {},     # lowercase header -> provided case
+	hdorder => [],      # order headers were received (canonical order)
+    };
+
+    # check request line
+    if ($is_response) {
+	# check for valid response line
+	return fail("Bogus response line") unless 
+	    $first =~ m!^HTTP\/(\d+\.\d+)\s+(\d+)!;
+	my ($ver, $code) = ($1, $2);
+	$self->{code} = $2;
+	$self->{responseLine} = $first;
+    } else {
+	# check for valid request line
+	return fail("Bogus request line") unless 
+	    $first =~ m!^(\w+) ((?:\*|(?:/\S*?)))(?: HTTP/(\d+\.\d+))$!;
+
+	my ($method, $uri, $ver) = ($1, $2, $3);
+	print "Method: [$method] URI: [$uri] Version: [$ver]\n" if Perlbal::DEBUG >= 1;
+	$self->{requestLine} = "$method $uri HTTP/1.0";
+    }
+
+    my $last_header = undef;
+    foreach my $line (@lines) {
+	if ($line =~ /^(\s+.*?)$/) {
+	    next unless defined $last_header;
+	    $self->{headers}{$last_header} .= $1;
+	} elsif ($line =~ /^([\w\-]+):\s*(.*?)$/) {
+	    $last_header = lc($1);
+	    if (defined $self->{headers}{$last_header}) {
+		if ($last_header eq "set-cookie") {
+		    # cookie spec doesn't allow merged headers for set-cookie,
+		    # so instead we do this hack so to_string below does the right
+		    # thing without needing to be arrayref-aware or such.  also
+		    # this lets client code still modify/delete this data
+		    # (but retrieving the value of "set-cookie" will be broken)
+		    $self->{headers}{$last_header} .= "\r\nSet-Cookie: $2";
+		} else {
+		    # normal merged header case (according to spec)
+		    $self->{headers}{$last_header} .= ", $2";
+		}
+	    } else {
+		$self->{headers}{$last_header} = $2;
+		$self->{origcase}{$last_header} = $1;
+		push @{$self->{hdorder}}, $last_header;
+	    }
+	} else {
+	    return fail("unknown header line");
+	}
+    }
+
+    return bless $self, ref $class || $class;
+}
+
+sub header {
+    my $self = shift;
+    my $key = shift;
+    return $self->{headers}{lc($key)} unless @_;
+
+    # adding a new header
+    my $origcase = $key;
+    $key = lc($key);
+    unless (exists $self->{headers}{$key}) {
+	push @{$self->{hdorder}}, $key;
+	$self->{origcase}{$key} = $origcase;
+    }
+
+    return $self->{headers}{$key} = shift;
+}
+
+sub to_string_ref {
+    my $self = shift;
+    my $st = join("\r\n", 
+		  $self->{requestLine} || $self->{responseLine},
+		  map { "$self->{origcase}{$_}: $self->{headers}{$_}" }
+		  grep { defined $self->{headers}{$_} }
+		  @{$self->{hdorder}},
+		  ) . "\r\n\r\n";
+    return \$st;
+}
+
+######################################################################
+# Base class for all socket types
+######################################################################
+package Perlbal::Socket;
+use IO::Epoll;
+
+use fields qw(sock fd write_buf write_buf_offset write_buf_size
+	      headers_string headers read_buf read_ahead read_size
+	      closed event_watch);
+
+use Errno qw( EINPROGRESS EWOULDBLOCK EISCONN EPIPE EAGAIN );
+use Socket qw( IPPROTO_TCP );
+use constant TCP_CORK => 3;    # FIXME: ghetto to hard-code this
+
+use constant MAX_HTTP_HEADER_LENGTH => 102400;  # 100k, arbitrary
+
+# keep track of active clients
+our %sock;                             # fd (num) -> Perlbal::Socket object
+our $epoll;
+
+sub watched_sockets {
+    return scalar keys %sock;
+}
+
+# Socket
+sub new {
+    my Perlbal::Socket $self = shift;
+    $self = fields::new($self) unless ref $self;
+
+    my $sock = shift;
+
+    $self->{sock}        = $sock;
+    my $fd = fileno($sock);
+    $self->{fd}          = $fd;
+    $self->{write_buf}      = [];
+    $self->{write_buf_offset} = 0;
+    $self->{write_buf_size} = 0;
+    $self->{closed} = 0;
+
+    unless ($epoll) {
+	$epoll = epoll_create(1024);
+	if ($epoll < 0) {
+	    die "# fail: epoll_create: $!\n";
+	}
+    }
+
+    $self->{event_watch} = EPOLLERR|EPOLLHUP;
+    epoll_ctl($epoll, EPOLL_CTL_ADD, $fd, $self->{event_watch})
+	and die "couldn't add epoll watch for $fd\n";
+
+    $sock{$fd} = $self;
+    return $self;
+}
+
+# Socket
+sub tcp_cork {
+    my Perlbal::Socket $self = shift;
+    my $val = shift;
+
+    setsockopt($self->{sock}, IPPROTO_TCP, TCP_CORK,
+	       pack("l", $val ? 1 : 0))   || die "setsockopt: $!";
+}
+
+# Socket
+sub watch_read {
+    my Perlbal::Socket $self = shift;
+    my $val = shift;
+    my $event = $self->{event_watch};
+    $event &= ~EPOLLIN if ! $val;
+    $event |=  EPOLLIN if   $val;
+    if ($event != $self->{event_watch}) {
+	epoll_ctl($epoll, EPOLL_CTL_MOD, $self->{fd}, $event)
+	    and die "couldn't modify epoll settings for $self->{fd}\n";
+	$self->{event_watch} = $event;
+    }
+}
+
+# Socket
+sub watch_write {
+    my Perlbal::Socket $self = shift;
+    my $val = shift;
+    my $event = $self->{event_watch};
+    $event &= ~EPOLLOUT if ! $val;
+    $event |=  EPOLLOUT if   $val;
+    if ($event != $self->{event_watch}) {
+	epoll_ctl($epoll, EPOLL_CTL_MOD, $self->{fd}, $event)
+	    and die "couldn't modify epoll settings for $self->{fd}\n";
+	$self->{event_watch} = $event;
+    }
+}
+
+
+# Socket
+sub close {
+    my Perlbal::Socket $self = shift;
+    my $reason = shift || "";
+
+    my $fd = $self->{fd};
+    my $sock = $self->{sock};
+    $self->{closed} = 1;
+
+    my ($pkg, $filename, $line) = caller;
+    print "Closing \#$fd due to $pkg/$filename/$line ($reason)\n"
+	if Perlbal::DEBUG >= 1;
+    {
+	my $i = 0;
+	my $errmsg;
+	while (my ($p, $f, $l) = caller($i++)) {
+	    $errmsg .= "  $p, $f, $l\n";
+	}
+	#print $errmsg;
+    }
+
+
+    if (epoll_ctl($epoll, EPOLL_CTL_DEL, $fd, $self->{event_watch}) == 0) {
+	print "Client $fd disconnected.\n" if Perlbal::DEBUG >= 1;
+    } else {
+	print "epoll_ctl del failed on fd $fd\n" if Perlbal::DEBUG >= 1;
+    }
+
+    delete $sock{$fd};
+    $sock->close;
+    return 0;
+}
+
+# Socket
+sub sock {
+    my Perlbal::Socket $self = shift;
+    return $self->{sock};
+}
+
+# Socket
+# $data may be scalar, scalar ref, code ref (to run when there), or undef just to kick-start
+# returns 1 if writes all went through, or 0 if there are writes in queue
+# (if it returns 1, caller should stop waiting for EPOLLOUT events)
+sub write {
+    my Perlbal::Socket $self;
+    my $data;
+    ($self, $data) = @_;
+
+    my $bref;
+
+    # just queue data if there's already a wait
+    my $need_queue;
+
+    if (defined $data) {
+	$bref = ref $data ? $data : \$data;
+	if ($self->{write_buf_size}) {
+	    push @{$self->{write_buf}}, $bref;
+	    $self->{write_buf_size} += ref $bref eq "SCALAR" ? length($$bref) : 1;
+	    return 0;
+	}
+
+	# this flag says we're bypassing the queue system, knowing we're the
+	# only outstanding write, and hoping we don't ever need to use it.
+	# if so later, though, we'll need to queue
+	$need_queue = 1;
+    }
+
+  WRITE:
+    while (1) {
+	return 1 unless $bref ||= $self->{write_buf}[0];
+
+	my $len;
+	eval {
+	    $len = length($$bref); # this will die if $bref is a code ref, caught below
+	};
+	if ($@) {
+	    if (ref $bref eq "CODE") {
+		unless ($need_queue) {
+		    $self->{write_buf_size}--;   # code refs are worth 1
+		    shift @{$self->{write_buf}};
+		}
+		$bref->();
+		undef $bref;
+		next WRITE;
+	    }
+	    die "Write error: $@";
+	}
+
+	my $to_write = $len - $self->{write_buf_offset};
+	my $written = syswrite($self->{sock}, $$bref, $to_write, $self->{write_buf_offset});
+
+	if (! defined $written) {
+	    if ($! == EPIPE) {
+		return $self->close("EPIPE");
+	    } elsif ($! == EAGAIN) {
+		# since connection has stuff to write, it should now be
+		# interested in pending writes:
+		if ($need_queue) {
+		    push @{$self->{write_buf}}, $bref;
+		    $self->{write_buf_size} += $len;
+		}
+		$self->watch_write(1);
+		return 0;
+	    }
+	    print STDERR "Closing connection ($self) due to write error: $!\n";
+	    return $self->close("write_error");
+	} elsif ($written != $to_write) {
+	    print "Wrote PARTIAL $written bytes to $self->{fd}\n"
+		if Perlbal::DEBUG >= 2;
+	    if ($need_queue) {
+		push @{$self->{write_buf}}, $bref;
+		$self->{write_buf_size} += $len;
+	    }
+	    # since connection has stuff to write, it should now be
+	    # interested in pending writes:
+	    $self->{write_buf_offset} += $written;
+	    $self->{write_buf_size} -= $written;
+	    $self->watch_write(1);
+	    return 0;
+	} elsif ($written == $to_write) {
+	    print "Wrote ALL $written bytes to $self->{fd} (nq=$need_queue)\n" 
+		if Perlbal::DEBUG >= 2;
+	    $self->{write_buf_offset} = 0;
+	    
+	    # this was our only write, so we can return immediately
+	    # since we avoided incrementing the buffer size or
+	    # putting it in the buffer.  we also know there
+	    # can't be anything else to write.
+	    return 1 if $need_queue;
+
+	    $self->{write_buf_size} -= $written;
+	    shift @{$self->{write_buf}};
+	    undef $bref;
+	    next WRITE;
+	}
+    }
+}
+
+# Socket
+# returns scalar ref on read, or undef on connection closed.
+sub read {
+    my Perlbal::Socket $self = shift;
+    my $bytes = shift;
+    my $buf;
+    my $sock = $self->{sock};
+
+    my $res = sysread($sock, $buf, $bytes, 0);
+
+    print "sysread = $res; \$! = $!\n" if Perlbal::DEBUG >= 2;
+
+    if (! $res && $! != EWOULDBLOCK) {
+	# catches 0=conn closed or undef=error
+	print "Fd \#$self->{fd} read hit the end of the road.\n"
+	    if Perlbal::DEBUG >= 2;
+	return undef;
+    }
+
+    return \$buf;
+}
+
+# Socket
+sub read_request_headers  { read_headers(@_, 0); }
+sub read_response_headers { read_headers(@_, 1); }
+
+# Socket: specific to HTTP socket types
+sub read_headers {
+    my Perlbal::Socket $self = shift;
+    my $is_res = shift;
+
+    my $sock = $self->{sock};
+
+    my $to_read = MAX_HTTP_HEADER_LENGTH - length($self->{headers_string});
+
+    my $bref = $self->read($to_read);
+    return $self->close if ! defined $bref;  # client disconnected
+
+    $self->{headers_string} .= $$bref;
+    my $idx = index($self->{headers_string}, "\r\n\r\n");
+
+    # can't find the header delimiter?
+    if ($idx == -1) {
+	$self->close('long_headers')
+	    if length($self->{headers_string}) >= MAX_HTTP_HEADER_LENGTH;
+	return 0;
+    }
+
+    $self->{headers} = substr($self->{headers_string}, 0, $idx);
+    print "HEADERS: [$self->{headers}]\n" if Perlbal::DEBUG >= 2;
+
+    my $extra = substr($self->{headers_string}, $idx+4);
+    if (my $len = length($extra)) {
+	push @{$self->{read_buf}}, \$extra;
+	$self->{read_size} = $self->{read_ahead} = length($extra);
+	print "post-header extra: $len bytes\n" if Perlbal::DEBUG >= 2;
+    }
+
+    unless ($self->{headers} = Perlbal::HTTPHeaders->new($self->{headers}, $is_res)) {
+	# bogus headers?  close connection.
+	return $self->close("parse_header_failure");
+    }
+
+    return $self->{headers};
+}
+
+# Socket
+sub drain_read_buf_to {
+    my ($self, $dest) = @_;
+    return unless $self->{read_ahead};
+
+    print "drain_read_buf_to ($self->{fd} -> $dest->{fd}): $self->{read_ahead} bytes\n"
+	if Perlbal::DEBUG >= 2;
+    while (my $bref = shift @{$self->{read_buf}}) {
+	$dest->write($bref);
+	$self->{read_ahead} -= length($$bref);
+    }
+}
+
+# Socket
+sub event_read  { die "Base class event_read called for $_[0]\n"; }
+sub event_err   { die "Base class event_err called for $_[0]\n"; }
+sub event_hup   { die "Base class event_hup called for $_[0]\n"; }
+sub event_write {
+    my $self = shift;
+    $self->write(undef);
+}
+
+# Socket
+sub wait_loop {
+    # get 1 event, wait forever (-1)
+    while (1) {
+	while (my $events = epoll_wait($epoll, 20, -1)) {
+	  EVENT:
+	    foreach my $ev (@$events) {
+		# it's possible epoll_wait returned many events, including some at the end
+		# that ones in the front triggered unregister-interest actions.  if we
+		# can't find the %sock entry, it's because we're no longer interested
+		# in that event.
+		my Perlbal::Socket $pob = $sock{$ev->[0]} or 
+		    die "Error: can't find Perlbal::Socket for fd=$ev->[0], state=$ev->[1]\n";
+
+		print "Event: fd=$ev->[0] (", ref($pob), "), state=$ev->[1] \@ " . time() . "\n"
+		    if Perlbal::DEBUG >= 1;
+
+		die "Error: closed Perlbal::Socket returned in epoll loop for fd=$ev->[0]\n"
+		    if $pob->{closed};
+
+		my $state = $ev->[1];
+		$pob->event_read   if $state & EPOLLIN;
+		$pob->event_write  if $state & EPOLLOUT && ! $pob->{closed};
+		if ($state & (EPOLLERR|EPOLLHUP)) {
+		    $pob->event_err    if $state & EPOLLERR && ! $pob->{closed};
+		    $pob->event_hup    if $state & EPOLLHUP && ! $pob->{closed};
+		}
+	    }
+	}
+	print STDERR "Event loop ending; restarting.\n";
+    }
+    exit 0;
+}
+
+######################################################################
+# TCP listener on a given port
+######################################################################
+package Perlbal::TCPListener;
+use base "Perlbal::Socket";
+use fields qw(service);
+
+# TCPListener
+sub new {
+    my ($class, $hostport, $service) = @_;
+
+    my $sock = IO::Socket::INET->new(
+                                     LocalAddr => $hostport,
+                                     Proto => 'tcp',
+                                     Listen => 1024,
+                                     ReuseAddr => 1,
+                                     Blocking => 0,
+                                     );
+
+    return Perlbal::error("Error creating listening socket: $!")
+	unless $sock;
+
+    my $self = $class->SUPER::new($sock);
+    $self->{service} = $service;
+    bless $self, ref $class || $class;
+    $self->watch_read(1);
+    return $self;
+}
+
+# TCPListener: accepts a new client connection
+sub event_read {
+    my Perlbal::TCPListener $self = shift;
+
+    # new connection
+    my ($psock, $peeraddr) = $self->{sock}->accept();
+    unless ($psock) {
+	print STDERR "No remote sock?\n";
+	return;
+    }
+
+    print "Got new conn: $psock\n" if Perlbal::DEBUG >= 1;
+    IO::Handle::blocking($psock, 0);
+
+    my $service_role = $self->{service}->role;
+    if ($service_role eq "reverse_proxy") {
+	Perlbal::ClientProxy->new($self->{service}, $psock);
+    } elsif ($service_role eq "management") {
+	Perlbal::ClientManage->new($self->{service}, $psock);
+    }
+}
+
+
+######################################################################
+# UDP listener for Apache free/busy stats
+######################################################################
+package Perlbal::StatsListener;
+use base "Perlbal::Socket";
+use fields qw(service pos message_ring from_ring);
+
+# StatsListener
+sub new {
+    my $class = shift;
+
+    my ($hostport, $service) = @_;
+
+    my $sock = IO::Socket::INET->new(
+                                     LocalAddr => $hostport,
+                                     Proto => 'udp',
+				     ReuseAddr => 1,
+                                     Blocking => 0,
+                                     );
+
+    return Perlbal::error("Error creating listening socket: $!")
+	unless $sock;
+    $sock->sockopt(Socket::SO_BROADCAST, 1);
+    $sock->blocking(0);
+
+    my $self = fields::new($class);
+    $self->SUPER::new($sock);       # init base fields
+
+    $self->{service} = $service;
+    $self->{pos} = 0;
+    $self->{message_ring} = [];
+    $self->{from_ring} = [];
+
+    bless $self, ref $class || $class;
+    $self->watch_read(1);
+    return $self;
+}
+
+# StatsListener
+sub event_read {
+    my $self = shift;
+    my $sock = $self->{sock};
+
+    my $ring_size = 30;   # FIXME: arbitrary
+
+    while (my $from = $sock->recv($self->{message_ring}[$self->{pos}], 1024)) {
+	$self->{from_ring}[$self->{pos}] = $from;
+	$self->{pos} = 0 if ++$self->{pos} == $ring_size;
+    }
+
+    return;
+
+    print "Ring pos: $self->{pos}\n";
+
+    for (my $i=0; $i<$ring_size; $i++) {
+	my $msg = $self->{message_ring}[$i];
+	my $from = $self->{from_ring}[$i];
+	next unless $from;
+
+	$msg =~ s/\n/ /g;
+	my ($port, $iaddr) = Socket::sockaddr_in($from);
+	$iaddr = Socket::inet_ntoa($iaddr);
+	#print "$i: ($msg) from=$iaddr\n";
+    }
+
+}
+
+# StatsListener
+sub event_err { }
+sub event_hup { }
+
+
+######################################################################
+# Management connection from a client
+######################################################################
+package Perlbal::ClientManage;
+use base "Perlbal::Socket";
+
+# ClientManage
+sub new {
+    my ($class, $service, $sock) = @_;
+    my $self = $class->SUPER::new($sock);
+    $self->{service} = $service;
+    $self->{buf} = "";   # what we've read so far, not forming a complete line
+    bless $self, ref $class || $class;
+    $self->watch_read(1);
+    return $self;
+}
+
+# ClientManage
+sub event_read {
+    my $self = shift;
+
+    my $bref = $self->read(1024);
+    return $self->close() unless defined $bref;
+    $self->{buf} .= $$bref;
+
+    if ($self->{buf} =~ s/^(.+?)\r?\n//) {
+	my $line = $1;
+	Perlbal::run_manage_command($line, sub {
+	    $self->write("$_[0]\r\n");
+	});
+    }
+}
+
+# ClientManage
+sub event_err {  my $self = shift; $self->close; }
+sub event_hup {  my $self = shift; $self->close; }
+
+
+
+######################################################################
+# HTTP Connection from a reverse proxy client
+######################################################################
+package Perlbal::ClientProxy;
+use base "Perlbal::Socket";
+use fields qw(service backend all_sent reproxy_file reproxy_file_offset reproxy_file_size);
+
+use constant READ_SIZE         => 4086;    # 4k, arbitrary
+use constant READ_AHEAD_SIZE   => 8192;    # 8k, arbitrary
+
+# ClientProxy
+sub new {
+    my ($class, $service, $sock) = @_;
+
+    my $self = fields::new($class);
+    $self->SUPER::new($sock);       # init base fields
+
+    $self->{service} = $service;
+
+    $self->{headers} = undef;      # defined w/ headers object once all headers in
+    $self->{headers_string} = "";  # blank to start
+
+    $self->{read_buf} = [];        # scalar refs of bufs read from client
+    $self->{read_ahead} = 0;       # bytes sitting in read_buf
+    $self->{read_size} = 0;        # total bytes read from client
+ 
+    $self->{backend} = undef;
+    $self->{all_sent} = 0;         # boolean: backend has written all data to client
+
+    bless $self, ref $class || $class;
+    $self->watch_read(1);
+    return $self;
+}
+
+# Client
+# get/set backend proxy connection
+sub all_sent {
+    my Perlbal::ClientProxy $self = shift;
+    return $self->{all_sent} unless @_;
+    return $self->{all_sent} = shift;
+}
+
+# Client
+# get/set backend proxy connection
+sub backend {
+    my Perlbal::ClientProxy $self = shift;
+    return $self->{backend} unless @_;
+    return $self->{backend} = shift;
+}
+
+# Client
+# get/set headers
+sub headers {
+    my Perlbal::ClientProxy $self = shift;
+    return $self->{headers} unless @_;
+    return $self->{headers} = shift;
+}
+
+# Client (overrides and calls super)
+sub close {
+    my Perlbal::ClientProxy $self = shift;
+    my $reason = shift;
+    if (my $backend = $self->{backend}) {
+	print "Client ($self) closing backend ($backend)\n" if Perlbal::DEBUG >= 1;
+	$self->backend(undef);
+	$backend->close($reason ? "proxied_from_client_close:$reason" : "proxied_from_client_close");
+    }
+    $self->SUPER::close($reason);
+}
+
+# Client
+sub reproxy_file {
+    my Perlbal::ClientProxy $self = shift;
+    return $self->{reproxy_file} unless @_;
+    my ($fh, $size) = @_;
+    $self->{reproxy_file_offset} = 0;
+    $self->{reproxy_file_size} = $size;
+    return $self->{reproxy_file} = $fh;
+}
+
+# Client
+sub event_write { 
+    my Perlbal::ClientProxy $self = shift;
+
+    if ($self->{reproxy_file}) {
+	my $to_send = $self->{reproxy_file_size} - $self->{reproxy_file_offset};
+	$self->tcp_cork(1) if $self->{reproxy_file_offset} == 0;
+	my $sent = IO::SendFile::sendfile($self->{fd}, 
+					  fileno($self->{reproxy_file}),
+					  0, # NULL offset means kernel moves filepos (apparently)
+					  $to_send);
+	print "REPROXY Sent: $sent\n" if Perlbal::DEBUG >= 2;
+	if ($sent < 0) { die "Error w/ sendfile: $!\n"; }
+	$self->{reproxy_file_offset} += $sent;
+
+	if ($sent >= $to_send) {
+	    $self->tcp_cork(0);
+	    $self->{reproxy_file} = undef;
+	    $self->close("sendfile_done");
+	    $self->all_sent(1);  # set our own flag that we're done
+	}
+	return;
+    }
+
+    if ($self->write(undef)) {
+	print "All writing done to $self\n" if Perlbal::DEBUG >= 2;
+
+	# we've written all data in the queue, so stop waiting for write
+	# notifications:
+	$self->watch_write(0);
+
+	if ($self->all_sent) {
+	    # backend has notified us that it's pushed all its
+	    # data into our queue.  so if we're caught up
+	    # at this point, that means we're done.
+
+	    $self->close("writing_done");
+	}
+    }
+
+    # trigger our backend to keep reading, if it's still connected
+    my $backend = $self->backend;
+    $backend->watch_read(1) if $backend && ! $self->all_sent;
+}
+
+# ClientProxy
+sub event_read {
+    my Perlbal::ClientProxy $self = shift;
+
+    unless ($self->{headers}) {
+	if (my $hd = $self->read_request_headers) {
+	    print "Got headers!  Firing off new backend connection.\n"
+		if Perlbal::DEBUG >= 2;
+
+	    # useful for profiling:
+	    exit 0 if Perlbal::SHUTDOWN_BY_CLIENT && $hd->header("X-TEMP-SHUTDOWN");
+
+	    Perlbal::BackendHTTP->new($self);
+	    $self->tcp_cork(1);  # cork writes to self
+	}
+	return;
+    }
+
+    if ($self->{read_ahead} < READ_AHEAD_SIZE) {
+	my $bref = $self->read(READ_SIZE);
+	my $backend = $self->backend;
+	$self->drain_read_buf_to($backend) if $backend;
+
+	if (! defined($bref)) {
+	    $self->watch_read(0);
+	    return;
+	}
+
+	my $len = length($$bref);
+	$self->{read_size} += $len;
+
+	if ($backend) {
+	    $backend->write($bref);
+	} else {
+	    push @{$self->{read_buf}}, $bref;
+	    $self->{read_ahead} += $len;
+	}
+
+	print "Read: ($len) [$$bref]\n";
+    } else {
+	print "read-ahead hit.\n";
+	$self->watch_read(0);
+    }
+}
+
+sub event_err {  my $self = shift; $self->close; }
+sub event_hup {  my $self = shift; $self->close; }
+
+######################################################################
+# HTTP connection to backend node
+######################################################################
+package Perlbal::BackendHTTP;
+use base "Perlbal::Socket";
+use fields qw(client ip port req_sent);
+
+use constant BACKEND_READ_SIZE => 131072;  # 128k; arbitrary
+
+# Backend
+sub new {
+    my ($class, $client, $ip, $port) = @_;
+
+    $ip ||= "10.1.0.2";
+    $port ||= 85;
+
+    my $sock = IO::Socket::INET->new(
+				     PeerAddr => $ip,
+				     PeerPort => $port,
+                                     Proto => 'tcp',
+                                     Blocking => 0,
+                                     );
+
+    my $self = fields::new($class);
+    $self->SUPER::new($sock);
+
+    $self->{client} = $client;   # client Perlbal::Socket this backend conn is for
+    $self->{client}->backend($self);  # set client's backend to us
+
+    $self->{ip}     = $ip;       # backend IP
+    $self->{port}   = $port;     # backend port
+
+    # for header reading:
+    $self->{headers} = undef;      # defined w/ headers object once all headers in
+    $self->{headers_string} = "";  # blank to start
+    $self->{read_buf} = [];        # scalar refs of bufs read from client
+    $self->{read_ahead} = 0;       # bytes sitting in read_buf
+    $self->{read_size} = 0;        # total bytes read from client
+
+    $self->{req_sent} = 0;         # boolean; request sent to backend?
+
+    bless $self, ref $class || $class;
+    $self->watch_write(1);
+    return $self;
+}
+
+# Backend
+sub event_write {
+    my Perlbal::BackendHTTP $self = shift;
+    print "Backend $self is writeable!\n" if Perlbal::DEBUG >= 2;
+
+    my $done;
+    unless ($self->{req_sent}++) {
+	my $hds = $self->{client}->headers;
+
+	# FIXME: make this conditional
+	$hds->header("X-Proxy-Capabilities", "reproxy-file");
+
+	$self->tcp_cork(1);
+	$done = $self->write($hds->to_string_ref);
+	$self->write(sub { 
+	    $self->tcp_cork(0);
+	    if (my $client = $self->{client}) {
+		# make the client push its overflow reads (request body)
+		# to the backend
+		$client->drain_read_buf_to($self);
+		# and start watching for more reads
+		$client->watch_read(1);
+	    }
+	});
+    }
+    
+    $done = $self->write(undef);
+    if ($done) {
+	$self->watch_read(1);
+	$self->watch_write(0);
+    }
+}
+
+# Backend
+sub event_read {
+    my Perlbal::BackendHTTP $self = shift;
+    print "Backend $self is readable!\n" if Perlbal::DEBUG >= 2;
+
+    my Perlbal::ClientProxy $client = $self->{client};
+
+    unless ($self->{headers}) {
+	if (my $hd = $self->read_response_headers) {
+	    $client->write($hd->to_string_ref);
+
+	    if (my $rep = $hd->header('X-REPROXY-FILE')) {
+		if (my $size = -s $rep) {
+		    print "REPROXY: $rep (size=$size)\n";
+		    my $fh = new IO::File;
+		    open($fh, $rep) or return $client->close("reproxy_file_open_error");
+		    $client->reproxy_file($fh, $size);
+
+		    # setup the client's state:
+		    $client->backend(undef);    # disconnect ourselves from it
+		    $self->{client} = undef;    # .. and it from us
+		    $self->close;               # close ourselves
+		    $client->watch_write(1);    # and kick-start it into writing
+		} else {
+		    print "REPROXY: $rep (bogus)\n";
+		    $client->close;
+		}
+		
+	    } else {
+		$self->drain_read_buf_to($client);
+	    }
+	}
+	return;
+    }
+
+    # if our client's 250k behind, stop buffering
+    # FIXME: constant
+    if ($client->{write_buf_size} > 256_000) { 
+	$self->watch_read(0);
+	return;
+    }
+
+    my $bref = $self->read(BACKEND_READ_SIZE);
+
+    if (defined $bref) {
+	$client->write($bref);
+	return;
+    } else {
+	# backend closed
+	print "Backend $self is done; closing...\n" if Perlbal::DEBUG >= 1;
+	
+	$client->backend(undef);    # disconnect ourselves from it
+	$self->{client} = undef;    # .. and it from us
+	$self->close;               # close ourselves
+	
+	$client->write(sub { $client->tcp_cork(0); });
+	$client->all_sent(1);      # tell our old client it has everything it needs
+	$client->watch_write(1);   # and kick-start it into writing (or shutting down)
+	return;
+    }
+}
+
+# Backend: bad connection to backend
+sub event_err {
+    my Perlbal::BackendHTTP $self = shift;
+
+    # FIXME: we get this after backend is done reading and we disconnect,
+    # hence the misc checks below for $self->{client}.
+
+    print "BACKEND event_err\n" if
+	Perlbal::DEBUG >= 2;
+
+    if ($self->{req_sent}) {
+	# request already sent to backend, then an error occurred.
+	# we don't want to duplicate POST requests, so for now
+	# just fail
+	# TODO: if just a GET request, retry?
+	$self->{client}->close if $self->{client};
+	$self->close;
+	return;
+    }
+
+    # otherwise, retry connection
+    Perlbal::BackendHTTP->new($self->{client}, "10.1.0.2", 81)
+	if $self->{client};
+
+    $self->close("error");
+}
+
+# Backend
+sub event_hup {
+    my Perlbal::BackendHTTP $self = shift;
+    print "HANGUP for $self\n";
+}
+
+######################################################################
+# Service class
+######################################################################
+
+package Perlbal::Service;
+
+sub new {
+    my ($class, $name) = @_;
+    my $self = {
+	name => $name,
+	enabled => 0,
+    };
+    return bless $self, ref $class || $class;
+}
+
+# getter only
+sub role {
+    my $self = shift;
+    return $self->{role};
+}
+
+# Service
+sub set {
+    my ($self, $key, $val, $out) = @_;
+    my $err = sub { $out->("ERROR: $_[0]"); return 0; };
+    my $set = sub { $self->{$key} = $val;   return 1; };
+
+    if ($key eq "role") {
+	return $err->("Unknown service role")
+	    unless $val eq "reverse_proxy" || $val eq "management";
+	return $set->();
+    }
+
+    if ($key eq "listen") {
+	return $err->("Invalid host:port")
+	    unless $val =~ m!^\d+\.\d+\.\d+\.\d+:\d+$!;
+	return $set->();
+    }
+
+    if ($key eq "balance_method") {
+	return $err->("Can only set balance method on a reverse_proxy service")
+	    unless $self->{role} eq "reverse_proxy";
+	return $err->("Unknown balance method")
+	    unless $val eq "sendstats";
+	return $set->();
+    }
+
+    if ($key =~ /^sendstats\./) {
+	return $err->("Can only set sendstats listening address on service with balancing method 'sendstats'")
+	    unless $self->{balance_method} eq "sendstats";
+	if ($key eq "sendstats.listen") {
+	    return $err->("Invalid host:port")
+		unless $val =~ m!^\d+\.\d+\.\d+\.\d+:\d+$!;
+
+	    if (my $pbs = $self->{"sendstats.listen.SOCKET"}) {
+		$pbs->close;
+	    }
+
+	    unless ($self->{"sendstats.listen.SOCKET"} =
+		    Perlbal::StatsListener->new($val, $self)) {
+		return $err->("Error creating stats listener: $Perlbal::last_error");
+	    }
+	}
+	if ($key eq "sendstats.nodefile") {
+	    return $err->("File not found")
+		unless -e $val;
+	}
+	return $set->();
+    }
+
+    return $err->("Unknown attribute '$key'");
+}
+
+# Service
+sub enable {
+    my ($self, $out) = @_;
+    if ($self->{enabled}) {
+	$out->("ERROR: service $self->{name} is already enabled");
+	return 0;
+    }
+
+    # create listening socket
+    my $tl = Perlbal::TCPListener->new($self->{listen}, $self);
+    unless ($tl) {
+	$out->("Can't start service '$self->{name}' on $self->{listen}: $Perlbal::last_error");
+	return 0;
+    }
+
+    $self->{listener} = $tl;
+    $self->{enabled} = 1;
+    return 1;
+}
+
+# Service
+sub disable {
+    my ($self, $out) = @_;
+    if (! $self->{enabled}) {
+	$out->("ERROR: service $self->{name} is already disabled");
+	return 0;
+    }
+    if ($self->{role} eq "management") {
+	$out->("ERROR: can't disable management service");
+        return 0;
+    }
+
+    # find listening socket
+    my $tl = $self->{listener};
+    $tl->close;
+    $self->{listener} = undef;
+    $self->{enabled} = 0;
+    return 1;
+}
+
+######################################################################
+# server management functions
+######################################################################
+package Perlbal;
+
+our(%service);   # servicename -> Perlbal::Service
+our($last_error);
+
+sub error {
+    $last_error = shift;
+    return 0;
+}
+
+# returns 1 if command succeeded, 0 otherwise
+sub run_manage_command {
+    my ($cmd, $out) = @_;  # $out is output stream closure
+    $cmd =~ s/\#.*//;
+    $cmd =~ s/^\s+//;
+    $cmd =~ s/\s+$//;
+    $cmd = lc($cmd);
+    $cmd =~ s/\s+/ /g;
+    return 1 unless $cmd =~ /\S/;
+
+    $out ||= sub {};
+
+    my $err = sub {
+	$out->("ERROR: $_[0]");
+	return 0;
+    };
+
+    if (0) {
+	my $rv = setrlimit(RLIMIT_NOFILE, 10_000, 10_000);
+	print "setrlimit = $rv\n";
+	
+	my ($nowsoft, $nowhard)  = getrlimit(RLIMIT_NOFILE);
+	print "getrlimit = ($nowsoft, $nowhard)\n";
+    }
+
+    if ($cmd =~ /^create service (\w+)$/) {
+	my $name = $1;
+	return $err->("service '$name' already exists") if $service{$name};
+	$service{$name} = Perlbal::Service->new($name);
+	return 1;
+    }
+
+    if ($cmd =~ /^show service$/) {
+	foreach my $name (sort keys %service) {
+	    my $svc = $service{$name};
+	    $out->("$name $svc->{listen} " . ($svc->{enabled} ? "ENABLED" : "DISABLED"));
+	}
+	return 1;
+    }
+
+    if ($cmd =~ /^set (\w+)\.([\w\.]+) ?= ?(.+)$/) {
+	my ($name, $key, $val) = ($1, $2, $3);
+	my $svc = $service{$name};
+	return $err->("service '$name' does not exist") unless $svc;
+	return $svc->set($key, $val, $out);
+    }
+
+    if ($cmd =~ /^(disable|enable) (\w+)$/) {
+        my ($verb, $name) = ($1, $2);
+        my $svc = $service{$name};
+        return $err->("service '$name' does not exist") unless $svc;
+        return $svc->$verb($out);
+    }
+
+    return $err->("unknown command: $cmd");
+}
+
+sub load_config {
+    my ($file, $writer) = @_;
+    open (F, $file) or die "Error opening config file ($file): $!\n";
+    while (<F>) {
+	return 0 unless run_manage_command($_, $writer);
+    }
+    close(F);
+    return 1;
+}
+
+1;
