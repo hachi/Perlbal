@@ -1,3 +1,13 @@
+    -- bug fix: don't send Not-Modified responses to requests for dynamic
+       directory listings.  it was messing up persistent connections
+       since the directory serving code didn't get passed down whether we
+       were sending a body or not.  and not modifies on directories are hard:
+       modify time isn't altogether useful.  (file sizes could change)
+
+       this still does not-modifieds on indirect index.html directory
+       requests, because _serve_request ends up eventually calling
+       _serve_request on a different URI.  (brad)
+
     -- added BSD::Resource as dependency to Makefile.PL (brad)
 
     -- fixed 304 Not Modified responses to not send Content-Length

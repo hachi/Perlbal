@@ -252,7 +252,7 @@ sub _serve_request {
         return $self->_simple_response(404) unless -e _;
 
         my $lastmod = HTTP::Date::time2str((stat(_))[9]);
-        my $not_mod = ($hd->header("If-Modified-Since") || "") eq $lastmod;
+        my $not_mod = ($hd->header("If-Modified-Since") || "") eq $lastmod && -f _;
 
         my $res = $self->{res_headers} = Perlbal::HTTPHeaders->new_response($not_mod ? 304 : 200);
 
