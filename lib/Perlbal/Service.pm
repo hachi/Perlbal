@@ -338,6 +338,9 @@ sub spawn_backends {
             my $age = $now - $be->{create_time};
             if ($age >= 5 && $be->{state} eq "connecting") {
                 $be->close;
+            } elsif ($age >= 60 && $be->{state} eq "verifying_backend") {
+                # after 60 seconds of attempting to verify, we're probably already dead
+                $be->close;
             } elsif (! $be->{closed}) {
                 next;
             }
