@@ -242,8 +242,8 @@ sub backend_finished {
     # we should let the reader close us.
     $self->{responded} = 1;
     $self->close('backend_finished')
-        unless defined $self->{content_length_remain} &&
-                      ($self->{content_length_remain} <= 0);
+        if defined $self->{content_length_remain} &&
+                  ($self->{content_length_remain} <= 0);
 }
 
 # Client (overrides and calls super)
