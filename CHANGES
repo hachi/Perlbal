@@ -1,3 +1,7 @@
+    -- made Palimg plugin far more paranoid about errors, and also uses new
+       ClientHTTPBase scratch area for keeping track of data instead of using
+       headers (which are generally slower)
+
     -- fixed bug in HTTPHeaders that set_version would inadvertently
        run into when used on a header created through new_response
 

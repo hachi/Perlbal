@@ -28,14 +28,15 @@ sub register {
         
         # must be ok, setup for it
         $$uriref = "/palimg/$fn.$ext";
-        $hd->header('X-PalImg-Ext', $ext);
-        $hd->header('X-PalImg-Palspec', $palspec);
+        $obj->{scratch}->{palimg} = [ $ext, $palspec ];
         return 0;
     });
     
     # actually serve a palimg
     $svc->register_hook('Palimg', 'start_send_file', sub {
         my Perlbal::ClientHTTPBase $obj = $_[0];
+        return 0 unless $obj &&
+                        (my $palimginfo = $obj->{scratch}->{palimg});
 
         # turn off writes
         $obj->watch_write(0);
@@ -48,7 +49,7 @@ sub register {
 
             # pass down to handler
             my Perlbal::HTTPHeaders $hd = $obj->{req_headers};
-            my $res = PalImg::modify_file(\$data, $hd->header('X-PalImg-Ext'), $hd->header('X-PalImg-Palspec'));
+            my $res = PalImg::modify_file(\$data, $palimginfo->[0], $palimginfo->[1]);
             return $obj->_simple_response(500) unless defined $res;
             return $obj->_simple_response($res) if $res;
 

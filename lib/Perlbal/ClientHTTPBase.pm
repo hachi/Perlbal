@@ -23,6 +23,7 @@ use fields ('service',             # Perlbal::Service object
             'replacement_uri',     # URI to send instead of the one requested; this is used
                                    # to instruct _serve_request to send an index file instead
                                    # of trying to serve a directory and failing
+            'scratch',             # extra storage; plugins can use it if they want
 
             # reproxy support
             'reproxy_file',        # filename the backend told us to start opening
@@ -72,6 +73,7 @@ sub new {
     $self->{headers_string} = '';
     $self->state('reading_headers');
     $self->{requests} = 0;
+    $self->{scratch} = {};
 
     bless $self, ref $class || $class;
     $self->watch_read(1);
@@ -142,6 +144,7 @@ sub http_response_sent {
     $self->{reproxy_file} = undef;
     $self->{reproxy_file_size} = 0;
     $self->{reproxy_file_offset} = 0;
+    $self->{scratch} = {};
 
     # reset state
     $self->state('persist_wait');
