@@ -141,25 +141,7 @@ sub run_manage_command {
         my $sname = $1;
         my Perlbal::Service $svc = $service{$sname};
         return $err->("Unknown service") unless $sname;
-        
-        $out->("SERVICE $sname");
-        $out->("     listening: $svc->{listen}");
-        $out->("          role: $svc->{role}");
-        if ($svc->{role} eq "reverse_proxy" ||
-            $svc->{role} eq "web_server") {
-            $out->("  pend clients: $svc->{waiting_client_count}");
-            $out->("  pend backend: $svc->{pending_connect_count}");
-        }
-        if ($svc->{role} eq "reverse_proxy") {
-            $out->("balance method: " . $svc->balance_method);
-            $out->("         nodes:");
-            foreach my $n (@{ $svc->{nodes} }) {
-                $out->("                $n->[0]:$n->[1]");
-            }
-        } elsif ($svc->{role} eq "web_server") {
-            $out->("        docroot: $svc->{docroot}");
-        }
-
+        $svc->stats_info($out);
         return 1;
     }
 

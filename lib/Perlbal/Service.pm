@@ -38,6 +38,7 @@ use fields (
             'pending_connect_count',   # number of outstanding backend connects
             'high_priority_cookie',          # cookie name to check if client can 'cut in line' and get backends faster
             'high_priority_cookie_contents', # aforementioned cookie value must contain this substring
+            'node_used',               # hashref of "ip:port" -> use count
             );
 
 sub new {
@@ -132,14 +133,18 @@ sub get_client {
     my Perlbal::BackendHTTP $be;
     ($self, $be) = @_;
 
+    my $hostport = "$be->{ip}:$be->{port}";
+
     # note that this backend is no longer pending a connect
     $self->{pending_connect_count}--;
-    $self->{pending_connects}{"$be->{ip}:$be->{port}"} = undef;
+    $self->{pending_connects}{$hostport} = undef;
 
     my $ret = sub {
         my Perlbal::ClientProxy $cp = shift;
         $self->{waiting_client_count}--;
         delete $self->{waiting_client_map}{$cp->{fd}};
+
+        $self->{node_used}{$hostport}++;
 
         # before we return, start another round of connections
         $self->pair_up_connections;
@@ -418,6 +423,33 @@ sub disable {
     return 1;
 }
 
+sub stats_info
+{
+    my Perlbal::Service $self = shift;
+    my $out = shift;
+
+    $out->("SERVICE $self->{name}");
+    $out->("     listening: $self->{listen}");
+    $out->("          role: $self->{role}");
+    if ($self->{role} eq "reverse_proxy" ||
+        $self->{role} eq "web_server") {
+        $out->("  pend clients: $self->{waiting_client_count}");
+        $out->("  pend backend: $self->{pending_connect_count}");
+    }
+    if ($self->{role} eq "reverse_proxy") {
+        $out->("balance method: " . $self->balance_method);
+        $out->("         nodes:");
+        foreach my $n (@{ $self->{nodes} }) {
+            my $hostport = "$n->[0]:$n->[1]";
+            $out->(sprintf("                %-21s %7d", $hostport, $self->{node_used}{$hostport} || 0));
+        }
+    } elsif ($self->{role} eq "web_server") {
+        $out->("        docroot: $self->{docroot}");
+    }
+
+    
+}
+
 sub _durl
 {
     my ($a) = @_;
@@ -425,6 +457,7 @@ sub _durl
     $a =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
     return $a;
 }
+
 
 1;
 
