@@ -1,3 +1,5 @@
+    -- reset some variables that weren't being reset: read_buf, read_ahead, read_size
+
     -- "proc" management command shows user and system CPU usage for Perlbal
        this run, as well as a delta since the last time you ran "proc"
 

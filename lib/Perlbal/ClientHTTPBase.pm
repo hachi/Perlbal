@@ -146,6 +146,9 @@ sub http_response_sent {
     $self->{reproxy_file} = undef;
     $self->{reproxy_file_size} = 0;
     $self->{reproxy_file_offset} = 0;
+    $self->{read_buf} = [];
+    $self->{read_ahead} = 0;
+    $self->{read_size} = 0;
     $self->{scratch} = {};
 
     # reset state
