@@ -4,10 +4,6 @@
 #
 # (c) 1994, Brad Fitzpatrick, <brad@danga.com>
 
-
-# Control flow at bottom (after class declarations
-# and in particular, the @our declarations)
-
 package Perlbal;
 
 use constant DEBUG => 0;
@@ -16,16 +12,14 @@ use strict;
 use IO::Socket;
 use IO::Handle;
 use IO::SendFile;
+use IO::File;
 
 use Linux::AIO;
 
-use IO::File;
 use Getopt::Long;
-use Data::Dumper;
 use BSD::Resource;
-use Carp qw(cluck);
-
-$SIG{'PIPE'} = "IGNORE";  # handled manually
+use Carp qw(cluck croak);
+use POSIX ();
 
 use lib 'lib';
 use Perlbal::Socket;
@@ -37,15 +31,7 @@ use Perlbal::ClientProxy;
 use Perlbal::BackendHTTP;
 use Perlbal::ClientManage;
 
-# FIXME: Linux::AIO doesn't auto-grow/shrink the helper threads according
-# to what you say here.  you do a one-time raise to some value, then its
-# END block brings them to 0 w/ max_parallel(0).  should make it auto-adjust.
-Linux::AIO::min_parallel(100);
-
-######################################################################
-# server management functions
-######################################################################
-package Perlbal;
+$SIG{'PIPE'} = "IGNORE";  # handled manually
 
 our(%service);   # servicename -> Perlbal::Service
 our($last_error);
@@ -72,12 +58,24 @@ sub run_manage_command {
 	return 0;
     };
 
-    if (0) {
-	my $rv = setrlimit(RLIMIT_NOFILE, 10_000, 10_000);
-	print "setrlimit = $rv\n";
-	
-	my ($nowsoft, $nowhard)  = getrlimit(RLIMIT_NOFILE);
-	print "getrlimit = ($nowsoft, $nowhard)\n";
+    if ($cmd =~ /^server (\w+) ?= ?(.+)$/) {
+	my ($key, $val) = ($1, $2);
+	return $err->("Expected numeric parameter") unless $val =~ /^\d+$/;
+
+	if ($key eq "max_connections") {
+	    my ($nowsoft, $nowhard)  = getrlimit(RLIMIT_NOFILE);
+	    $out->("WAS: ($nowsoft, $nowhard)");
+
+	    unless ($> == 0) {
+		$out->("ERROR: need to be root to increase max connections");
+	    }
+	} elsif ($key eq "aio_threads") {
+	    
+	}
+
+	#my $rv = setrlimit(RLIMIT_NOFILE, 10_000, 10_000);
+	#print "setrlimit = $rv\n";
+	return 1;
     }
 
     if ($cmd =~ /^create service (\w+)$/) {
@@ -122,8 +120,36 @@ sub load_config {
     return 1;
 }
 
+sub daemonize {
+    my($pid, $sess_id, $i);
 
+    ## Fork and exit parent
+    if ($pid = fork) { exit 0; }
 
+    ## Detach ourselves from the terminal
+    croak "Cannot detach from controlling terminal"
+	unless $sess_id = POSIX::setsid();
+
+    ## Prevent possibility of acquiring a controling terminal
+    $SIG{'HUP'} = 'IGNORE';
+    if ($pid = fork) { exit 0; }
+
+    ## Change working directory
+    chdir "/";
+
+    ## Clear file creation mask
+    umask 0;
+
+    ## Close open file descriptors
+    close(STDIN);
+    close(STDOUT);
+    close(STDERR);
+
+    ## Reopen stderr, stdout, stdin to /dev/null
+    open(STDIN,  "+>/dev/null");
+    open(STDOUT, "+>&STDIN");
+    open(STDERR, "+>&STDIN");
+}
 
 my $opt_daemonize;
 my $opt_manage;
@@ -145,12 +171,25 @@ unless (Perlbal::Socket::watched_sockets() > 0) {
     die "No services or management port configured.  Nothing to do.  Stopping.\n";
 }
 
-print "Ready.\n";
+if ($opt_daemonize) {
+    daemonize();
+} else {
+    print "Running.\n";
+}
+
+$SIG{'INT'} = $SIG{'TERM'} = sub {
+    Linux::AIO::max_parallel(0);
+    # FIXME: unlink pid file
+    exit(0);
+};
+
+# FIXME: Linux::AIO doesn't auto-grow/shrink the helper threads according
+# to what you say here.  you do a one-time raise to some value, then its
+# END block brings them to 0 w/ max_parallel(0).  should make it auto-adjust.
+Linux::AIO::min_parallel(2);
 
 # wait for activity
 Perlbal::Socket->wait_loop();
-
-
 
 
 1;
