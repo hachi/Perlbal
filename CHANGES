@@ -1,3 +1,6 @@
+    -- fixed 304 Not Modified responses to not send Content-Length
+       and Content-Type headers.
+
 1.01 (2004-10-22)
     -- when internally redirecting a URL, perlbal advertises
        that it supports persisent HTTP connections now,
