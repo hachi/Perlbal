@@ -16,12 +16,20 @@ WriteMakefile(
     VERSION                 => '1.01',
     AUTHOR                  => 'Brad Fitzpatrick <brad@danga.com>',
     ABSTRACT_FROM           => 'perlbal',
-    EXE_FILES               => [ 'perlbal' ],
+
+    (
+      exists($ENV{DANGABUILD_MODULESONLY}) ?
+      () :
+      (EXE_FILES               => [ 'perlbal' ]),
+    ),
+
     PREREQ_PM               => {
         'Linux::AIO'  => '1.3',
         'Danga::Socket' => '1.25',
         'BSD::Resource' => 0,
         'Net::Netmask' => 0,
+        'Test::More' => 0,
+        'File::Find' => 0,
     },
     dist                    => {
         CI                      => "cvs commit",
@@ -30,6 +38,12 @@ WriteMakefile(
         DIST_DEFAULT            => 'all tardist',
         COMPRESS                => "gzip",
     },
+
+    (
+      exists($ENV{DANGABUILD_DAEMONONLY}) ?
+      (PM => {}, PMLIBDIRS => []):
+      (),
+    ),
 
 );
 
