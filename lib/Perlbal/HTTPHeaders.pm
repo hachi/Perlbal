@@ -188,6 +188,11 @@ sub code {
     $self->{codetext} = $text;
 }
 
+sub response_code {
+    my Perlbal::HTTPHeaders $self = $_[0];
+    return $self->{code};
+}
+
 sub request_method {
     my Perlbal::HTTPHeaders $self = shift;
     return $self->{method};

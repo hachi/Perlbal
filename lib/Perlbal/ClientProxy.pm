@@ -151,7 +151,8 @@ sub backend_response_received {
 
     # we fail if we got something that's NOT a 2xx code, OR, if we expected
     # a certain size and got back something different
-    if ($be->{res_headers}->{code} < 200 || $be->{res_headers}->{code} > 299 ||
+    my $code = $be->{res_headers}->response_code + 0;
+    if ($code < 200 || $code > 299 ||
             (defined $self->{reproxy_expected_size} &&
              $self->{reproxy_expected_size} != $be->{res_headers}->header('Content-length'))) {
         # fall back to an alternate URL
