@@ -25,6 +25,8 @@ use fields ('client',  # Perlbal::ClientProxy connection, or undef
             'content_length',  # length of document being transferred
             'content_length_remain',    # bytes remaining to be read
 
+            'use_count',  # number of requests this backend's been used for
+
             );
 use Socket qw(PF_INET IPPROTO_TCP SOCK_STREAM);
 
@@ -73,6 +75,7 @@ sub new {
                                    #    until we ask our service for one
 
     $self->{has_attention} = 0;
+    $self->{use_count}     = 0;
 
     bless $self, ref $class || $class;
     $self->watch_write(1);
@@ -165,13 +168,12 @@ sub event_read {
 
     my Perlbal::ClientProxy $client = $self->{client};
 
-    # temp debug
-    unless ($client) {
-        my $bref = $self->read(BACKEND_READ_SIZE);
-        print "Backend ($self; att=$self->{has_attention}) readable ".
-            "without client.  Read: <" . ($bref ? $$bref : "undef") . ">\n";
-        return $self->close;
-    }
+    # with persistent connections, sometimes we have a backend and
+    # no client, and backend becomes readable, either to signal
+    # to use the end of the stream, or because a bad request error,
+    # which I can't totally understand.  in any case, we have
+    # no client so all we can do is close this backend.
+    return $self->close unless $client;
 
     unless ($self->{headers}) {
         if (my $hd = $self->read_response_headers) {
@@ -270,6 +272,8 @@ sub next_request {
         return $self->close;
     }
 
+    $self->{use_count}++;
+
     # if backend told us, keep track of when the backend
     # says it's going to boot us, so we don't use it within
     # a few seconds of that time
@@ -339,7 +343,7 @@ sub as_string {
     if (my Perlbal::ClientProxy $cp = $self->{client}) {
         $ret .= "; client=$cp->{fd}";
     }
-    $ret .= "; $self->{state}";
+    $ret .= "; uses=$self->{use_count}; $self->{state}";
 
     return $ret;
 }
