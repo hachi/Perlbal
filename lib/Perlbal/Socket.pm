@@ -141,6 +141,8 @@ sub sock {
 # (if it returns 1, caller should stop waiting for EPOLLOUT events)
 sub write {
     my Perlbal::Socket $self;
+    my $data;
+    ($self, $data) = @_;
 
     # nobody should be writing to closed sockets.  (temporary code to find
     # my bug, but I'll probably just leave it in because it's a good assertion)
@@ -149,9 +151,6 @@ sub write {
         # but let's lie and say it worked, since the caller's broken anyway
 	return 1;
     }
-
-    my $data;
-    ($self, $data) = @_;
 
     my $bref;
 
