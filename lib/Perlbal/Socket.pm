@@ -68,13 +68,15 @@ sub tcp_cork {
 # Socket
 sub watch_read {
     my Perlbal::Socket $self = shift;
+    return if $self->{closed};
+
     my $val = shift;
     my $event = $self->{event_watch};
     $event &= ~EPOLLIN if ! $val;
     $event |=  EPOLLIN if   $val;
     if ($event != $self->{event_watch}) {
 	epoll_ctl($epoll, EPOLL_CTL_MOD, $self->{fd}, $event)
-	    and print STDERR "couldn't modify epoll settings for $self->{fd}\n";
+	    and print STDERR "couldn't modify epoll settings for $self->{fd} ($self) from $self->{event_watch} -> $event\n";
 	$self->{event_watch} = $event;
     }
 }
@@ -82,13 +84,15 @@ sub watch_read {
 # Socket
 sub watch_write {
     my Perlbal::Socket $self = shift;
+    return if $self->{closed};
+
     my $val = shift;
     my $event = $self->{event_watch};
     $event &= ~EPOLLOUT if ! $val;
     $event |=  EPOLLOUT if   $val;
     if ($event != $self->{event_watch}) {
 	epoll_ctl($epoll, EPOLL_CTL_MOD, $self->{fd}, $event)
-	    and print STDERR "couldn't modify epoll settings for $self->{fd}\n";
+	    and print STDERR "couldn't modify epoll settings for $self->{fd} ($self) from $self->{event_watch} -> $event\n";
 	$self->{event_watch} = $event;
     }
 }
