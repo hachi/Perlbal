@@ -32,6 +32,7 @@ use fields ('client',  # Perlbal::ClientProxy connection, or undef
             'content_length_remain',    # bytes remaining to be read
 
             'use_count',  # number of requests this backend's been used for
+            'generation', # int; counts what generation we were spawned in
             );
 use Socket qw(PF_INET IPPROTO_TCP SOCK_STREAM);
 
@@ -105,6 +106,7 @@ sub new {
 
     $self->{has_attention} = 0;
     $self->{use_count}     = 0;
+    $self->{generation}    = $opts->{generation};
 
     bless $self, ref $class || $class;
     $self->watch_write(1);
@@ -131,6 +133,12 @@ sub close {
         $reportto->note_backend_close($self);
         $self->{reportto} = undef;
     }
+}
+
+# return our defined generation counter
+sub generation {
+    my Perlbal::BackendHTTP $self = $_[0];
+    return $self->{generation};
 }
 
 # called by service when it's got a client for us, or by ourselves

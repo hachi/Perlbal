@@ -55,6 +55,7 @@ use fields (
             'always_trusted', # bool; if true, always trust upstreams
             'extra_headers', # { insert => [ [ header, value ], ... ], remove => [ header, header, ... ],
                              #   set => [ [ header, value ], ... ] }; used in header management interface
+            'generation', # int; generation count so we can slough off backends from old pools
             );
 
 sub new {
@@ -71,6 +72,7 @@ sub new {
     $self->{verify_backend} = 0;
     $self->{max_backend_uses} = 0;
     $self->{backend_persist_cache} = 2;
+    $self->{generation} = 0;
 
     $self->{hooks} = {};
     $self->{plugins} = {};
@@ -319,8 +321,7 @@ sub register_boredom {
     # it is possible that this backend is part of a different pool that we're
     # no longer using... if that's the case, we want to close it
     return $be->close('pool_switch')
-        unless $be->{pool} && $self->{pool} &&
-               $be->{pool}->name eq $self->{pool}->name;
+        unless $be->generation == $self->{generation};
 
     # now try to fetch a client for it
     my Perlbal::ClientProxy $cp = $self->get_client;
@@ -400,6 +401,12 @@ sub request_backend_connection {
     my $now = time;
     while ($be = shift @{$self->{bored_backends}}) {
         next if $be->{closed};
+
+        # now make sure that it's still in our pool, and if not, close it
+        unless ($be->generation == $self->{generation}) {
+            $be->close("pool_switch");
+            next;
+        }
 
         # don't use connect-ahead connections when we haven't
         # verified we have their attention
@@ -490,7 +497,8 @@ sub spawn_backends {
         }
 
         # now actually spawn a backend and add it to our pending list
-        if (my $be = Perlbal::BackendHTTP->new($self, $ip, $port, { pool => $self->{pool} })) {
+        if (my $be = Perlbal::BackendHTTP->new($self, $ip, $port, { pool => $self->{pool},
+                                                                    generation => $self->{generation} })) {
             $self->add_pending_connect($be);
         }
     }
@@ -737,6 +745,7 @@ sub set {
         $self->{pool}->decrement_use_count if $self->{pool};
         $self->{pool} = $pl;
         $self->{pool}->increment_use_count;
+        $self->{generation}++;
         return 1;
     }
 

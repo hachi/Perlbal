@@ -1,3 +1,8 @@
+    -- add generation count to services that increments every time a pool is
+       switched.  this data is now stored on backends when they're spawned as
+       well, and when we allocate a backend we verify the generation so old ones
+       are thrown away.
+
     -- allow setting of nodefile on pools to 'none' or 'null' or 'undef' or just
        an empty set of quotes ("", '') in order to stop using node files
 
