@@ -257,6 +257,34 @@ sub set_version {
     return $self;
 }
 
+# using all available information, attempt to determine the content length of
+# the message body being sent to us.
+sub content_length {
+    my Perlbal::HTTPHeaders $self = shift;
+
+    # shortcuts depending on our method/code, depending on what we are
+    if ($self->{type} eq 'req') {
+        # no content length for head requests
+        return 0 if $self->{method} eq 'HEAD';
+    } elsif ($self->{type} eq 'res' || $self->{type} eq 'httpres') {
+        # no content length in any of these        
+        if ($self->{code} == 304 || $self->{code} == 204 ||
+            ($self->{code} >= 100 && $self->{code} <= 199)) {
+            return 0;
+        }
+    }
+
+    # the normal case for a GET/POST, etc.  real data coming back
+    # also, an OPTIONS requests generally has a defined but 0 content-length
+    if (defined(my $clen = $self->header("Content-Length"))) {
+        return $clen;
+    }
+
+    # if we get here, nothing matched, so we don't definitively know what the
+    # content length is.  this is usually an error, but we try to work around it.
+    return undef;
+}
+
 # logic for deciding to keep client connection open or not,
 # based on both client's advertised intent and version,
 # and whether or not the content we just sent to it had

@@ -298,21 +298,15 @@ sub event_read {
 
             my Perlbal::HTTPHeaders $rqhd = $self->{req_headers};
 
-            if ($rqhd->{method} eq "HEAD") {
-                # content-lengths coming back from HEAD requests aren't
-                # real.  there never is a message body.  just pass it
-                # back to the client and don't actually read what's not there
+            # setup our content length so we know how much data to expect, in general
+            # we want the content-length from the response, but if this was a head request
+            # we know it's a 0 length message the client wants
+            if ($rqhd->{method} eq 'HEAD') {
                 $self->{content_length} = 0;
-                $self->{content_length_remain} = 0;
-            } elsif (defined($self->{content_length} = $hd->header("Content-Length"))) {
-                # the normal case for a GET/POST, etc.  real data coming back
-                # also, an OPTIONS requests generally has a defined but 0 content-length
-                $self->{content_length_remain} = $self->{content_length};
-            } elsif ($hd->{code} == 304 || $hd->{code} == 204 || ($hd >= 100 && $hd <= 199)) {
-                # cases that will have no content-length
-                $self->{content_length} = 0;
-                $self->{content_length_remain} = 0;
+            } else {
+                $self->{content_length} = $hd->content_length;
             }
+            $self->{content_length_remain} = $self->{content_length} || 0;
 
             if (my $rep = $hd->header('X-REPROXY-FILE')) {
                 # make the client begin the async IO while we move on
@@ -354,7 +348,7 @@ sub event_read {
                     # order important:  next_request detaches us from client, so
                     # $client->close can't kill us
                     $self->next_request;
-                    $client->write(sub { $client->close; });
+                    $client->write(sub { $client->backend_finished; });
                 }
             }
         }
@@ -382,7 +376,7 @@ sub event_read {
                 # order important:  next_request detaches us from client, so
                 # $client->close can't kill us
                 $self->next_request;
-                $client->write(sub { $client->close; });
+                $client->write(sub { $client->backend_finished; });
             }
         }
         return;
@@ -394,7 +388,7 @@ sub event_read {
         $self->{client} = undef;    # .. and it from us
         $self->close('backend_disconnect'); # close ourselves
 
-        $client->write(sub { $client->close; });
+        $client->write(sub { $client->backend_finished; });
         return;
     }
 }

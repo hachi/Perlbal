@@ -12,6 +12,8 @@ use fields (
             'high_priority',       # boolean; 1 if we are or were in the high priority queue
             'reproxy_uris',        # arrayref; URIs to reproxy to, in order
             'reproxy_expected_size', # int: size of response we expect to get back for reproxy
+            'content_length_remain', # int: amount of data we're still waiting for
+            'responded',           # bool: whether we've already sent a response to the user or not
             );
 
 use constant READ_SIZE         => 4086;    # 4k, arbitrary
@@ -35,6 +37,9 @@ sub new {
 
     $self->{backend} = undef;
     $self->{high_priority} = 0;
+
+    $self->{responded} = 0;
+    $self->{content_length_remain} = undef;
 
     $self->{reproxy_uris} = undef;
     $self->{reproxy_expected_size} = undef;
@@ -227,6 +232,20 @@ sub backend {
     return $self->{backend} = $backend;
 }
 
+# called by the backend when it's done sending us stuff
+sub backend_finished {
+    my Perlbal::ClientProxy $self = shift;
+
+    # at this point we probably don't actually have a backend anymore.
+    # we should definitely mark ourselves as having responded to the
+    # user, and close if we have no content length remaining, else
+    # we should let the reader close us.
+    $self->{responded} = 1;
+    $self->close('backend_finished')
+        unless defined $self->{content_length_remain} &&
+                       $self->{content_length_remain};
+}
+
 # Client (overrides and calls super)
 sub close {
     my Perlbal::ClientProxy $self = shift;
@@ -255,6 +274,10 @@ sub event_write {
 
     $self->SUPER::event_write;
 
+    # obviously if we're writing the backend has processed our request
+    # and we are responding/have responded to the user, so mark it so
+    $self->{responded} = 1;
+
     # trigger our backend to keep reading, if it's still connected
     if (my $backend = $self->{backend}) {
         # figure out which maximum buffer size to use
@@ -277,6 +300,9 @@ sub event_read {
 
             return if $self->{service}->run_hook('start_proxy_request', $self);
 
+            # if defined we're waiting on some amount of data
+            $self->{content_length_remain} = $hd->content_length;
+
             $self->state('wait_backend');
             $self->{service}->request_backend_connection($self);
 
@@ -285,6 +311,14 @@ sub event_read {
         return;
     }
 
+    # if we have no content length remaining, ignore this notice
+    if (defined $self->{content_length_remain} && !$self->{content_length_remain}) {
+        $self->watch_read(0);
+        $self->close('responded_done_reading') if $self->{responded};
+        return;
+    }
+
+    # read data and send to backend (or buffer for later sending)
     if ($self->{read_ahead} < READ_AHEAD_SIZE) {
         my $bref = $self->read(READ_SIZE);
         my $backend = $self->backend;
@@ -297,6 +331,16 @@ sub event_read {
 
         my $len = length($$bref);
         $self->{read_size} += $len;
+        $self->{content_length_remain} -= $len
+            if defined $self->{content_length_remain};
+
+        # just dump the read into the nether if we're dangling. that is
+        # the case when we send the headers to the backend and it responds
+        # before we're done reading from the client; therefore further
+        # reads from the client just need to be sent nowhere, because the
+        # RFC2616 section 8.2.3 says: "the server SHOULD NOT close the
+        # transport connection until it has read the entire request"
+        return if $self->{responded};
 
         if ($backend) {
             $backend->write($bref);
@@ -306,7 +350,7 @@ sub event_read {
         }
 
     } else {
-
+        # our buffer is full, so turn off reads for now
         $self->watch_read(0);
     }
 }
@@ -323,6 +367,7 @@ sub as_string {
             if $self->{write_buf_size} > 0;
     }
     $ret .= "; highpri" if $self->{high_priority};
+    $ret .= "; responded" if $self->{responded};
 
     return $ret;
 }
