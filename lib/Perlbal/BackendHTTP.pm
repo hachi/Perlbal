@@ -62,7 +62,7 @@ sub new {
     $self->{port}    = $port;     # backend port
     $self->{ipport}  = "$ip:$port";  # often used as key
     $self->{service} = $svc;      # the service we're serving for
-    $self->{state}   = "connecting";
+    $self->state("connecting");
 
     # for header reading:
     $self->{headers} = undef;      # defined w/ headers object once all headers in
@@ -85,7 +85,7 @@ sub new {
 sub close {
     my Perlbal::BackendHTTP $self = shift;
     my $reason = shift;
-    $self->{state}   = "closed";
+    $self->state("closed");
 
     # tell our client that we're gone
     if (my $client = $self->{client}) {
@@ -106,7 +106,7 @@ sub assign_client {
     # set our client, and the client's backend to us
     $self->{service}->mark_node_used($self->{ipport});
     $self->{client} = $client;
-    $self->{state}   = "sending_req";
+    $self->state("sending_req");
     $self->{client}->backend($self);
 
     my Perlbal::HTTPHeaders $hds = $client->headers->clone;
@@ -125,15 +125,15 @@ sub assign_client {
     $hds->header("X-Forwarded-Host", undef);
 
     $self->tcp_cork(1);
-    $client->{state} = 'backend_req_sent';
+    $client->state('backend_req_sent');
     $self->write($hds->to_string_ref);
     $self->write(sub {
         $self->tcp_cork(0);
         if (my $client = $self->{client}) {
             # start waiting on a reply
             $self->watch_read(1);
-            $self->{state}   = "wait_res";
-            $client->{state} = 'wait_res';
+            $self->state("wait_res");
+            $client->state('wait_res');
             # make the client push its overflow reads (request body)
             # to the backend
             $client->drain_read_buf_to($self);
@@ -151,7 +151,7 @@ sub event_write {
     print "Backend $self is writeable!\n" if Perlbal::DEBUG >= 2;
 
     if (! $self->{client} && $self->{state} eq "connecting") {
-        $self->{state}   = "bored";
+        $self->state("bored");
         $self->{service}->register_boredom($self);
         $self->watch_write(0);
         return;
@@ -177,8 +177,8 @@ sub event_read {
 
     unless ($self->{headers}) {
         if (my $hd = $self->read_response_headers) {
-            $self->{state}   = "xfer_res";
-            $client->{state} = "xfer_res";
+            $self->state("xfer_res");
+            $client->state("xfer_res");
             $self->{has_attention} = 1;
 
             # RFC 2616, Sec 4.4: Messages MUST NOT include both a
@@ -295,7 +295,7 @@ sub next_request {
     $client->backend(undef) if $client;
     $self->{client} = undef;
 
-    $self->{state}   = "bored";
+    $self->state("bored");
     $self->watch_write(0);
 
     $self->{headers} = undef;

@@ -25,6 +25,11 @@ use constant MAX_HTTP_HEADER_LENGTH => 102400;  # 100k, arbitrary
 # time we last did a full connection sweep (O(n) .. lame)
 # and closed idle connections.
 our $last_cleanup = 0;
+our %state_changes = (); # { "objref" => [ state, state, state, ... ] }
+
+sub get_statechange_ref {
+    return \%state_changes;
+}
 
 sub new {
     my Perlbal::Socket $self = shift;
@@ -144,7 +149,9 @@ sub die_gracefully { }
 sub state {
     my Perlbal::Socket $self = shift;    
     return $self->{state} unless @_;
-    return $self->{state} = shift;
+
+    push @{$state_changes{"$self"} ||= []}, $_[0];
+    return $self->{state} = $_[0];
 }
 
 sub read_request_headers  { read_headers(@_, 0); }
@@ -156,6 +163,8 @@ sub as_string_html {
 }
 
 sub DESTROY {
+    my Perlbal::Socket $self = shift;
+    delete $state_changes{"$self"};
     Perlbal::objdtor();
 }
 

@@ -52,7 +52,7 @@ sub new {
 
     $self->{service} = $service;
     $self->{headers_string} = '';
-    $self->{state} = 'reading_headers';
+    $self->state('reading_headers');
 
     bless $self, ref $class || $class;
     $self->watch_read(1);
@@ -81,7 +81,7 @@ sub reproxy_fd {
     return $self->{reproxy_fd} unless @_;
 
     my ($fd, $size) = @_;
-    $self->{state} = 'xfer_disk';
+    $self->state('xfer_disk');
     $self->{reproxy_file_offset} = 0;
     $self->{reproxy_file_size} = $size;
     return $self->{reproxy_fd} = $fd;
@@ -152,7 +152,7 @@ sub _serve_request {
     my $file = $svc->{docroot} . $uri;
 
     # update state, since we're now waiting on stat
-    $self->{state} = 'wait_stat';
+    $self->state('wait_stat');
     
     Linux::AIO::aio_stat($file, sub {
         # client's gone anyway
@@ -185,7 +185,7 @@ sub _serve_request {
             }
 
             # state update
-            $self->{state} = 'wait_open';
+            $self->state('wait_open');
             
             Linux::AIO::aio_open($file, 0, 0, sub {
                 my $rp_fd = shift;
@@ -203,7 +203,7 @@ sub _serve_request {
                     return $self->close();
                 }
 
-                $self->{state} = 'xfer_disk';
+                $self->state('xfer_disk');
                 $self->tcp_cork(1);  # cork writes to self
                 $self->write($res->to_string_ref);
                 $self->reproxy_fd($rp_fd, $size);
@@ -231,7 +231,7 @@ sub _serve_request {
 
             $res->header("Content-Length", length($body));
 
-            $self->{state} = 'xfer_resp';
+            $self->state('xfer_resp');
             $self->tcp_cork(1);  # cork writes to self
             $self->write($res->to_string_ref);
             $self->write(\$body);
@@ -253,7 +253,7 @@ sub _simple_response {
     my $body = "<h1>$code" . ($en ? " - $en" : "") . "</h1>\n";
     $body .= $msg if $msg;
 
-    $self->{state} = 'xfer_resp';
+    $self->state('xfer_resp');
     $self->tcp_cork(1);  # cork writes to self
     $self->write($res->to_string_ref);
     $self->write(\$body);

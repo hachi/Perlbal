@@ -208,6 +208,20 @@ sub run_manage_command {
         return 1;
     }
 
+    if ($cmd =~ /^state changes$/) {
+        my $hr = Perlbal::Socket->get_statechange_ref;
+        my %final; # { "state" => count }
+        while (my ($obj, $arref) = each %$hr) {
+            $out->("$obj: " . join(', ', @$arref));
+            $final{$arref->[-1]}++;
+        }
+        foreach my $k (sort keys %final) {
+            $out->("$k $final{$k}");
+        }
+        $out->('.');
+        return 1;
+    }
+
     if ($cmd =~ /^show service (\w+)$/) {
         my $sname = $1;
         my Perlbal::Service $svc = $service{$sname};

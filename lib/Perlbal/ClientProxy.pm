@@ -42,7 +42,7 @@ sub start_reproxy_file {
     my Perlbal::HTTPHeaders $hd = shift;   # headers from backend, in need of cleanup
 
     # start an async stat on the file
-    $self->{state} = 'wait_stat';
+    $self->state('wait_stat');
     Linux::AIO::aio_stat($file, sub {
 
         # if the client's since disconnected by the time we get the stat,
@@ -70,7 +70,7 @@ sub start_reproxy_file {
             return;
         }
 
-        $self->{state} = 'wait_open';
+        $self->state('wait_open');
         Linux::AIO::aio_open($file, 0, 0 , sub {
             my $rp_fd = shift;
 
@@ -99,7 +99,7 @@ sub backend {
     return $self->{backend} unless @_;
 
     my $backend = shift;
-    $self->{state} = 'draining_res' unless $backend;
+    $self->state('draining_res') unless $backend;
     return $self->{backend} = $backend;
 }
 
@@ -143,7 +143,7 @@ sub event_read {
             print "Got headers!  Firing off new backend connection.\n"
                 if Perlbal::DEBUG >= 2;
 
-            $self->{state} = 'wait_backend';
+            $self->state('wait_backend');
             $self->{service}->request_backend_connection($self);
 
             $self->tcp_cork(1);  # cork writes to self
