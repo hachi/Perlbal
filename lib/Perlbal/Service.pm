@@ -25,6 +25,8 @@ use fields (
 	    'nodefile.lastcheck', # unix time nodefile was last stated
 	    'sendstats.listen',        # what IP/port the stats listener runs on
 	    'sendstats.listen.socket', # Perlbal::StatsListener object
+	    'docroot',            # document root for webserver role
+	    'dirindexing',        # bool: direcotry indexing?  (for webserver role)  not async.
 	    'listener'
 	    );
 
@@ -120,7 +122,7 @@ sub set {
 
     if ($key eq "role") {
 	return $err->("Unknown service role")
-	    unless $val eq "reverse_proxy" || $val eq "management";
+	    unless $val eq "reverse_proxy" || $val eq "management" || $val eq "web_server";
 	return $set->();
     }
 
@@ -153,6 +155,23 @@ sub set {
 	$self->{'nodefile.lastcheck'} = time;
 
 	return 1;
+    }
+
+    if ($key eq "docroot") {
+	return $err->("Can only set docroot on a web_server service")
+	    unless $self->{role} eq "web_server";
+	$val =~ s!/$!!;
+	return $err->("Directory not found")
+	    unless $val && -d $val;
+	return $set->();
+    }
+
+    if ($key eq "dirindexing") {
+	return $err->("Can only set dirindexing on a web_server service")
+	    unless $self->{role} eq "web_server";
+	return $err->("Expected value 0 or 1")
+	    unless $val eq '0' || $val eq '1';
+	return $set->();
     }
 
     if ($key =~ /^sendstats\./) {

@@ -29,6 +29,7 @@ use Perlbal::StatsListener;
 use Perlbal::Service;
 use Perlbal::ClientProxy;
 use Perlbal::BackendHTTP;
+use Perlbal::ClientHTTP;
 use Perlbal::ClientManage;
 
 $SIG{'PIPE'} = "IGNORE";  # handled manually

@@ -13,6 +13,23 @@ sub fail {
     return undef;
 }
 
+sub new_response {
+    my ($class, $code) = @_;
+
+    my $self = {
+	headers => {},      # lowercase header -> comma-sep list of values
+	origcase => {},     # lowercase header -> provided case
+	hdorder => [],      # order headers were received (canonical order)
+	method => undef,    # request method (if GET request)
+	uri => undef,       # request URI (if GET request)
+    };
+
+    $self->{responseLine} = "HTTP/1.0 $code HTTP/1.0";
+    $self->{code} = $code;
+
+    return bless $self, ref $class || $class;
+}
+
 sub new {
     my ($class, $hstr, $is_response) = @_;
     # hstr: headers as a string
@@ -27,6 +44,7 @@ sub new {
 	origcase => {},     # lowercase header -> provided case
 	hdorder => [],      # order headers were received (canonical order)
 	method => undef,    # request method (if GET request)
+	uri => undef,       # request URI (if GET request)
     };
 
     # check request line
@@ -46,6 +64,7 @@ sub new {
 	print "Method: [$method] URI: [$uri] Version: [$ver]\n" if Perlbal::DEBUG >= 1;
 	$self->{requestLine} = "$method $uri HTTP/1.0";
 	$self->{method} = $method;
+	$self->{uri} = $uri;
     }
 
     my $last_header = undef;
@@ -83,6 +102,11 @@ sub new {
 sub request_method {
     my $self = shift;
     return $self->{method};
+}
+
+sub request_uri {
+    my $self = shift;
+    return $self->{uri};
 }
 
 sub header {

@@ -50,6 +50,8 @@ sub event_read {
 	    Perlbal::ClientProxy->new($self->{service}, $psock);
 	} elsif ($service_role eq "management") {
 	    Perlbal::ClientManage->new($self->{service}, $psock);
+	} elsif ($service_role eq "web_server") {
+	    Perlbal::ClientHTTP->new($self->{service}, $psock);
 	}
     }
 
