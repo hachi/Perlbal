@@ -1,3 +1,7 @@
+    -- fixed a crash caused by calling getsockname/getpeername on sockets
+       that have been undefined after having been stolen during an internal
+       redirect to another webserver
+
     -- fixed _simple_response to not return a body if we're serving
        to a HEAD request
 

@@ -401,9 +401,10 @@ sub event_hup {  my $self = shift; $self->close('hup'); }
 sub as_string {
     my Perlbal::ClientHTTPBase $self = shift;
 
-    my $name = getsockname($self->{sock});
+    my $ret = $self->SUPER::as_string;
+    my $name = $self->{sock} ? getsockname($self->{sock}) : undef;
     my $lport = $name ? (Socket::sockaddr_in($name))[0] : undef;
-    my $ret = $self->SUPER::as_string . ": localport=$lport";
+    $ret .= ": localport=$lport" if $lport;
     $ret .= "; reqs=$self->{requests}";
     $ret .= "; $self->{state}";
 
