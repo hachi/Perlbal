@@ -320,8 +320,11 @@ sub event_read {
                 # if we had an alternate primary response header, make sure
                 # we send the real content-length (from the reproxied URL)
                 # and not the one the first server gave us
-                $thd->header('Content-Length', $hd->header('Content-Length'))
-                    if $self->{primary_res_headers};
+                if ($self->{primary_res_headers}) {
+                    $thd->header('Content-Length', $hd->header('Content-Length'));
+                    $thd->header('X-REPROXY-FILE', undef);
+                    $thd->header('X-REPROXY-URL', undef);
+                }
 
                 $client->write($thd->to_string_ref);
 
