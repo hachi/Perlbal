@@ -43,6 +43,9 @@ sub start_reproxy_file {
     my $file = shift;                      # filename to reproxy
     my Perlbal::HTTPHeaders $hd = shift;   # headers from backend, in need of cleanup
 
+    # call hook for pre-reproxy
+    return if $self->{service}->run_hook("start_file_reproxy", $self, \$file);
+
     # start an async stat on the file
     $self->state('wait_stat');
     Linux::AIO::aio_stat($file, sub {
@@ -110,11 +113,13 @@ sub backend {
     return $self->{backend} = $backend;
 }
 
-
 # Client (overrides and calls super)
 sub close {
     my Perlbal::ClientProxy $self = shift;
     my $reason = shift;
+
+    # signal that we're done
+    $self->{service}->run_hooks('end_proxy_request', $self);
 
     # kill our backend if we still have one
     if (my $backend = $self->{backend}) {
@@ -149,6 +154,8 @@ sub event_read {
         if (my $hd = $self->read_request_headers) {
             print "Got headers!  Firing off new backend connection.\n"
                 if Perlbal::DEBUG >= 2;
+
+            return if $self->{service}->run_hook('start_proxy_request', $self);
 
             $self->state('wait_backend');
             $self->{service}->request_backend_connection($self);

@@ -47,6 +47,10 @@ use fields (
             'persist_backend', # bool: persistent connections for backends
             'verify_backend',  # bool: get attention of backend before giving it clients (using OPTIONS)
             'max_backend_uses',  # max requests to send per kept-alive backend (default 0 = unlimited)
+            'hooks',    # hashref: hookname => [ [ plugin, ref ], [ plugin, ref ], ... ]
+            'plugins',  # hashref: name => 1
+            'plugin_order', # arrayref: name, name, name...
+            'extra_config', # hashref: extra config options; name => values
             );
 
 sub new {
@@ -66,6 +70,10 @@ sub new {
 
     $self->{nodes} = [];   # no configured nodes
 
+    $self->{hooks} = {};
+    $self->{plugins} = {};
+    $self->{plugin_order} = [];
+
     # track pending connects to backend
     $self->{pending_connects} = {};
     $self->{pending_connect_count} = 0;
@@ -78,6 +86,66 @@ sub new {
     $self->{waiting_client_count} = 0;
 
     return $self;
+}
+
+# run the hooks in a list one by one until one hook returns 1.  returns
+# 1 or 0 depending on if any hooks handled the request.
+sub run_hook {
+    my Perlbal::Service $self = shift;
+    my $hook = shift;
+    if (defined (my $ref = $self->{hooks}->{$hook})) {
+        # call all the hooks until one returns true
+        foreach my $hookref (@$ref) {
+            my $rval = $hookref->[1]->(@_);
+            return 1 if defined $rval && $rval;
+        }
+    }
+    return 0;
+}
+
+# run a bunch of hooks in this service, always returns undef.
+sub run_hooks {
+    my Perlbal::Service $self = shift;
+    my $hook = shift;
+    if (defined (my $ref = $self->{hooks}->{$hook})) {
+        # call all the hooks
+        $_->[1]->(@_) foreach @$ref;
+    }
+    return undef;
+}
+
+# define a hook for this service
+sub register_hook {
+    my Perlbal::Service $self = shift;
+    my ($pclass, $hook, $ref) = @_;
+    push @{$self->{hooks}->{$hook} ||= []}, [ $pclass, $ref ];
+    return 1;
+}
+
+# remove hooks we have defined
+sub unregister_hook {
+    my Perlbal::Service $self = shift;
+    my ($pclass, $hook) = @_;
+    if (defined (my $refs = $self->{hooks}->{$hook})) {
+        my @new;
+        foreach my $ref (@$refs) {
+            # fill @new with hooks that DON'T match
+            push @new, $ref
+                unless $ref->[0] eq $pclass;
+        }
+        $self->{hooks}->{$hook} = \@new;
+        return 1;
+    }
+    return undef;
+}
+
+# remove all hooks of a certain class
+sub unregister_hooks {
+    my Perlbal::Service $self = shift;
+    foreach my $hook (keys %{$self->{hooks}}) {
+        # call unregister_hook with this hook name
+        $self->unregister_hook($_[0], $hook);        
+    }
 }
 
 # returns string of balance method
@@ -530,6 +598,45 @@ sub set {
             $self->populate_sendstats_hosts;
         }
         return $set->();
+    }
+
+    if ($key eq 'plugins') {
+        # unload existing plugins
+        foreach my $plugin (keys %{$self->{plugins}}) {
+            eval "Perlbal::Plugin::$plugin->unregister(\$self);";
+            return $err->($@) if $@;
+        }
+        
+        # clear out loaded plugins and hooks
+        $self->{hooks} = {};
+        $self->{plugins} = {};
+        $self->{plugin_order} = [];
+        
+        # load some plugins
+        foreach my $plugin (split /[\s,]+/, $val) {
+            next if $plugin eq 'none';
+
+            # since we lowercase our input, uppercase the first character here
+            my $fn = uc($1) . lc($2) if $plugin =~ /^(.)(.*)$/;
+            next if $self->{plugins}->{$fn};
+            unless ($Perlbal::plugins{$fn}) {
+                $err->("Plugin $fn not loaded; not registered for $self->{name}.");
+                next;
+            }
+
+            # now register it
+            eval "Perlbal::Plugin::$fn->register(\$self);";
+            $self->{plugins}->{$fn} = 1;
+            push @{$self->{plugin_order}}, $fn;
+            return $err->($@) if $@;
+        }
+        return 1;
+    }
+
+    if ($key =~ /^extra\.(.+)$/) {
+        # set some extra configuration data data
+        $self->{extra_config}->{$1} = $val;
+        return 1;
     }
 
     return $err->("Unknown attribute '$key'");

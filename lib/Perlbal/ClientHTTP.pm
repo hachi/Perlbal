@@ -26,6 +26,9 @@ sub event_read {
     my $hd = $self->read_request_headers;
     return unless $hd;
 
+    # notify that we're about to serve
+    return if $self->{service}->run_hook('start_web_request', $self);
+
     # and once we have it, start serving
     $self->watch_read(0);
     return $self->_serve_request($hd);

@@ -1,0 +1,88 @@
+Perlbal Hooks --
+
+                            -- INTRODUCTION --
+
+Basically, a hook is a bit of code that is run at certain stages in the
+requests that Perlbal handles.  There are all kinds of hooks available and
+they all do different things.  Some are only applicable to some of the
+roles and others are applicable only to certain classes.  Each hook is
+described in detail below, but first a description of the basics of a hook.
+
+In general, you define a hook by calling the "register_hook" method on a
+Perlbal::Service object.  You specify what hook you are interested in and
+provide a reference to a subroutine that will be called with the parameters
+particular to that hook.
+
+There are three types of hooks:
+
+--- Global hooks
+These are hooks that are defined on a global scale.  They are set like so:
+
+    Perlbal::register_global_hook('foo', sub { return 0; });
+
+That would define a global hook named foo that would return 0 when it's
+called.  (Return codes from hooks will be explained below.)
+
+--- Service handler hooks
+A handler hook is attached to a particular service.  These hooks are called
+one at a time, starting from the top of the hook list on a service, until
+one hook returns 1.  At that point, no further hooks are called.  For
+example:
+
+    $service->register_hook('bar', sub {
+        # do something
+        return 1;
+    });
+
+When this hook runs, it would return 1, signalling to Perlbal that it had
+done what it needed to do and that Perlbal shouldn't call any further
+hooks.  You can use this type of hook to create sets of plugins that all
+handle different types of requests, and when one hook had handled a request
+it wouldn't continue telling other hooks about the request.
+
+--- Service general hooks
+These hooks are defined the same way as above, but general hooks are all
+run.  The return code is ignored.  This can be useful for putting in code
+that records statistics about an action or something to that effect.
+
+
+                               -- HOOKS --
+
+The following hooks are defined in the Perlbal distribution:
+
+GENERAL     end_proxy_request           Perlbal::ClientProxy
+This hook is called when the ClientProxy object is being closed.
+
+HANDLER     start_proxy_request         Perlbal::ClientProxy
+Called as soon as we've read in headers from a user but right before we've
+requested a backend connection.  If a true value is returned, Perlbal will
+not request a backend.
+
+HANDLER     start_file_reproxy          Perlbal::ClientProxy, $filename_ref
+Called when we've been told to reproxy a file.  If you return a true
+value, Perlbal will not perform any operations on the file and will simply
+return.  You can also change the file in the scalar ref passed as the
+second parameter.
+
+HANDLER     backend_client_assigned     Perlbal::BackendHTTP
+Happens right after a backend is given a client, but before we've talked to
+the backend and asked it to do something.  If you return a true value, the
+process is stopped and you will manually have to send the client's request
+to the backend, etc.
+
+HANDLER     start_web_request           Perlbal::ClientHTTP
+When a 'web' service has gotten headers and is about to serve it... return
+a true value to cancel the default handling of web requests.
+
+HANDLER     start_send_file             Perlbal::ClientHTTPBase
+Called when we've opened a file and are about to start sending it to the
+user using sendfile.  Return a true value to cancel the default sending.
+
+HANDLER     start_serve_request         Perlbal::ClientHTTPBase, $uri_ref
+Called when we're about to serve a local file, before we've done any
+work.  You can change the file served by modifying $uri_ref, and cancel the
+process by returning a true value.
+
+HANDLER     backend_response_received   Perlbal::BackendHTTP
+Called as soon as response headers are read from the backend.  If you
+return a true value, will stop all handling at that point.

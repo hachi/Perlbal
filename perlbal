@@ -38,7 +38,9 @@ use Perlbal::BackendHTTP;
 
 $SIG{'PIPE'} = "IGNORE";  # handled manually
 
+our(%hooks);     # hookname => subref
 our(%service);   # servicename -> Perlbal::Service
+our(%plugins);   # plugin => 1 (shows loaded plugins)
 our($last_error);
 
 sub error {
@@ -63,6 +65,22 @@ sub objdtor {
         $caller .= "-$_[0]" if $_[0];
         $ObjCount{$caller}--;
     }
+}
+
+sub register_global_hook {
+    $hooks{$_[0]} = $_[1];
+    return 1;
+}
+
+sub unregister_global_hook {
+    delete $hooks{$_[0]};
+    return 1;
+}
+
+sub run_global_hook {
+    my $ref = $hooks{$_[0]};
+    return $ref->(@_) if defined $ref;
+    return undef;
 }
 
 sub service_names {
@@ -341,6 +359,33 @@ sub run_manage_command {
         return $svc->$verb($out);
     }
 
+    if ($cmd =~ /^(un)?load (\w+)$/) {
+        my $un = $1 ? $1 : '';
+        my $fn = $2;
+        if (length $fn) {
+            # since we lowercase our input, uppercase the first character here
+            $fn = uc($1) . lc($2) if $fn =~ /^(.)(.*)$/;
+            eval "use Perlbal::Plugin::$fn; Perlbal::Plugin::$fn->${un}load;";
+            return $err->($@) if $@;
+            $plugins{$fn} = $un ? 0 : 1;
+        }
+        return 1;
+    }
+
+    if ($cmd =~ /^plugins$/) {
+        foreach my $svc (values %service) {
+            next unless @{$svc->{plugin_order}};
+            $out->(join(' ', $svc->{name}, @{$svc->{plugin_order}}));
+        }
+        $out->('.');
+        return 1;
+    }
+
+    # call any hooks if they've been defined
+    my $lcmd = $cmd =~ /^(.+?)\s+/ ? $1 : $cmd;
+    my $rval = run_global_hook("manage_command.$lcmd", $cmd);
+    return $out->($rval, '.') if defined $rval;
+
     return $err->("unknown command: $cmd");
 }
 
@@ -399,7 +444,9 @@ my $default_config = "/etc/perlbal/perlbal.conf";
 $opt_config = $default_config if ! $opt_config && -e $default_config;
 
 # load user config
-load_config($opt_config, sub { print STDOUT "$_[0]\n"; }) if $opt_config;
+load_config($opt_config, sub { 
+    print STDOUT join("\n", map { ref $_ eq 'ARRAY' ? @$_ : $_ } @_) . "\n";
+}) if $opt_config;
 
 unless (Perlbal::Socket->WatchedSockets() > 0) {
     die "No services or management port configured.  Nothing to do.  Stopping.\n";

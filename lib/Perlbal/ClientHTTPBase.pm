@@ -16,6 +16,7 @@ use fields ('service',             # Perlbal::Service object
             'reproxy_file',        # filename the backend told us to start opening
             'reproxy_file_size',   # size of file, once we stat() it
             'reproxy_fd',          # integer fd of reproxying file, once we open() it
+            'reproxy_fh',          # if needed, IO::Handle of fd
             'reproxy_file_offset', # how much we've sent from the file.
             );
 
@@ -70,6 +71,15 @@ sub close {
     $self->SUPER::close($reason);
 }
 
+sub reproxy_fh {
+    my Perlbal::ClientHTTPBase $self = shift;
+    unless (defined $self->{reproxy_fh}) {
+        $self->{reproxy_fh} = IO::Handle->new_from_fd($self->{reproxy_fd}, 'r')
+            if $self->{reproxy_fd};
+    }
+    return $self->{reproxy_fh};
+}
+
 sub reproxy_fd {
     my Perlbal::ClientHTTPBase $self = shift;
     return $self->{reproxy_fd} unless @_;
@@ -78,7 +88,14 @@ sub reproxy_fd {
     $self->state('xfer_disk');
     $self->{reproxy_file_offset} = 0;
     $self->{reproxy_file_size} = $size;
-    return $self->{reproxy_fd} = $fd;
+    $self->{reproxy_fd} = $fd;
+    
+    # call hook that we're reproxying a file
+    return $fd if $self->{service}->run_hook("start_send_file", $self);
+
+    # turn on writes (the hook might not have wanted us to)    
+    $self->watch_write(1);
+    return $fd;
 }
 
 sub event_write {
@@ -111,6 +128,7 @@ sub event_write {
             my $rv = POSIX::close($self->{reproxy_fd});
             
             $self->{reproxy_fd} = undef;
+            $self->{reproxy_fh} = undef;
             $self->close("sendfile_done");
         }
         return;
@@ -143,6 +161,10 @@ sub _serve_request {
     }
 
     my Perlbal::Service $svc = $self->{service};
+
+    # start_serve_request hook
+    return 1 if $self->{service}->run_hook('start_serve_request', $self, \$uri);
+    
     my $file = $svc->{docroot} . $uri;
 
     # update state, since we're now waiting on stat
@@ -201,7 +223,6 @@ sub _serve_request {
                 $self->tcp_cork(1);  # cork writes to self
                 $self->write($res->to_string_ref);
                 $self->reproxy_fd($rp_fd, $size);
-                $self->watch_write(1);
             });
 
         } elsif (-d _) {

@@ -139,6 +139,9 @@ sub assign_client {
     $self->{content_length} = undef;
     $self->{content_length_remain} = undef;
 
+    # run hooks
+    return 1 if $self->{service}->run_hook('backend_client_assigned', $self);
+
     $self->write($hds->to_string_ref);
     $self->write(sub {
         $self->tcp_cork(0);
@@ -247,6 +250,10 @@ sub event_read {
 
     unless ($self->{res_headers}) {
         if (my $hd = $self->read_response_headers) {
+            # call hook
+            return if $self->{service}->run_hook('backend_response_received', $self);
+
+            # standard handling
             $self->state("xfer_res");
             $client->state("xfer_res");
             $self->{has_attention} = 1;
