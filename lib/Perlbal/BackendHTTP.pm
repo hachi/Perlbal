@@ -393,7 +393,8 @@ sub next_request {
     my Perlbal::BackendHTTP $self = shift;
 
     my $hd = $self->{res_headers};  # response headers
-    unless ($self->{service}{persist_backend} &&
+    unless (defined $self->{service} &&
+            $self->{service}{persist_backend} &&
             $hd->header("Connection") =~ /\bkeep-alive\b/i) {
         return $self->close;
     }
@@ -481,7 +482,7 @@ sub as_string {
         $ret .= "; client=$cp->{fd}";
     }
     $ret .= "; uses=$self->{use_count}; $self->{state}";
-    if ($self->{service}->{verify_backend}) {
+    if (defined $self->{service} && $self->{service}->{verify_backend}) {
         $ret .= "; has_attention=";
         $ret .= $self->{has_attention} ? 'yes' : 'no';
     }
