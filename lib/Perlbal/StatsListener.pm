@@ -6,14 +6,14 @@ package Perlbal::StatsListener;
 use strict;
 use base "Perlbal::Socket";
 use fields ('service',  # Perlbal::Service,
-	    'pos',           # index in ring.  this index has an empty value in it
-	                     # entries before it are good
-	    'message_ring',  # arrayref of UDP messages, unparsed
-	    'from_ring',     # arrayref of from addresses
-	    'hostinfo',      # hashref of ip (4 bytes) -> [ $free, $active ] (or undef)
-	    'total_free',    # int scalar: free listeners
-	    'need_parse',    # hashref:  ip -> pos
-	    );
+            'pos',           # index in ring.  this index has an empty value in it
+                             # entries before it are good
+            'message_ring',  # arrayref of UDP messages, unparsed
+            'from_ring',     # arrayref of from addresses
+            'hostinfo',      # hashref of ip (4 bytes) -> [ $free, $active ] (or undef)
+            'total_free',    # int scalar: free listeners
+            'need_parse',    # hashref:  ip -> pos
+            );
 
 sub new {
     my $class = shift;
@@ -23,12 +23,12 @@ sub new {
     my $sock = IO::Socket::INET->new(
                                      LocalAddr => $hostport,
                                      Proto => 'udp',
-				     ReuseAddr => 1,
+                                     ReuseAddr => 1,
                                      Blocking => 0,
                                      );
 
     return Perlbal::error("Error creating listening socket: $!")
-	unless $sock;
+        unless $sock;
     $sock->sockopt(Socket::SO_BROADCAST, 1);
     $sock->blocking(0);
 
@@ -56,21 +56,21 @@ sub event_read {
     my ($port, $iaddr);
 
     while (my $from = $sock->recv($self->{message_ring}[$self->{pos}], 1024)) {
-	# set the from just to the 4 byte IP address
-	($port, $from) = Socket::sockaddr_in($from);
+        # set the from just to the 4 byte IP address
+        ($port, $from) = Socket::sockaddr_in($from);
 
-	$self->{from_ring}[$self->{pos}] = $from;
+        $self->{from_ring}[$self->{pos}] = $from;
 
-	# new message from host $from, so clear its cached data
-	if (exists $self->{hostinfo}{$from}) {
-	    if (my $hi = $self->{hostinfo}{$from}) {
-		$self->{total_free} -= $hi->[0];
-	    }
-	    $self->{hostinfo}{$from} = undef;
-	    $self->{need_parse}{$from} = $self->{pos};
-	}
+        # new message from host $from, so clear its cached data
+        if (exists $self->{hostinfo}{$from}) {
+            if (my $hi = $self->{hostinfo}{$from}) {
+                $self->{total_free} -= $hi->[0];
+            }
+            $self->{hostinfo}{$from} = undef;
+            $self->{need_parse}{$from} = $self->{pos};
+        }
 
-	$self->{pos} = 0 if ++$self->{pos} == $ring_size;
+        $self->{pos} = 0 if ++$self->{pos} == $ring_size;
     }
 }
 
@@ -79,12 +79,12 @@ sub get_endpoint {
 
     # catch up on our parsing
     while (my ($from, $pos) = each %{$self->{need_parse}}) {
-	# make sure this position still corresponds to that host
-	next unless $from eq $self->{from_ring}[$pos];
-	next unless $self->{message_ring}[$pos] =~
-	    m!^bcast_ver=1\nfree=(\d+)\nactive=(\d+)\n$!;
-	$self->{hostinfo}{$from} = [ $1, $2 ];
-	$self->{total_free} += $1;
+        # make sure this position still corresponds to that host
+        next unless $from eq $self->{from_ring}[$pos];
+        next unless $self->{message_ring}[$pos] =~
+            m!^bcast_ver=1\nfree=(\d+)\nactive=(\d+)\n$!;
+        $self->{hostinfo}{$from} = [ $1, $2 ];
+        $self->{total_free} += $1;
     }
     $self->{need_parse} = {};
 
@@ -96,15 +96,15 @@ sub get_endpoint {
     # find the winner
     my $count = 0;
     while (my ($from, $hi) = each %{$self->{hostinfo}}) {
-	next unless $hi;
-	$count += $hi->[0];  # increment free
+        next unless $hi;
+        $count += $hi->[0];  # increment free
 
-	if ($count >= $winner) {
-	    my $ip = Socket::inet_ntoa($from);
-	    $hi->[0]--;
-	    $self->{total_free}--;
-	    return ($ip, 80);
-	}
+        if ($count >= $winner) {
+            my $ip = Socket::inet_ntoa($from);
+            $hi->[0]--;
+            $self->{total_free}--;
+            return ($ip, 80);
+        }
     }
 
     # guess we couldn't find anything
@@ -121,9 +121,9 @@ sub set_hosts {
     # make each provided host known, but undef (meaning
     # its ring data hasn't been parsed)
     foreach my $dq (@hosts) {
-	# converted dotted quad to packed format
-	my $pd = Socket::inet_aton($dq);
-	$self->{hostinfo}{$pd} = undef;
+        # converted dotted quad to packed format
+        my $pd = Socket::inet_aton($dq);
+        $self->{hostinfo}{$pd} = undef;
     }
 }
 
@@ -131,3 +131,10 @@ sub event_err { }
 sub event_hup { }
 
 1;
+
+
+# Local Variables:
+# mode: perl
+# c-basic-indent: 4
+# indent-tabs-mode: nil
+# End:

@@ -21,7 +21,7 @@ sub new {
                                      );
 
     return Perlbal::error("Error creating listening socket: $!")
-	unless $sock;
+        unless $sock;
 
     my $self = $class->SUPER::new($sock);
     $self->{service} = $service;
@@ -36,25 +36,32 @@ sub event_read {
 
     # accept as many connections as we can
     while (my ($psock, $peeraddr) = $self->{sock}->accept) {
-	my $service_role = $self->{service}->role;
+        my $service_role = $self->{service}->role;
 
-	if (Perlbal::DEBUG >= 1) {
-	    my ($pport, $pipr) = Socket::sockaddr_in($peeraddr);
-	    my $pip = Socket::inet_ntoa($pipr);
-	    print "Got new conn: $psock ($pip:$pport) for $service_role\n";
-	}
+        if (Perlbal::DEBUG >= 1) {
+            my ($pport, $pipr) = Socket::sockaddr_in($peeraddr);
+            my $pip = Socket::inet_ntoa($pipr);
+            print "Got new conn: $psock ($pip:$pport) for $service_role\n";
+        }
 
-	IO::Handle::blocking($psock, 0);
+        IO::Handle::blocking($psock, 0);
 
-	if ($service_role eq "reverse_proxy") {
-	    Perlbal::ClientProxy->new($self->{service}, $psock);
-	} elsif ($service_role eq "management") {
-	    Perlbal::ClientManage->new($self->{service}, $psock);
-	} elsif ($service_role eq "web_server") {
-	    Perlbal::ClientHTTP->new($self->{service}, $psock);
-	}
+        if ($service_role eq "reverse_proxy") {
+            Perlbal::ClientProxy->new($self->{service}, $psock);
+        } elsif ($service_role eq "management") {
+            Perlbal::ClientManage->new($self->{service}, $psock);
+        } elsif ($service_role eq "web_server") {
+            Perlbal::ClientHTTP->new($self->{service}, $psock);
+        }
     }
 
 }
 
 1;
+
+
+# Local Variables:
+# mode: perl
+# c-basic-indent: 4
+# indent-tabs-mode: nil
+# End:

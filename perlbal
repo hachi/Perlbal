@@ -55,50 +55,50 @@ sub run_manage_command {
     $out ||= sub {};
 
     my $err = sub {
-	$out->("ERROR: $_[0]");
-	return 0;
+        $out->("ERROR: $_[0]");
+        return 0;
     };
 
     if ($cmd =~ /^server (\w+) ?= ?(.+)$/) {
-	my ($key, $val) = ($1, $2);
-	return $err->("Expected numeric parameter") unless $val =~ /^\d+$/;
+        my ($key, $val) = ($1, $2);
+        return $err->("Expected numeric parameter") unless $val =~ /^\d+$/;
 
-	if ($key eq "max_connections") {
-	    my ($nowsoft, $nowhard)  = getrlimit(RLIMIT_NOFILE);
-	    $out->("WAS: ($nowsoft, $nowhard)");
+        if ($key eq "max_connections") {
+            my ($nowsoft, $nowhard)  = getrlimit(RLIMIT_NOFILE);
+            $out->("WAS: ($nowsoft, $nowhard)");
 
-	    unless ($> == 0) {
-		$out->("ERROR: need to be root to increase max connections");
-	    }
-	} elsif ($key eq "aio_threads") {
-	    
-	}
+            unless ($> == 0) {
+                $out->("ERROR: need to be root to increase max connections");
+            }
+        } elsif ($key eq "aio_threads") {
 
-	#my $rv = setrlimit(RLIMIT_NOFILE, 10_000, 10_000);
-	#print "setrlimit = $rv\n";
-	return 1;
+        }
+
+        #my $rv = setrlimit(RLIMIT_NOFILE, 10_000, 10_000);
+        #print "setrlimit = $rv\n";
+        return 1;
     }
 
     if ($cmd =~ /^create service (\w+)$/) {
-	my $name = $1;
-	return $err->("service '$name' already exists") if $service{$name};
-	$service{$name} = Perlbal::Service->new($name);
-	return 1;
+        my $name = $1;
+        return $err->("service '$name' already exists") if $service{$name};
+        $service{$name} = Perlbal::Service->new($name);
+        return 1;
     }
 
     if ($cmd =~ /^show service$/) {
-	foreach my $name (sort keys %service) {
-	    my $svc = $service{$name};
-	    $out->("$name $svc->{listen} " . ($svc->{enabled} ? "ENABLED" : "DISABLED"));
-	}
-	return 1;
+        foreach my $name (sort keys %service) {
+            my $svc = $service{$name};
+            $out->("$name $svc->{listen} " . ($svc->{enabled} ? "ENABLED" : "DISABLED"));
+        }
+        return 1;
     }
 
     if ($cmd =~ /^set (\w+)\.([\w\.]+) ?= ?(.+)$/) {
-	my ($name, $key, $val) = ($1, $2, $3);
-	my $svc = $service{$name};
-	return $err->("service '$name' does not exist") unless $svc;
-	return $svc->set($key, $val, $out);
+        my ($name, $key, $val) = ($1, $2, $3);
+        my $svc = $service{$name};
+        return $err->("service '$name' does not exist") unless $svc;
+        return $svc->set($key, $val, $out);
     }
 
     if ($cmd =~ /^(disable|enable) (\w+)$/) {
@@ -115,7 +115,7 @@ sub load_config {
     my ($file, $writer) = @_;
     open (F, $file) or die "Error opening config file ($file): $!\n";
     while (<F>) {
-	return 0 unless run_manage_command($_, $writer);
+        return 0 unless run_manage_command($_, $writer);
     }
     close(F);
     return 1;
@@ -129,7 +129,7 @@ sub daemonize {
 
     ## Detach ourselves from the terminal
     croak "Cannot detach from controlling terminal"
-	unless $sess_id = POSIX::setsid();
+        unless $sess_id = POSIX::setsid();
 
     ## Prevent possibility of acquiring a controling terminal
     $SIG{'HUP'} = 'IGNORE';
@@ -157,10 +157,10 @@ my $opt_manage;
 my $opt_config;
 exit 1 unless
     Getopt::Long::GetOptions(
-	       'daemon' => \$opt_daemonize,
-	       'config=s' => \$opt_config,
-	       'manage=s' => \$opt_manage,
-	       );
+               'daemon' => \$opt_daemonize,
+               'config=s' => \$opt_config,
+               'manage=s' => \$opt_manage,
+               );
 
 my $default_config = "/etc/perlbal/perlbal.conf";
 $opt_config = $default_config if ! $opt_config && -e $default_config;
@@ -193,3 +193,10 @@ Perlbal::Socket->wait_loop();
 
 
 1;
+
+
+# Local Variables:
+# mode: perl
+# c-basic-indent: 4
+# indent-tabs-mode: nil
+# End:

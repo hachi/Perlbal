@@ -22,10 +22,10 @@ sub new {
     socket $sock, PF_INET, SOCK_STREAM, IPPROTO_TCP;
 
     unless ($sock) {
-	print STDERR "Error creating socket: $!\n";
-	return undef;
+        print STDERR "Error creating socket: $!\n";
+        return undef;
     }
-    
+
     IO::Handle::blocking($sock, 0);
     connect $sock, Socket::sockaddr_in($port, Socket::inet_aton($ip));
 
@@ -58,7 +58,7 @@ sub close {
 
     # tell our client that we're gone
     if (my $client = $self->{client}) {
-	$client->backend(undef);
+        $client->backend(undef);
     }
 
     $self->SUPER::close($reason);
@@ -71,29 +71,29 @@ sub event_write {
 
     my $done;
     unless ($self->{req_sent}++) {
-	my $hds = $self->{client}->headers;
+        my $hds = $self->{client}->headers;
 
-	# FIXME: make this conditional
-	$hds->header("X-Proxy-Capabilities", "reproxy-file");
+        # FIXME: make this conditional
+        $hds->header("X-Proxy-Capabilities", "reproxy-file");
 
-	$self->tcp_cork(1);
-	$done = $self->write($hds->to_string_ref);
-	$self->write(sub { 
-	    $self->tcp_cork(0);
-	    if (my $client = $self->{client}) {
-		# make the client push its overflow reads (request body)
-		# to the backend
-		$client->drain_read_buf_to($self);
-		# and start watching for more reads
-		$client->watch_read(1);
-	    }
-	});
+        $self->tcp_cork(1);
+        $done = $self->write($hds->to_string_ref);
+        $self->write(sub {
+            $self->tcp_cork(0);
+            if (my $client = $self->{client}) {
+                # make the client push its overflow reads (request body)
+                # to the backend
+                $client->drain_read_buf_to($self);
+                # and start watching for more reads
+                $client->watch_read(1);
+            }
+        });
     }
-    
+
     $done = $self->write(undef);
     if ($done) {
-	$self->watch_read(1);
-	$self->watch_write(0);
+        $self->watch_read(1);
+        $self->watch_write(0);
     }
 }
 
@@ -105,49 +105,49 @@ sub event_read {
     my Perlbal::ClientProxy $client = $self->{client};
 
     unless ($self->{headers}) {
-	if (my $hd = $self->read_response_headers) {
+        if (my $hd = $self->read_response_headers) {
 
-	    if (my $rep = $hd->header('X-REPROXY-FILE')) {
-		# make the client begin the async IO and reproxy
-		# process while we detach and die
-		$client->start_reproxy_file($rep, $hd);
-		$client->backend(undef);    # disconnect ourselves from it
+            if (my $rep = $hd->header('X-REPROXY-FILE')) {
+                # make the client begin the async IO and reproxy
+                # process while we detach and die
+                $client->start_reproxy_file($rep, $hd);
+                $client->backend(undef);    # disconnect ourselves from it
 
-		$self->{client} = undef;    # .. and it from us
-		$self->close;               # close ourselves
-		return;
-	    } else {
-		$client->write($hd->to_string_ref);
-		$self->drain_read_buf_to($client);
-	    }
-	}
-	return;
+                $self->{client} = undef;    # .. and it from us
+                $self->close;               # close ourselves
+                return;
+            } else {
+                $client->write($hd->to_string_ref);
+                $self->drain_read_buf_to($client);
+            }
+        }
+        return;
     }
 
     # if our client's 250k behind, stop buffering
     # FIXME: constant
-    if ($client->{write_buf_size} > 256_000) { 
-	$self->watch_read(0);
-	return;
+    if ($client->{write_buf_size} > 256_000) {
+        $self->watch_read(0);
+        return;
     }
 
     my $bref = $self->read(BACKEND_READ_SIZE);
 
     if (defined $bref) {
-	$client->write($bref);
-	return;
+        $client->write($bref);
+        return;
     } else {
-	# backend closed
-	print "Backend $self is done; closing...\n" if Perlbal::DEBUG >= 1;
-	
-	$client->backend(undef);    # disconnect ourselves from it
-	$self->{client} = undef;    # .. and it from us
-	$self->close;               # close ourselves
-	
-	$client->write(sub { $client->tcp_cork(0); });
-	$client->all_sent(1);      # tell our old client it has everything it needs
-	$client->watch_write(1);   # and kick-start it into writing (or shutting down)
-	return;
+        # backend closed
+        print "Backend $self is done; closing...\n" if Perlbal::DEBUG >= 1;
+
+        $client->backend(undef);    # disconnect ourselves from it
+        $self->{client} = undef;    # .. and it from us
+        $self->close;               # close ourselves
+
+        $client->write(sub { $client->tcp_cork(0); });
+        $client->all_sent(1);      # tell our old client it has everything it needs
+        $client->watch_write(1);   # and kick-start it into writing (or shutting down)
+        return;
     }
 }
 
@@ -159,16 +159,16 @@ sub event_err {
     # hence the misc checks below for $self->{client}.
 
     print "BACKEND event_err\n" if
-	Perlbal::DEBUG >= 2;
+        Perlbal::DEBUG >= 2;
 
     if ($self->{req_sent}) {
-	# request already sent to backend, then an error occurred.
-	# we don't want to duplicate POST requests, so for now
-	# just fail
-	# TODO: if just a GET request, retry?
-	$self->{client}->close if $self->{client};
-	$self->close;
-	return;
+        # request already sent to backend, then an error occurred.
+        # we don't want to duplicate POST requests, so for now
+        # just fail
+        # TODO: if just a GET request, retry?
+        $self->{client}->close if $self->{client};
+        $self->close;
+        return;
     }
 
     # otherwise, retry connection up to 5 times (FIXME: arbitrary)
@@ -180,8 +180,8 @@ sub event_err {
     # then try to make a new connection, which tells the client
     # who the new connection is
     Perlbal::BackendHTTP->new($client)
-	if $client && ! $client->{closed} && 
-	++$client->{reconnect_count} < 5;
+        if $client && ! $client->{closed} &&
+        ++$client->{reconnect_count} < 5;
 }
 
 # Backend
@@ -191,3 +191,10 @@ sub event_hup {
 }
 
 1;
+
+
+# Local Variables:
+# mode: perl
+# c-basic-indent: 4
+# indent-tabs-mode: nil
+# End:

@@ -27,10 +27,10 @@ sub event_read {
     $self->{buf} .= $$bref;
 
     if ($self->{buf} =~ s/^(.+?)\r?\n//) {
-	my $line = $1;
-	Perlbal::run_manage_command($line, sub {
-	    $self->write("$_[0]\r\n");
-	});
+        my $line = $1;
+        Perlbal::run_manage_command($line, sub {
+            $self->write("$_[0]\r\n");
+        });
     }
 }
 
@@ -39,3 +39,10 @@ sub event_err {  my $self = shift; $self->close; }
 sub event_hup {  my $self = shift; $self->close; }
 
 1;
+
+
+# Local Variables:
+# mode: perl
+# c-basic-indent: 4
+# indent-tabs-mode: nil
+# End:
