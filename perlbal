@@ -212,13 +212,13 @@ sub run_manage_command {
             foreach my $ipport (keys %{$svc->{pending_connects}}) {
                 my Perlbal::BackendHTTP $be = $svc->{pending_connects}->{$ipport};
                 next unless defined $be;
-                $pend{$svc->role}->{$ipport} = $now - $be->{create_time};
+                $pend{$svc->{name}}->{$ipport} = $now - $be->{create_time};
             }
         }
 
-        foreach my $role (sort keys %pend) {
-            foreach my $ipport (sort keys %{$pend{$role}}) {
-                $out->("$role $ipport $pend{$role}{$ipport}");
+        foreach my $name (sort keys %pend) {
+            foreach my $ipport (sort keys %{$pend{$name}}) {
+                $out->("$name $ipport $pend{$name}{$ipport}");
             }
         }
         $out->('.');
@@ -250,17 +250,17 @@ sub run_manage_command {
         my $now = time;
         my %oldest; # { "service-PARM" => oldest age }
         foreach my $svc (values %service) {
-            my $role = $svc->role;
+            my $name = $svc->{name};
             foreach my $sock (@{$svc->{waiting_clients}}) {
                 my $age = $now - $sock->{create_time};
-                $oldest{$role} = $age
-                    if $age > ($oldest{$role} || 0);
+                $oldest{$name} = $age
+                    if $age > ($oldest{$name} || 0);
             }
 
             foreach my $sock (@{$svc->{waiting_clients_highpri}}) {
                 my $age = $now - $sock->{create_time};
-                $oldest{"$role-highpri"} = $age
-                    if $age > ($oldest{"$role-highpri"} || 0);
+                $oldest{"$name-highpri"} = $age
+                    if $age > ($oldest{"$name-highpri"} || 0);
             }
         }
 
