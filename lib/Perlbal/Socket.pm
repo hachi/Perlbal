@@ -10,10 +10,12 @@ use fields qw(sock fd write_buf write_buf_offset write_buf_size
 	      headers_string headers read_buf read_ahead read_size
 	      closed event_watch);
 
-use Errno qw( EINPROGRESS EWOULDBLOCK EISCONN EPIPE EAGAIN );
-use Socket qw( IPPROTO_TCP );
-use constant TCP_CORK => 3;    # FIXME: ghetto to hard-code this
+use Errno qw(EINPROGRESS EWOULDBLOCK EISCONN
+	     EPIPE EAGAIN EBADF ECONNRESET);
 
+use Socket qw(IPPROTO_TCP);
+
+use constant TCP_CORK => 3; # FIXME: not hard-coded (Linux-specific too)
 use constant MAX_HTTP_HEADER_LENGTH => 102400;  # 100k, arbitrary
 
 # keep track of active clients
@@ -197,8 +199,17 @@ sub write {
 		}
 		$self->watch_write(1);
 		return 0;
+	    } elsif ($! == ECONNRESET) {
+		return $self->close("ECONNRESET");
 	    }
+
 	    print STDERR "Closing connection ($self) due to write error: $!\n";
+
+	    # FIXME: temporary debug:
+	    if ($! == EBADF) {
+		print STDERR "  -- fd=$self->{fd}; closed=$self->{closed}; event_watch=$self->{event_watch}\n";
+	    }
+
 	    return $self->close("write_error");
 	} elsif ($written != $to_write) {
 	    print "Wrote PARTIAL $written bytes to $self->{fd}\n"
