@@ -222,9 +222,6 @@ sub event_read {
 	    print "Got headers!  Firing off new backend connection.\n"
 		if Perlbal::DEBUG >= 2;
 
-	    # useful for profiling:
-	    #exit 0 if Perlbal::SHUTDOWN_BY_CLIENT && $hd->header("X-TEMP-SHUTDOWN");
-
 	    my $be = Perlbal::BackendHTTP->new($self);
 
 	    # abort if we couldn't get a backend host
