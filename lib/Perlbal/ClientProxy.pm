@@ -11,6 +11,7 @@ use fields (
             'reconnect_count',     # number of times we've tried to reconnect to backend
             'high_priority',       # boolean; 1 if we are or were in the high priority queue
             'reproxy_uris',        # arrayref; URIs to reproxy to, in order
+            'reproxy_expected_size', # int: size of response we expect to get back for reproxy
             );
 
 use constant READ_SIZE         => 4086;    # 4k, arbitrary
@@ -34,6 +35,9 @@ sub new {
 
     $self->{backend} = undef;
     $self->{high_priority} = 0;
+
+    $self->{reproxy_uris} = undef;
+    $self->{reproxy_expected_size} = undef;
 
     bless $self, ref $class || $class;
     $self->watch_read(1);
@@ -61,6 +65,9 @@ sub start_reproxy_uri {
     # if we have no uris in our list now, tell the user 404
     return $self->_simple_response(404)
         unless @{$self->{reproxy_uris} || []};
+
+    # set the expected size if we got a content length in our headers
+    $self->{reproxy_expected_size} = $primary_res_hdrs->header('Content-length');
 
     # now build backend
     $self->state('wait_backend');
@@ -96,11 +103,17 @@ sub register_boredom {
     $be->watch_write(1);
 }
 
-# this is used in the reproxy_uri path
+# this is called when a transient backend getting a reproxied URI has received
+# a response from the server and is ready for us to deal with it
 sub backend_response_received {
     my Perlbal::ClientProxy $self = shift;
     my Perlbal::BackendHTTP $be = shift;
-    if ($be->{res_headers}->{code} != 200) {
+
+    # we fail if we got something that's NOT a 2xx code, OR, if we expected
+    # a certain size and got back something different
+    if ($be->{res_headers}->{code} < 200 || $be->{res_headers}->{code} > 299 ||
+            (defined $self->{reproxy_expected_size} &&
+             $self->{reproxy_expected_size} != $be->{res_headers}->header('Content-length'))) {
         # fall back to an alternate URL
         $be->{client} = undef;
         $be->close('non_200_reproxy');
@@ -121,6 +134,9 @@ sub start_reproxy_file {
     # call hook for pre-reproxy
     return if $self->{service}->run_hook("start_file_reproxy", $self, \$file);
 
+    # set our expected size
+    $self->{reproxy_expected_size} = $hd->header('X-REPROXY-EXPECTED-SIZE');
+
     # start an async stat on the file
     $self->state('wait_stat');
     Linux::AIO::aio_stat($file, sub {
@@ -135,6 +151,11 @@ sub start_reproxy_file {
             # FIXME: POLICY: 404 or retry request to backend w/o reproxy-file capability?
             return $self->_simple_response(404);
         }
+        if (defined $self->{reproxy_expected_size} && $self->{reproxy_expected_size} != $size) {
+            # 404; the file size doesn't match what we expected
+            return $self->_simple_response(404);
+        }
+        
 
         # fixup the Content-Length header with the correct size (application
         # doesn't need to provide a correct value if it doesn't want to stat())

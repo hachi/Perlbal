@@ -38,3 +38,10 @@ will proxy the response back to the user just like normal.
 Note that the user's headers are NOT passed through to the web server.  To
 the target server, it looks simply like Perlbal is requesting the resource
 for itself.  This behavior may change at some point.
+
+One final note: the server that returns the reproxy header can also return
+a X-REPROXY-EXPECTED-SIZE header.  If present, Perlbal will consider
+a reproxy a failure if the file returned by the target system is of a
+different size than what the expected size header says.  On failure,
+Perlbal tries the next URI in the list.  If it's a file being reproxied, a
+404 is returned if the file size is different.
