@@ -175,6 +175,9 @@ sub assign_client {
     # run hooks
     return 1 if $self->{service}->run_hook('backend_client_assigned', $self);
 
+    # now cleanup the headers before we send to the backend
+    $self->{service}->munge_headers($hds) if $self->{service};
+
     $self->write($hds->to_string_ref);
     $self->write(sub {
         $self->tcp_cork(0);

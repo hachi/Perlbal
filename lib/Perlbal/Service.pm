@@ -68,6 +68,8 @@ use fields (
             'queue_relief_chance', # int:0-100; % chance to take a standard priority
                                    # request when we're in pressure relief mode
             'trusted_upstreams', # Net::Netmask object containing netmasks for trusted upstreams
+            'extra_headers', # { insert => [ [ header, value ], ... ], remove => [ header, header, ... ],
+                             #   set => [ [ header, value ], ... ] }; used in header management interface
             );
 
 sub new {
@@ -121,6 +123,9 @@ sub new {
 
     # don't have an object for this yet
     $self->{trusted_upstreams} = undef;
+
+    # bare data structure for extra header info
+    $self->{extra_headers} = { remove => [], insert => [] };
 
     return $self;
 }
@@ -595,6 +600,41 @@ sub get_backend_endpoint {
 sub role {
     my Perlbal::Service $self = shift;
     return $self->{role};
+}
+
+# manage some header stuff
+sub header_management {
+    my Perlbal::Service $self = shift;
+
+    my ($mode, $key, $val, $out) = @_;
+    my $err = sub { $out->("ERROR: $_[0]"); return 0; };
+
+    return $err->("no header provided") unless $key;
+    return $err->("no value provided") unless $val || $mode eq 'remove';
+
+    if ($mode eq 'insert') {
+        push @{$self->{extra_headers}->{insert}}, [ $key, $val ];
+    } elsif ($mode eq 'remove') {
+        push @{$self->{extra_headers}->{remove}}, $key;
+    } else {
+        return $err->("invalid mode '$mode'");
+    }
+    return 1;
+}
+
+sub munge_headers {
+    my Perlbal::Service $self = $_[0];
+    my Perlbal::HTTPHeaders $hdrs = $_[1];
+
+    # handle removals first
+    foreach my $hdr (@{$self->{extra_headers}->{remove}}) {
+        $hdrs->header($hdr, undef);
+    }
+
+    # and now insertions
+    foreach my $hdr (@{$self->{extra_headers}->{insert}}) {
+        $hdrs->header($hdr->[0], $hdr->[1]);
+    }
 }
 
 # Service

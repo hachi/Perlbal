@@ -132,8 +132,9 @@ sub run_manage_command {
     $cmd =~ s/\#.*//;
     $cmd =~ s/^\s+//;
     $cmd =~ s/\s+$//;
-    $cmd =~ s/^([^=]+)/lc $1/e; # lowercase everything up to an =
     $cmd =~ s/\s+/ /g;
+    my $orig = $cmd; # save original case for some commands
+    $cmd =~ s/^([^=]+)/lc $1/e; # lowercase everything up to an =
     return 1 unless $cmd =~ /\S/;
 
     $out ||= sub {};
@@ -511,6 +512,15 @@ sub run_manage_command {
         my $svc = $service{$name};
         return $err->("service '$name' does not exist") unless $svc;
         return $svc->set($key, $val, $out);
+    }
+
+    if ($orig =~ /^header\s+(\w+)\s+(\w+)\s+(.+?)(?:\s*:\s*(.+))?$/i) {
+        my ($mode, $name, $header, $val) = (lc $1, lc $2, $3, $4);
+        return $err->("format: header <'insert|remove> <service> <header>[: <value>]")
+            unless $mode =~ /^(?:insert|remove)$/;
+        my $svc = $service{$name};
+        return $err->("service '$name' does not exist") unless $svc;
+        return $svc->header_management($mode, $header, $val, $out);
     }
 
     if ($cmd =~ /^(disable|enable) (\w+)$/) {

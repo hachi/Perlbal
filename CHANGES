@@ -1,3 +1,7 @@
+    -- new config commands: HEADER INSERT <svc> <header>: <value> and HEADER
+       REMOVE <svc> <header> which will insert and remove headers from user
+       requests before they're sent to backend proxy nodes.
+
     -- add dependency to Net::Netmask; now you can specify trusted_upstream_proxies
        on a service (SET service.trusted_upstream_proxies = 10.0.0.0/8, etc)
        which will allow requests from that range to set X-Forwarded-For, X-Host,
