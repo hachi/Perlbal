@@ -256,8 +256,18 @@ sub attempt_open {
         }
 
         # associate descriptor from aio_open with filehandle for aio_write/aio_close
-        $self->{put_fh} = IO::Handle->new_from_fd(shift(), "w")
-            or return $self->system_error("Unable to create file", "error = $!, path = $path, file = $file");
+        my $fd = shift();
+        unless ($self->{put_fh} = IO::Handle->new_from_fd($fd, "w")) {
+            # log the output of readlink
+            my $linkinfo;
+            eval {
+                # eval because some systems don't have symbolic link support
+                $linkinfo = readlink "/proc/self/fd/$fd";
+                $linkinfo ||= "Error obtaining link info: $!";
+            };
+            return $self->system_error("Unable to create file", 
+                                       "error = $!, path = $path, file = $file, fd = $fd ($linkinfo)");
+        }
         $self->{put_pos} = 0;
         $self->handle_put;
     });
