@@ -42,20 +42,16 @@ sub new_response {
     my $msg = $HTTPCode->{$code} || "";
     $self->{responseLine} = "HTTP/1.0 $code $msg";
     $self->{code} = $code;
+    $self->{type} = "httpres";
 
+    Perlbal::objctor($self->{type});
     return bless $self, ref $class || $class;
-}
-
-sub DESTROY {
-    Perlbal::objdtor();
 }
 
 sub new {
     my ($class, $hstr, $is_response) = @_;
     # hstr: headers as a string
     # is_response: bool; is HTTP response (as opposed to request).  defaults to request.
-
-    Perlbal::objctor();
 
     $hstr =~ s!\r!!g;
     my @lines = split(/\n/, $hstr);
@@ -67,6 +63,7 @@ sub new {
         hdorder => [],      # order headers were received (canonical order)
         method => undef,    # request method (if GET request)
         uri => undef,       # request URI (if GET request)
+        type => ($is_response ? "res" : "req"),
     };
 
     # check request line
@@ -118,6 +115,7 @@ sub new {
         }
     }
 
+    Perlbal::objctor($self->{type});
     return bless $self, ref $class || $class;
 }
 
@@ -158,8 +156,11 @@ sub to_string_ref {
     return \$st;
 }
 
-1;
+sub DESTROY {
+    Perlbal::objdtor($_[0]->{type});
+}
 
+1;
 
 # Local Variables:
 # mode: perl

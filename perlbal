@@ -7,7 +7,7 @@
 package Perlbal;
 
 use constant DEBUG => 0;
-use constant DEBUG_OBJ => 0;
+use constant DEBUG_OBJ => 1;
 
 use strict;
 use IO::Socket;
@@ -50,13 +50,17 @@ our(%ObjCount);  # classname -> instances
 our(%ObjTotal);  # classname -> instances
 sub objctor {
     if (DEBUG_OBJ) {
-        $ObjCount{(caller)[0]}++;
-        $ObjTotal{(caller)[0]}++;
+        my $caller = (caller)[0];
+        $caller .= "-$_[0]" if $_[0];
+        $ObjCount{$caller}++;
+        $ObjTotal{$caller}++;
     }
 }
 sub objdtor {
     if (DEBUG_OBJ) {
-        $ObjCount{(caller)[0]}--;
+        my $caller = (caller)[0];
+        $caller .= "-$_[0]" if $_[0];
+        $ObjCount{$caller}--;
     }
 }
 
