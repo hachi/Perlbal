@@ -9,6 +9,7 @@ use base "Perlbal::Socket";
 use fields ('service',
             'buf',
             'is_http',  # bool: is an HTTP request?
+            'verbose',  # bool: on/off if we should be verbose for management commands
             );  
 
 # ClientManage
@@ -17,6 +18,7 @@ sub new {
     my $self = $class->SUPER::new($sock);
     $self->{service} = $service;
     $self->{buf} = "";   # what we've read so far, not forming a complete line
+    $self->{verbose} = $Perlbal::verbose;
     bless $self, ref $class || $class;
     $self->watch_read(1);
     return $self;
@@ -47,9 +49,17 @@ sub event_read {
 
     while ($self->{buf} =~ s/^(.+?)\r?\n//) {
         my $line = $1;
+
+        # enable user to turn verbose on and off for our connection
+        if ($line =~ /^verbose (on|off)$/i) {
+            $self->{verbose} = (lc $1 eq 'on' ? 1 : 0);
+            $self->write("OK\r\n") if $self->{verbose};
+            next;
+        }
+
         Perlbal::run_manage_command($line, sub {
             $self->write(join("\r\n", map { ref $_ eq 'ARRAY' ? @$_ : $_ } @_) . "\r\n");
-        });
+        }, $self->{verbose});
     }
 }
 

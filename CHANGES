@@ -1,3 +1,8 @@
+    -- revamp verbose functionality; by default it's still of, but if you specify
+       VERBOSE ON in the config file, it turns it on for management connections
+       by default.  management connections, when specifying VERBOSE ON/OFF, will
+       now set the flag only for that connection.
+
     -- new command for config file; VERBOSE ON/OFF; can be used to enable or
        disable confirmation of all commands such as SET, SERVER, CREATE, etc.
        by default, it's off for config files, but on for management connections.

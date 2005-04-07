@@ -52,7 +52,7 @@ our $track_obj = 0;  # default to not track creation locations
 our $reqs = 0; # total number of requests we've done
 our $starttime = time(); # time we started
 our ($lastutime, $laststime, $lastreqs) = (0, 0, 0); # for deltas
-our $verbose = 0; # turned off by default
+our $verbose = 0; # default management connections to not verbose
 
 # setup XS status data structures
 our %XSModules; # ( 'headers' => 'Perlbal::XS::HTTPHeaders' )
@@ -143,7 +143,7 @@ sub pool {
 
 # returns 1 if command succeeded, 0 otherwise
 sub run_manage_command {
-    my ($cmd, $out) = @_;  # $out is output stream closure
+    my ($cmd, $out, $verbose) = @_;  # $out is output stream closure
     $cmd =~ s/\#.*//;
     $cmd =~ s/^\s+//;
     $cmd =~ s/\s+$//;
@@ -676,7 +676,7 @@ sub run_manage_command {
     }
 
     if ($cmd =~ /^verbose (on|off)$/) {
-        $verbose = ($1 eq 'on') ? 1 : 0;
+        $Perlbal::verbose = ($1 eq 'on') ? 1 : 0;
         return $ok->();
     }
 
@@ -712,13 +712,11 @@ sub run_manage_command {
 
 sub load_config {
     my ($file, $writer) = @_;
-    $verbose = 0;
     open (F, $file) or die "Error opening config file ($file): $!\n";
     while (<F>) {
         return 0 unless run_manage_command($_, $writer);
     }
     close(F);
-    $verbose = 1;
     return 1;
 }
 
