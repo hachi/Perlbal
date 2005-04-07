@@ -52,7 +52,6 @@ our $track_obj = 0;  # default to not track creation locations
 our $reqs = 0; # total number of requests we've done
 our $starttime = time(); # time we started
 our ($lastutime, $laststime, $lastreqs) = (0, 0, 0); # for deltas
-our $verbose = 0; # default management connections to not verbose
 
 # setup XS status data structures
 our %XSModules; # ( 'headers' => 'Perlbal::XS::HTTPHeaders' )
@@ -675,11 +674,6 @@ sub run_manage_command {
             if $svc->$verb($out);
     }
 
-    if ($cmd =~ /^verbose (on|off)$/) {
-        $Perlbal::verbose = ($1 eq 'on') ? 1 : 0;
-        return $ok->();
-    }
-
     if ($cmd =~ /^(un)?load (\w+)$/) {
         my $un = $1 ? $1 : '';
         my $fn = $2;
@@ -713,8 +707,13 @@ sub run_manage_command {
 sub load_config {
     my ($file, $writer) = @_;
     open (F, $file) or die "Error opening config file ($file): $!\n";
+    my $verbose = 0;
     while (<F>) {
-        return 0 unless run_manage_command($_, $writer);
+        if ($_ =~ /^verbose (on|off)/i) {
+            $verbose = (lc $1 eq 'on' ? 1 : 0);
+            next;
+        }
+        return 0 unless run_manage_command($_, $writer, $verbose);
     }
     close(F);
     return 1;
