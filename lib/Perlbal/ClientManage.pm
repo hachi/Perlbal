@@ -10,7 +10,7 @@ use fields ('service',
             'buf',
             'is_http',  # bool: is an HTTP request?
             'verbose',  # bool: on/off if we should be verbose for management commands
-            );  
+            );
 
 # ClientManage
 sub new {
@@ -18,7 +18,7 @@ sub new {
     my $self = $class->SUPER::new($sock);
     $self->{service} = $service;
     $self->{buf} = "";   # what we've read so far, not forming a complete line
-    $self->{verbose} = $Perlbal::verbose;
+    $self->{verbose} = 1;
     bless $self, ref $class || $class;
     $self->watch_read(1);
     return $self;
