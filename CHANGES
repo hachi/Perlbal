@@ -1,3 +1,6 @@
+    -- fix spinning issue when webnodes unavailable; should now not consume 100%
+       CPU in those cases
+
     -- revamp verbose functionality; by default it's still of, but if you specify
        VERBOSE ON in the config file, it turns it on for management connections
        by default.  management connections, when specifying VERBOSE ON/OFF, will
