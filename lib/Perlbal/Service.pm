@@ -56,6 +56,7 @@ use fields (
             'extra_headers', # { insert => [ [ header, value ], ... ], remove => [ header, header, ... ],
                              #   set => [ [ header, value ], ... ] }; used in header management interface
             'generation', # int; generation count so we can slough off backends from old pools
+            'backend_no_spawn', # { "ip:port" => 1 }; if on, spawn_backends will ignore this ip:port combo
             );
 
 sub new {
@@ -73,6 +74,7 @@ sub new {
     $self->{max_backend_uses} = 0;
     $self->{backend_persist_cache} = 2;
     $self->{generation} = 0;
+    $self->{backend_no_spawn} = {};
 
     $self->{hooks} = {};
     $self->{plugins} = {};
@@ -379,9 +381,22 @@ sub register_boredom {
 sub note_bad_backend_connect {
     my Perlbal::Service $self = shift;
     my Perlbal::BackendHTTP $be = shift;
+    my $retry_time = shift();
 
     # clear this pending connection
     $self->clear_pending_connect($be);
+
+    # mark this host as dead for a while if we need to
+    if (defined $retry_time && $retry_time > 0) {
+        # we don't want other spawn_backends calls to retry
+        $self->{backend_no_spawn}->{$be->{ipport}} = 1;
+
+        # and now we set a callback to ensure we're kicked at the right time
+        Perlbal::Socket::register_callback($retry_time, sub {
+            delete $self->{backend_no_spawn}->{$be->{ipport}};
+            $self->spawn_backends;
+        });
+    }
 
     # FIXME: do something interesting (tell load balancer about dead host,
     # and fire up a new connection, if warranted)
@@ -501,6 +516,11 @@ sub spawn_backends {
             $self->{spawn_lock} = 0;
             return;
         }
+
+        # handle retry timeouts so we don't spin
+        next if $self->{backend_no_spawn}->{"$ip:$port"};
+
+        # if it's pending, verify the pending one is still valid
         if (my Perlbal::BackendHTTP $be = $self->{pending_connects}{"$ip:$port"}) {
             my $age = $now - $be->{create_time};
             if ($age >= 5 && $be->{state} eq "connecting") {

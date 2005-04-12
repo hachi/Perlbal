@@ -517,7 +517,7 @@ sub event_err {
         $self->{state} eq "verifying_backend") {
         # then tell the service manager that this connection
         # failed, so it can spawn a new one and note the dead host
-        $self->{reportto}->note_bad_backend_connect($self);
+        $self->{reportto}->note_bad_backend_connect($self, 1);
     }
 
     # close ourselves first
