@@ -8,6 +8,7 @@ use warnings;
 use base "Perlbal::ClientHTTPBase";
 use fields (
             'backend',             # Perlbal::BackendHTTP object (or undef if disconnected)
+            'backend_requested',   # true if we've requested a backend for this request
             'reconnect_count',     # number of times we've tried to reconnect to backend
             'high_priority',       # boolean; 1 if we are or were in the high priority queue
             'reproxy_uris',        # arrayref; URIs to reproxy to, in order
@@ -48,6 +49,7 @@ sub new {
 
     $self->{responded} = 0;
     $self->{content_length_remain} = undef;
+    $self->{backend_requested} = 0;
 
     $self->{reproxy_uris} = undef;
     $self->{reproxy_expected_size} = undef;
@@ -282,6 +284,7 @@ sub http_response_sent {
     return 0 unless $self->SUPER::http_response_sent;
 
     # if we get here we're being persistent, reset our state
+    $self->{backend_requested} = 0;
     $self->{backend} = undef;
     $self->{high_priority} = 0;
     $self->{reproxy_uris} = undef;
@@ -345,6 +348,9 @@ sub event_read {
 
     # used a few times below to trigger the send start
     my $request_backend = sub {
+        return if $self->{backend_requested};
+        $self->{backend_requested} = 1;
+
         $self->state('wait_backend');
         $self->{service}->request_backend_connection($self);
         $self->tcp_cork(1);  # cork writes to self
@@ -421,7 +427,7 @@ sub event_read {
             push @{$self->{read_buf}}, $bref;
             $self->{read_ahead} += $len;
 
-            # now, request a backend if we are done reading data and need one
+            # this is when we have read all their data
             $request_backend->()
                 if defined $self->{content_length_remain} &&
                            $self->{content_length_remain} <= 0;
@@ -431,7 +437,7 @@ sub event_read {
         # our buffer is full, so turn off reads for now
         $self->watch_read(0);
 
-        # we've exceeded our buffer, start getting a backend for us
+        # we've exceeded our buffer_backend_connect, start getting a backend for us
         $request_backend->();
     }
 }
