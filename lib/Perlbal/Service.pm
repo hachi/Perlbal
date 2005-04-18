@@ -57,6 +57,7 @@ use fields (
                              #   set => [ [ header, value ], ... ] }; used in header management interface
             'generation', # int; generation count so we can slough off backends from old pools
             'backend_no_spawn', # { "ip:port" => 1 }; if on, spawn_backends will ignore this ip:port combo
+            'buffer_backend_connect', # 0 for of, else, number of bytes to buffer before we ask for a backend
             );
 
 sub new {
@@ -75,6 +76,7 @@ sub new {
     $self->{backend_persist_cache} = 2;
     $self->{generation} = 0;
     $self->{backend_no_spawn} = {};
+    $self->{buffer_backend_connect} = 0;
 
     $self->{hooks} = {};
     $self->{plugins} = {};
@@ -701,7 +703,7 @@ sub set {
     if ($key eq "max_backend_uses" || $key eq "backend_persist_cache" ||
         $key eq "max_put_size" || $key eq "min_put_directory" ||
         $key eq "buffer_size" || $key eq "buffer_size_reproxy_url" ||
-        $key eq "queue_relief_size") {
+        $key eq "queue_relief_size" || $key eq "buffer_backend_connect") {
         return $err->("Expected integer value") unless $val =~ /^\d+$/;
         return $set->();
     }

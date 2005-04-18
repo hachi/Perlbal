@@ -343,6 +343,13 @@ sub event_read {
     # mark alive so we don't get killed for being idle
     $self->{alive_time} = time;
 
+    # used a few times below to trigger the send start
+    my $request_backend = sub {
+        $self->state('wait_backend');
+        $self->{service}->request_backend_connection($self);
+        $self->tcp_cork(1);  # cork writes to self
+    };
+
     unless ($self->{req_headers}) {
         if (my $hd = $self->read_request_headers) {
             print "Got headers!  Firing off new backend connection.\n"
@@ -361,16 +368,20 @@ sub event_read {
             $self->{requests}++;
             $self->{last_request_time} = $self->{alive_time};
 
-            $self->state('wait_backend');
-            $self->{service}->request_backend_connection($self);
-
-            $self->tcp_cork(1);  # cork writes to self
+            # request a backend, or start buffering
+            if ($self->{service}->{buffer_backend_connect} && $self->{content_length_remain}) {
+                # buffer logic; note we don't do anything here except set our state and move on
+                $self->state('buffering_request');
+            } else {
+                # dispatch to backend
+                $request_backend->();
+            }
         }
         return;
     }
 
     # read data and send to backend (or buffer for later sending)
-    if ($self->{read_ahead} < READ_AHEAD_SIZE) {
+    if ($self->{read_ahead} < ($self->{service}->{buffer_backend_connect} || READ_AHEAD_SIZE)) {
         my $bref = $self->read(READ_SIZE);
         my $backend = $self->backend;
         $self->drain_read_buf_to($backend) if $backend;
@@ -409,11 +420,19 @@ sub event_read {
         } else {
             push @{$self->{read_buf}}, $bref;
             $self->{read_ahead} += $len;
+
+            # now, request a backend if we are done reading data and need one
+            $request_backend->()
+                if defined $self->{content_length_remain} &&
+                           $self->{content_length_remain} <= 0;
         }
 
     } else {
         # our buffer is full, so turn off reads for now
         $self->watch_read(0);
+
+        # we've exceeded our buffer, start getting a backend for us
+        $request_backend->();
     }
 }
 
