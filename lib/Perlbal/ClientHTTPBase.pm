@@ -262,7 +262,7 @@ sub _serve_request {
     # update state, since we're now waiting on stat
     $self->state('wait_stat');
     
-    Linux::AIO::aio_stat($file, sub {
+    Perlbal::AIO::aio_stat($file, sub {
         # client's gone anyway
         return if $self->{closed};
         return $self->_simple_response(404) unless -e _;
@@ -301,7 +301,7 @@ sub _serve_request {
             # state update
             $self->state('wait_open');
             
-            Linux::AIO::aio_open($file, 0, 0, sub {
+            Perlbal::AIO::aio_open($file, 0, 0, sub {
                 my $rp_fd = shift;
 
                 # if client's gone, just close filehandle and abort
@@ -373,7 +373,7 @@ sub try_index_files {
     my $fullpath = $self->{service}->{docroot} . '/' . $hd->request_uri . '/' . $file;
 
     # now see if it exists
-    Linux::AIO::aio_stat($fullpath, sub {
+    Perlbal::AIO::aio_stat($fullpath, sub {
         return if $self->{closed};
         return $self->try_index_files($hd, $res, $filepos + 1) unless -f _;
 

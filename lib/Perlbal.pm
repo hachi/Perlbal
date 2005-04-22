@@ -26,6 +26,7 @@ use Carp qw(cluck croak);
 use Errno qw(EBADF);
 use POSIX ();
 
+use Perlbal::AIO;
 use Perlbal::HTTPHeaders;
 use Perlbal::Service;
 use Perlbal::Socket;

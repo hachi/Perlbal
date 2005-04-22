@@ -159,7 +159,7 @@ sub setup_delete {
     # now we want to get the URI
     if ($uri =~ m!^(?:/[\w\-\.]+)+$!) {
         # now attempt the unlink
-        Linux::AIO::aio_unlink($self->{service}->{docroot} . '/' . $uri, sub {
+        Perlbal::AIO::aio_unlink($self->{service}->{docroot} . '/' . $uri, sub {
             my $err = shift;
             if ($err == 0 && !$!) {
                 # delete was successful
@@ -226,7 +226,7 @@ sub verify_put {
     
     $self->{put_in_progress} = 1;
     
-    Linux::AIO::aio_open($mindir, O_RDONLY, 0755, sub {
+    Perlbal::AIO::aio_open($mindir, O_RDONLY, 0755, sub {
         $self->{put_in_progress} = 0;
 
         # if error return failure
@@ -247,7 +247,7 @@ sub attempt_open {
 
     $self->{put_in_progress} = 1;
     
-    Linux::AIO::aio_open("$path/$file", O_CREAT | O_TRUNC | O_WRONLY, 0644, sub {
+    Perlbal::AIO::aio_open("$path/$file", O_CREAT | O_TRUNC | O_WRONLY, 0644, sub {
         # get the fd
         my $fd = shift;
 
@@ -313,7 +313,7 @@ sub handle_put {
 
     # okay, file is open, write some data
     $self->{put_in_progress} = 1;
-    Linux::AIO::aio_write($self->{put_fh}, $self->{put_pos}, $count, $data, 0, sub {
+    Perlbal::AIO::aio_write($self->{put_fh}, $self->{put_pos}, $count, $data, 0, sub {
         return if $self->{closed};
 
         # see how many bytes written

@@ -184,7 +184,7 @@ sub start_reproxy_file {
 
     # start an async stat on the file
     $self->state('wait_stat');
-    Linux::AIO::aio_stat($file, sub {
+    Perlbal::AIO::aio_stat($file, sub {
 
         # if the client's since disconnected by the time we get the stat,
         # just bail.
@@ -220,7 +220,7 @@ sub start_reproxy_file {
         }
 
         $self->state('wait_open');
-        Linux::AIO::aio_open($file, 0, 0 , sub {
+        Perlbal::AIO::aio_open($file, 0, 0 , sub {
             my $rp_fd = shift;
 
             # if client's gone, just close filehandle and abort

@@ -196,7 +196,7 @@ sub _load_nodefile_async {
     return if $self->{'nodefile.checking'};
     $self->{'nodefile.checking'} = 1;
 
-    Linux::AIO::aio_stat($self->{nodefile}, sub {
+    Perlbal::AIO::aio_stat($self->{nodefile}, sub {
         $self->{'nodefile.checking'} = 0;
 
         # this might have gotten unset while we were out statting the file, which
