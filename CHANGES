@@ -1,3 +1,7 @@
+    -- AIO abstraction layer (Perlbal::AIO) which can currently do either
+       Linux::AIO or "none" (doing everything sync).  also in future File::FDpasser
+       and other OS-specific modes [brad]
+
     -- add buffer_backend_connect to do in memory buffering of data before we
        request a backend; assists slow clients without tying up a mod_perl
 

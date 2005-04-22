@@ -155,7 +155,7 @@ sub setup_delete {
     my $uri = $self->{req_headers}->request_uri;
     return $self->send_response(400, 'Invalid filename')
         if $uri =~ /\.\./;
-    
+
     # now we want to get the URI
     if ($uri =~ m!^(?:/[\w\-\.]+)+$!) {
         # now attempt the unlink
@@ -313,7 +313,7 @@ sub handle_put {
 
     # okay, file is open, write some data
     $self->{put_in_progress} = 1;
-    Perlbal::AIO::aio_write($self->{put_fh}, $self->{put_pos}, $count, $data, 0, sub {
+    Perlbal::AIO::aio_write($self->{put_fh}, $self->{put_pos}, $count, $data, sub {
         return if $self->{closed};
 
         # see how many bytes written

@@ -18,6 +18,9 @@ BEGIN {
     $Perlbal::OPTMOD_LINUX_AIO = eval "use Linux::AIO '1.3'; 1;";
 }
 
+$Perlbal::AIO_MODE = "none";
+$Perlbal::AIO_MODE = "linux" if $Perlbal::OPTMOD_LINUX_AIO;
+
 use Sys::Syslog;
 
 use Getopt::Long;
@@ -543,9 +546,9 @@ sub run_manage_command {
 
     if ($cmd =~ /^server (\S+) ?= ?(.+)$/) {
         my ($key, $val) = ($1, $2);
-        return $err->("Expected numeric parameter") unless $val =~ /^-?\d+$/;
 
         if ($key =~ /^max_reproxy_connections(?:\((.+)\))?/) {
+            return $err->("Expected numeric parameter") unless $val =~ /^-?\d+$/;
             my $hostip = $1;
             if (defined $hostip) {
                 $Perlbal::ReproxyManager::ReproxyMax{$hostip} = $val+0;
@@ -554,6 +557,7 @@ sub run_manage_command {
             }
 
         } elsif ($key eq "max_connections") {
+            return $err->("Expected numeric parameter") unless $val =~ /^-?\d+$/;
             my $rv = setrlimit(RLIMIT_NOFILE, $val, $val);
             unless (defined $rv && $rv) {
                 if ($> == 0) {
@@ -563,11 +567,13 @@ sub run_manage_command {
                 }
             }
         } elsif ($key eq "nice_level") {
+            return $err->("Expected numeric parameter") unless $val =~ /^-?\d+$/;
             my $rv = POSIX::nice($val);
             $err->("Unable to renice: $!")
                 unless defined $rv;
 
         } elsif ($key eq "aio_threads") {
+            return $err->("Expected numeric parameter") unless $val =~ /^-?\d+$/;
             Linux::AIO::min_parallel($val)
                 if $Perlbal::OPTMOD_LINUX_AIO;
 
@@ -575,7 +581,13 @@ sub run_manage_command {
             return $err->("Expected 1 or 0") unless $val eq '1' || $val eq '0';
             $track_obj = $val + 0;
             %ObjTrack = () if $val; # if we're turning it on, clear it out
-            
+
+        } elsif ($key =~ /^aio_mode$/) {
+            return $err->("Unknown AIO mode") unless $val =~ /^none|linux|fdpass$/;
+            return $err->("Linux::AIO not available") if $val eq "linux" && ! $Perlbal::OPTMOD_LINUX_AIO;
+            return $err->("fdpassing not implemented") if $val eq "fdpass";
+            $Perlbal::AIO_MODE = $val;
+            return $ok->();
         }
 
         return $ok->();

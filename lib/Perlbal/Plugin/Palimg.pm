@@ -43,7 +43,7 @@ sub register {
 
         # create filehandle for reading
         my $data = '';
-        Perlbal::AIO::aio_read($obj->reproxy_fh, 0, 2048, $data, 0, sub {
+        Perlbal::AIO::aio_read($obj->reproxy_fh, 0, 2048, $data, sub {
             # got data? undef is error
             return $obj->_simple_response(500) unless defined $_[0];
 
