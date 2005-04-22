@@ -391,19 +391,24 @@ sub _simple_response {
     my $res = $self->{res_headers} = Perlbal::HTTPHeaders->new_response($code);
     $res->header("Content-Type", "text/html");
 
-    my $en = $res->http_code_english;
-    my $body = "<h1>$code" . ($en ? " - $en" : "") . "</h1>\n";
-    $body .= $msg if $msg;
+    my $body;
+    unless ($code == 204) {
+        my $en = $res->http_code_english;
+        $body = "<h1>$code" . ($en ? " - $en" : "") . "</h1>\n";
+        $body .= $msg if $msg;
+        $res->header('Content-Length', length($body));
+    }
 
-    $res->header('Content-Length', length($body));
     $self->setup_keepalive($res);
 
     $self->state('xfer_resp');
     $self->tcp_cork(1);  # cork writes to self
     $self->write($res->to_string_ref);
-    unless ($self->{req_headers} && $self->{req_headers}->request_method eq 'HEAD') {
-        # don't write body for head requests
-        $self->write(\$body);
+    if (defined $body) {
+        unless ($self->{req_headers} && $self->{req_headers}->request_method eq 'HEAD') {
+            # don't write body for head requests
+            $self->write(\$body);
+        }
     }
     $self->write(sub { $self->http_response_sent; });
     return 1;
