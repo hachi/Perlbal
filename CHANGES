@@ -1,3 +1,6 @@
+    -- 'nodes' command now takes as an optional argument a specific ip:port to
+       dump the node stats for
+
     -- AIO abstraction layer (Perlbal::AIO) which can currently do either
        Linux::AIO or "none" (doing everything sync).  also in future File::FDpasser
        and other OS-specific modes [brad]

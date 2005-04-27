@@ -253,10 +253,13 @@ sub run_manage_command {
         return 1;
     }
 
-    if ($cmd =~ /^nodes/) {
+    if ($cmd =~ /^nodes?(?:\s+(\d+.\d+.\d+.\d+)(?::(\d+))?)?$/) {
+        my ($ip, $port) = ($1, $2 || 80);
+        my $spec_ipport = $ip ? "$ip:$port" : undef;
         my $ref = \%Perlbal::BackendHTTP::NodeStats;
 
-        foreach my $ipport (keys %$ref) {
+        my $dump = sub {
+            my $ipport = shift;
             foreach my $key (keys %{$ref->{$ipport}}) {
                 if (ref $ref->{$ipport}->{$key} eq 'ARRAY') {
                     my %temp;
@@ -267,6 +270,15 @@ sub run_manage_command {
                 } else {
                     $out->("$ipport $key $ref->{$ipport}->{$key}");
                 }
+            }
+        };
+
+        # dump a node, or all nodes
+        if ($spec_ipport) {
+            $dump->($spec_ipport);
+        } else {
+            foreach my $ipport (keys %$ref) {
+                $dump->($ipport);
             }
         }
 
