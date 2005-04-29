@@ -57,6 +57,11 @@ sub event_read {
             next;
         }
 
+        if ($line =~ /^quit/) {
+            $self->close('user_requested_quit');
+            return;
+        }
+
         Perlbal::run_manage_command($line, sub {
             $self->write(join("\r\n", map { ref $_ eq 'ARRAY' ? @$_ : $_ } @_) . "\r\n");
         }, $self->{verbose});
