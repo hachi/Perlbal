@@ -35,6 +35,8 @@ sub aio_unlink {
 sub aio_write {
     #   0    1        2        3(data) 4
     my ($fh, $offset, $length, undef,  $cb) = @_;
+    return no_fh($cb) unless $fh;
+
     if ($Perlbal::AIO_MODE eq "linux") {
         Linux::AIO::aio_write($fh, $offset, $length, $_[3], 0, $cb);
     } else {
@@ -46,12 +48,29 @@ sub aio_write {
 sub aio_read {
     #   0    1        2        3(data) 4
     my ($fh, $offset, $length, undef,  $cb) = @_;
+    return no_fh($cb) unless $fh;
+
     if ($Perlbal::AIO_MODE eq "linux") {
         Linux::AIO::aio_read($fh, $offset, $length, $_[3], 0, $cb);
     } else {
         my $rv = sysread($fh, $_[3], $length, $offset);
         $cb->($rv);
     }
+}
+
+sub no_fh {
+    my $cb = shift;
+
+    my $i = 1;
+    my $stack_trace = "";
+    while (my ($pkg, $filename, $line, $subroutine, $hasargs,
+               $wantarray, $evaltext, $is_require, $hints, $bitmask) = caller($i++)) {
+        $stack_trace .= " at $filename:$line $subroutine\n";
+    }
+
+    Perlbal::log("crit", "Undef \$fh: $stack_trace");
+    $cb->(undef);
+    return undef;
 }
 
 1;

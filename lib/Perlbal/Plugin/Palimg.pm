@@ -45,7 +45,7 @@ sub register {
         my $data = '';
         Perlbal::AIO::aio_read($obj->reproxy_fh, 0, 2048, $data, sub {
             # got data? undef is error
-            return $obj->_simple_response(500) unless defined $_[0];
+            return $obj->_simple_response(500) unless $_[0] > 0;
 
             # pass down to handler
             my Perlbal::HTTPHeaders $hd = $obj->{req_headers};
