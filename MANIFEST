@@ -26,4 +26,4 @@ doc/Reproxying.txt
 doc/todo.txt
 conf/nodelist.dat
 conf/perlbal.conf
-t/00use.t
+t/00-use.t
