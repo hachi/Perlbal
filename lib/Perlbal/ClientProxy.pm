@@ -205,6 +205,10 @@ sub start_reproxy_file {
         # doesn't need to provide a correct value if it doesn't want to stat())
         $hd->header("Content-Length", $size);
 
+        # change the status code to 200, if, for instance, the backend
+        # gave us a 204 no content.
+        $hd->code(200);
+
         # don't send this internal header to the client:
         $hd->header('X-REPROXY-FILE', undef);
 
