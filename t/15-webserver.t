@@ -3,12 +3,11 @@
 use strict;
 use Perlbal::Test;
 
-use File::Temp qw/tempdir/;
 use Test::More 'no_plan';
 require HTTP::Request;
 
-my $port = 60001;
-my $dir = tempdir( CLEANUP => 1 );
+my $port = new_port();
+my $dir = tempdir();
 
 my $conf = qq{
 SERVER aio_mode = none

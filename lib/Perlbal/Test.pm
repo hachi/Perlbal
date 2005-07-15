@@ -6,14 +6,26 @@ use IO::Socket::INET;
 require Exporter;
 use vars qw(@ISA @EXPORT);
 @ISA = qw(Exporter);
-@EXPORT = qw(ua start_server foreach_aio manage filecontent);
+@EXPORT = qw(ua start_server foreach_aio manage filecontent tempdir new_port);
 
 our $i_am_parent = 0;
 our $msock;  # management sock of child
 our $to_kill = 0;
+our $mgmt_port;
+
+our $free_port = 60000;
 
 END {
     manage("shutdown") if $i_am_parent;
+}
+
+sub tempdir {
+    require File::Temp;
+    return File::Temp::tempdir( CLEANUP => 1 );
+}
+
+sub new_port {
+    return $free_port++;  # FIXME: make it somehow detect if port is in use?
 }
 
 sub filecontent {
@@ -45,12 +57,13 @@ sub manage {
 
 sub start_server {
     my $conf = shift;
+    $mgmt_port = new_port();
 
     my $child = fork;
     if ($child) {
         $i_am_parent = 1;
         $to_kill = $child;
-        my $msock = wait_on_child($child);
+        my $msock = wait_on_child($child, $mgmt_port);
         my $rv = waitpid($child, WNOHANG);
         if ($rv) {
             die "Child process (webserver) died.\n";
@@ -74,7 +87,7 @@ sub start_server {
 
     $conf .= qq{
 CREATE SERVICE mgmt
-SET mgmt.listen = 127.0.0.1:60000
+SET mgmt.listen = 127.0.0.1:$mgmt_port
 SET mgmt.role = management
 ENABLE mgmt
 };
@@ -103,11 +116,11 @@ sub ua {
 
 sub wait_on_child {
     my $pid = shift;
+    my $port = shift;
 
-    my($port) = @_;
     my $start = time;
     while (1) {
-	$msock = IO::Socket::INET->new(PeerAddr => "127.0.0.1:60000");
+	$msock = IO::Socket::INET->new(PeerAddr => "127.0.0.1:$port");
 	return $msock if $msock;
 	select undef, undef, undef, 0.25;
         if (waitpid($pid, WNOHANG) > 0) {

@@ -3,11 +3,10 @@
 use strict;
 use Perlbal::Test;
 
-use File::Temp qw/tempdir/;
 use Test::More 'no_plan';
 
-my $port = 60001;
-my $dir = tempdir( CLEANUP => 1 );
+my $port = new_port();
+my $dir = tempdir();
 
 my $conf = qq{
 SERVER aio_mode = none
@@ -86,8 +85,8 @@ foreach_aio {
     ok(unlink($disk_file), "rm file");
     ok(rmdir("$dir/$dir1/dir2"), "rm dir2");
     ok(rmdir("$dir/$dir1"), "rm dir1");
-
 };
+
 ok(manage("SET test.min_put_directory = 0"));
 
 # let Perlbal autocreate a dir tree
