@@ -226,12 +226,11 @@ sub verify_put {
     $self->{put_in_progress} = 1;
 
     Perlbal::AIO::aio_open($mindir, O_RDONLY, 0755, sub {
+        my $fh = shift;
         $self->{put_in_progress} = 0;
 
         # if error return failure
-        return $self->send_response(404, "Base directory does not exist") if $!;
-
-        my $fh = shift;
+        return $self->send_response(404, "Base directory does not exist") unless $fh;
         CORE::close($fh);
 
         # mindir existed, mark it as so and start the open for the rest of the path
@@ -282,7 +281,7 @@ sub system_error {
 
     # log to syslog
     Perlbal::log('warning', "system error: $msg ($info)");
-    
+
     # and return a 500
     return $self->send_response(500, $msg);
 }

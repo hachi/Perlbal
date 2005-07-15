@@ -49,9 +49,8 @@ sub delete_file {
     return $res->is_success;
 }
 
-
 sub verify_put {
-    ok(filecontent($disk_file) eq $content);
+    ok(filecontent($disk_file) eq $content, "verified put");
 }
 
 # successful puts
@@ -71,14 +70,40 @@ ok(! -f $disk_file, "file gone");
 ok(! delete_file(), "deleting non-existent file");
 
 # min_put_directory
-#TODO
+ok(manage("SET test.min_put_directory = 2"));
+foreach_aio {
+    my $mode = shift;
 
+    my $dir1 = "mode-$mode";
+    my $path = "$dir1/dir2/foo.txt";
+    $url = "http://127.0.0.1:$port/$path";
+    $disk_file = "$dir/$path";
+    ok(! put_file(), "aio $mode: bad put");
+    ok(mkdir("$dir/$dir1"), "mkdir dir1");
+    ok(mkdir("$dir/$dir1/dir2"), "mkdir dir1/dir2");
+    ok(put_file(), "aio $mode: good put at dir1/dir2/foo.txt");
+    verify_put();
+    ok(unlink($disk_file), "rm file");
+    ok(rmdir("$dir/$dir1/dir2"), "rm dir2");
+    ok(rmdir("$dir/$dir1"), "rm dir1");
+
+};
+ok(manage("SET test.min_put_directory = 0"));
+
+# let Perlbal autocreate a dir tree
+{
+    my $path = "a/b/c/d/foo.txt";
+    $url = "http://127.0.0.1:$port/$path";
+    $disk_file = "$dir/$path";
+    ok(put_file(), "made deep file");
+    ok(-f $disk_file, "deep file exists");
+}
 
 # permissions
 ok(put_file());
-manage("SET test.enable_put = 0");
+ok(manage("SET test.enable_put = 0"));
 ok(! put_file(), "put disabled");
-manage("SET test.enable_delete = 0");
+ok(manage("SET test.enable_delete = 0"));
 ok(! delete_file(), "delete disabled");
 
 1;

@@ -15,7 +15,7 @@ sub aio_stat {
 
 sub _fh_of_fd_mode {
     my ($fd, $mode) = @_;
-    return undef unless $fd;
+    return undef unless defined $fd && $fd >= 0;
 
     #TODO: use the write MODE for the given $mode;
     my $fh = IO::Handle->new_from_fd($fd, 'r+');
@@ -34,9 +34,9 @@ sub aio_open {
     } elsif ($Perlbal::AIO_MODE eq "ioaio") {
         IO::AIO::aio_open($file, $flags, $mode, $cb);
     } else {
-        my $fd = POSIX::open($file, $flags, $mode);
-        my $fh = _fh_of_fd_mode($fd, $mode);
-        $cb->($fh);
+        my $fh;
+        my $rv = sysopen($fh, $file, $flags, $mode);
+        $cb->($rv ? $fh : undef);
     }
 }
 
