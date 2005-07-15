@@ -55,7 +55,7 @@ sub register {
 
             # seek into the file now so sendfile starts further in
             my $ld = length $data;
-            POSIX::lseek($obj->{reproxy_fd}, $ld, &POSIX::SEEK_SET);
+            sysseek($obj->{reproxy_fh}, $ld, &POSIX::SEEK_SET);
             $obj->{reproxy_file_offset} = $ld;
 
             # reenable writes after we get data

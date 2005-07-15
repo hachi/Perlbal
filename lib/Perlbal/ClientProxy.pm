@@ -225,21 +225,21 @@ sub start_reproxy_file {
 
         $self->state('wait_open');
         Perlbal::AIO::aio_open($file, 0, 0 , sub {
-            my $rp_fd = shift;
+            my $fh = shift;
 
             # if client's gone, just close filehandle and abort
             if ($self->{closed}) {
-                POSIX::close($rp_fd) if $rp_fd >= 0;
+                CORE::close($fh) if $fh;
                 return;
             }
 
             # handle errors
-            if ($rp_fd < 0) {
+            if (! $fh) {
                 # FIXME: do 500 vs. 404 vs whatever based on $! ?
                 return $self->_simple_response(500);
             }
 
-            $self->reproxy_fd($rp_fd, $size);
+            $self->reproxy_fh($fh, $size);
             $self->watch_write(1);
         });
     });

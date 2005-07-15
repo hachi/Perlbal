@@ -1,3 +1,7 @@
+    -- test suite
+
+    -- IO::AIO support (brad)
+
     -- change response code to client to 200 on reproxy-file from backend
 
     -- 'nodes' command now takes as an optional argument a specific ip:port to

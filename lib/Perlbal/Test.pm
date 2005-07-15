@@ -1,52 +1,46 @@
 package Perlbal::Test;
 use strict;
-use Perlbal;
 use POSIX qw( :sys_wait_h );
+use IO::Socket::INET;
+
+require Exporter;
+use vars qw(@ISA @EXPORT);
+@ISA = qw(Exporter);
+@EXPORT = qw(ua start_server foreach_aio manage filecontent);
 
 our $i_am_parent = 0;
 our $msock;  # management sock of child
 our $to_kill = 0;
 
 END {
-    if ($i_am_parent) {
-        eval {
-            Linux::AIO::max_parallel(0)
-                if $Perlbal::OPTMOD_LINUX_AIO;
-          };
-        kill_all_children_of($$);
+    manage("shutdown") if $i_am_parent;
+}
+
+sub filecontent {
+    my $file = shift;
+    my $ct;
+    open (F, $file) or return undef;
+    $ct = do { local $/; <F>; };
+    close F;
+    return $ct;
+}
+
+sub foreach_aio (&) {
+    my $cb = shift;
+
+    foreach my $mode (qw(none linux ioaio)) {
+        my $line = manage("SERVER aio_mode = $mode");
+        next unless $line;
+        $cb->($mode);
     }
 }
 
-our %children;
-sub learn_pid_tree {
-    opendir(P, "/proc") or die;
-    my @pids = grep { /^\d+$/ } readdir(P);
-    closedir(P);
-    foreach my $pid (@pids) {
-        my $parent = parent_pid_of($pid);
-        push @{$children{$parent} ||= []}, $pid;
-    }
-}
-
-sub kill_all_children_of {
-    my $pid = shift;
-    learn_pid_tree() unless %children;
-    foreach my $ch (@{$children{$pid} || []}) {
-        kill_all_children_of($ch);
-        kill 9, $ch;
-    }
-}
-
-sub parent_pid_of {
-    my $pid = shift;
-    return undef unless $pid =~ /^\d+$/;
-    open(L, "/proc/$pid/status") or return undef;
-    while (<L>) {
-        next unless /PPid:\s+(\d+)/;
-        close L;
-        return $1;
-    }
-    close L;
+sub manage {
+    my $cmd = shift;
+    print $msock "$cmd\r\n";
+    my $res = <$msock>;
+    return 0 if !$res || $res =~ /^ERR/;
+    return $res;
 }
 
 sub start_server {
@@ -62,7 +56,7 @@ sub start_server {
             die "Child process (webserver) died.\n";
         }
         print $msock "proc\r\n";
-        my $spid = 0;
+        my $spid = undef;
         while (<$msock>) {
             last if m!^\.\r?\n!;
             next unless /^pid:\s+(\d+)/;
@@ -76,8 +70,10 @@ sub start_server {
 
     # child process...
 
+    require Perlbal;
+
     $conf .= qq{
-CREATE SERVICE mgmt   # word
+CREATE SERVICE mgmt
 SET mgmt.listen = 127.0.0.1:60000
 SET mgmt.role = management
 ENABLE mgmt
@@ -87,7 +83,6 @@ ENABLE mgmt
     Perlbal::run_manage_command($_, $out) foreach split(/\n/, $conf);
 
     unless (Perlbal::Socket->WatchedSockets() > 0) {
-        #kill 15, getppid();
         die "Invalid configuration.  (shouldn't happen?)  Stopping (self=$$).\n";
     }
 
@@ -98,6 +93,12 @@ ENABLE mgmt
 # get the manager socket
 sub msock {
     return $msock;
+}
+
+sub ua {
+    require LWP;
+    require LWP::UserAgent;
+    return LWP::UserAgent->new;
 }
 
 sub wait_on_child {

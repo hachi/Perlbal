@@ -5,19 +5,38 @@ sub aio_stat {
     my ($file, $cb) = @_;
     if ($Perlbal::AIO_MODE eq "linux") {
         Linux::AIO::aio_stat($file, $cb);
+    } elsif ($Perlbal::AIO_MODE eq "ioaio") {
+        IO::AIO::aio_stat($file, $cb);
     } else {
         stat($file);
         $cb->();
     }
 }
 
+sub _fh_of_fd_mode {
+    my ($fd, $mode) = @_;
+    return undef unless $fd;
+
+    #TODO: use the write MODE for the given $mode;
+    my $fh = IO::Handle->new_from_fd($fd, 'r+');
+    my $num = fileno($fh);
+    return $fh;
+}
+
 sub aio_open {
     my ($file, $flags, $mode, $cb) = @_;
     if ($Perlbal::AIO_MODE eq "linux") {
-        Linux::AIO::aio_open($file, $flags, $mode, $cb);
+        Linux::AIO::aio_open($file, $flags, $mode, sub {
+            my $fd = shift;
+            my $fh = _fh_of_fd_mode($fd, $mode);
+            $cb->($fh);
+        });
+    } elsif ($Perlbal::AIO_MODE eq "ioaio") {
+        IO::AIO::aio_open($file, $flags, $mode, $cb);
     } else {
         my $fd = POSIX::open($file, $flags, $mode);
-        $cb->($fd);
+        my $fh = _fh_of_fd_mode($fd, $mode);
+        $cb->($fh);
     }
 }
 
@@ -25,6 +44,8 @@ sub aio_unlink {
     my ($file, $cb) = @_;
     if ($Perlbal::AIO_MODE eq "linux") {
         Linux::AIO::aio_unlink($file, $cb);
+    } elsif ($Perlbal::AIO_MODE eq "ioaio") {
+        IO::AIO::aio_unlink($file, $cb);
     } else {
         my $rv = unlink($file);
         $rv = $rv ? 0 : -1;
@@ -39,6 +60,8 @@ sub aio_write {
 
     if ($Perlbal::AIO_MODE eq "linux") {
         Linux::AIO::aio_write($fh, $offset, $length, $_[3], 0, $cb);
+    } elsif ($Perlbal::AIO_MODE eq "ioaio") {
+        IO::AIO::aio_write($fh, $offset, $length, $_[3], 0, $cb);
     } else {
         my $rv = syswrite($fh, $_[3], $length, $offset);
         $cb->($rv);
@@ -52,6 +75,8 @@ sub aio_read {
 
     if ($Perlbal::AIO_MODE eq "linux") {
         Linux::AIO::aio_read($fh, $offset, $length, $_[3], 0, $cb);
+    } elsif ($Perlbal::AIO_MODE eq "ioaio") {
+        IO::AIO::aio_read($fh, $offset, $length, $_[3], 0, $cb);
     } else {
         my $rv = sysread($fh, $_[3], $length, $offset);
         $cb->($rv);

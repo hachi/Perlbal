@@ -13,13 +13,15 @@ use IO::Socket;
 use IO::Handle;
 use IO::File;
 
-# Try and use Linux::AIO, if it's around.  If not, worst 
+# Try and use IO::AIO or Linux::AIO, if it's around.
 BEGIN {
+    $Perlbal::OPTMOD_IO_AIO    = eval "use IO::AIO (); 1;";
     $Perlbal::OPTMOD_LINUX_AIO = eval "use Linux::AIO '1.3'; 1;";
 }
 
 $Perlbal::AIO_MODE = "none";
-$Perlbal::AIO_MODE = "linux" if $Perlbal::OPTMOD_LINUX_AIO;
+$Perlbal::AIO_MODE = "ioaio" if $Perlbal::OPTMOD_IO_AIO;
+$Perlbal::AIO_MODE = "linux"  if $Perlbal::OPTMOD_LINUX_AIO;
 
 use Sys::Syslog;
 
@@ -42,6 +44,13 @@ use Perlbal::ClientHTTP;
 use Perlbal::BackendHTTP;
 use Perlbal::ReproxyManager;
 use Perlbal::Pool;
+
+END {
+    Linux::AIO::max_parallel(0)
+        if $Perlbal::OPTMOD_LINUX_AIO;
+    IO::AIO::max_parallel(0)
+        if $Perlbal::OPTMOD_IO_AIO;
+}
 
 $SIG{'PIPE'} = "IGNORE";  # handled manually
 
@@ -174,7 +183,11 @@ sub run_manage_command {
         return 1;
     }
 
-    exit(0) if $cmd eq "shutdown";
+    if ($cmd eq "shutdown") {
+        Linux::AIO::max_parallel(0) if $Perlbal::OPTMOD_LINUX_AIO;
+        IO::AIO::max_parallel(0)    if $Perlbal::OPTMOD_IO_AIO;
+        exit(0);
+    }
 
     if ($cmd =~ /^xs(?:\s+(\w+)\s+(\w+))?$/) {
         if ($1 && $2) {
@@ -245,6 +258,7 @@ sub run_manage_command {
         my ($udelta, $sdelta) = ($ut - $lastutime, $st - $laststime);
         my $rdelta = $reqs - $lastreqs;
         $out->('time: ' . time());
+        $out->('pid: ' . $$);
         $out->("utime: $ut (+$udelta)");
         $out->("stime: $st (+$sdelta)");
         $out->("reqs: $reqs (+$rdelta)");
@@ -381,7 +395,7 @@ sub run_manage_command {
                 $write_buf += $v->{write_buf_size};
                 if ($v->isa("Perlbal::ClientHTTPBase")) {
                     my Perlbal::ClientHTTPBase $cv = $v;
-                    $open_files++ if $cv->{'reproxy_fd'};
+                    $open_files++ if $cv->{'reproxy_fh'};
                 }
             }
 
@@ -588,16 +602,18 @@ sub run_manage_command {
             return $err->("Expected numeric parameter") unless $val =~ /^-?\d+$/;
             Linux::AIO::min_parallel($val)
                 if $Perlbal::OPTMOD_LINUX_AIO;
+            IO::AIO::min_parallel($val)
+                if $Perlbal::OPTMOD_IO_AIO;
 
         } elsif ($key =~ /^track_obj/) {
             return $err->("Expected 1 or 0") unless $val eq '1' || $val eq '0';
             $track_obj = $val + 0;
             %ObjTrack = () if $val; # if we're turning it on, clear it out
 
-        } elsif ($key =~ /^aio_mode$/) {
-            return $err->("Unknown AIO mode") unless $val =~ /^none|linux|fdpass$/;
+        } elsif ($key eq "aio_mode") {
+            return $err->("Unknown AIO mode") unless $val =~ /^none|linux|ioaio$/;
             return $err->("Linux::AIO not available") if $val eq "linux" && ! $Perlbal::OPTMOD_LINUX_AIO;
-            return $err->("fdpassing not implemented") if $val eq "fdpass";
+            return $err->("IO::AIO not available")    if $val eq "ioaio" && ! $Perlbal::OPTMOD_IO_AIO;
             $Perlbal::AIO_MODE = $val;
             return $ok->();
         }
@@ -753,6 +769,8 @@ sub daemonize {
     # required before fork: (as of Linux::AIO 1.1, but may change)
     Linux::AIO::max_parallel(0)
         if $Perlbal::OPTMOD_LINUX_AIO;
+    IO::AIO::max_parallel(0)
+        if $Perlbal::OPTMOD_IO_AIO;
 
     ## Fork and exit parent
     if ($pid = fork) { exit 0; }
@@ -786,22 +804,23 @@ sub run {
     # setup for logging
     openlog('perlbal', 'pid', 'daemon');
     Perlbal::log('info', 'beginning run');
-    
+
     # number of AIO threads.  the number of outstanding requests isn't
     # affected by this
     Linux::AIO::min_parallel(3) if $Perlbal::OPTMOD_LINUX_AIO;
+    IO::AIO::min_parallel(3)    if $Perlbal::OPTMOD_IO_AIO;
 
     # register Linux::AIO's pipe which gets written to from threads
     # doing blocking IO
     if ($Perlbal::OPTMOD_LINUX_AIO) {
-        my $aio_fd = Linux::AIO::poll_fileno();
-
-        # add, so we don't clobber
-        Perlbal::Socket->AddOtherFds($aio_fd => sub {
-            # run any callbacks on async file IO operations
-            Linux::AIO::poll_cb();
-        });
+        Perlbal::Socket->AddOtherFds(Linux::AIO::poll_fileno() =>
+                                     \&Linux::AIO::poll_cb)
     }
+    if ($Perlbal::OPTMOD_IO_AIO) {
+        Perlbal::Socket->AddOtherFds(IO::AIO::poll_fileno() =>
+                                     \&IO::AIO::poll_cb);
+    }
+
 
     Danga::Socket->SetLoopTimeout(1000);
     Danga::Socket->SetPostLoopCallback(sub {

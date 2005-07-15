@@ -43,7 +43,7 @@ sub close {
 
     # don't close twice
     return if $self->{closed};
-    
+
     $self->{put_fh} = undef;
 
     $self->SUPER::close(@_);
@@ -110,10 +110,10 @@ sub event_read {
     } elsif ($self->{service}->{enable_put} && $hd->request_method eq 'PUT') {
         # they want to put something, so let's setup and wait for more reads
         my $clen = $hd->header('Content-length') + 0;
-        
+
         # return a 400 (bad request) if we got no content length or if it's
         # bigger than any specified max put size
-        return $self->send_response(400, "File too big? ($clen)")
+        return $self->send_response(400, "Content-length of $clen is invalid.")
             if !$clen ||
                ($self->{service}->{max_put_size} &&
                 $clen > $self->{service}->{max_put_size});
@@ -223,17 +223,18 @@ sub verify_put {
 
     my $mindir = $self->{service}->{docroot} . '/' . $minput;
     return 1 if $VerifiedDirs{$mindir};
-    
     $self->{put_in_progress} = 1;
-    
+
     Perlbal::AIO::aio_open($mindir, O_RDONLY, 0755, sub {
         $self->{put_in_progress} = 0;
 
         # if error return failure
         return $self->send_response(404, "Base directory does not exist") if $!;
 
+        my $fh = shift;
+        CORE::close($fh);
+
         # mindir existed, mark it as so and start the open for the rest of the path
-        POSIX::close(shift);
         $VerifiedDirs{$mindir} = 1;
         return $self->attempt_open($mindir . $extrapath, $filename);
     });
@@ -246,40 +247,28 @@ sub attempt_open {
     my ($path, $file) = @_;
 
     $self->{put_in_progress} = 1;
-    
+
     Perlbal::AIO::aio_open("$path/$file", O_CREAT | O_TRUNC | O_WRONLY, 0644, sub {
         # get the fd
-        my $fd = shift;
+        my $fh = shift;
 
         # verify file was opened
         $self->{put_in_progress} = 0;
-        if ($! == ENOENT) {
-            # directory doesn't exist, so let's manually create it
-            eval { File::Path::mkpath($path, 0, 0755); };
-            return $self->system_error("Unable to create directory", "path = $path, file = $file") if $@;
 
-            # should be created, call self recursively to try
-            return $self->attempt_open($path, $file);
-        } elsif ($!) {
-            return $self->system_error("Internal error", "error = $!, path = $path, file = $file");
+        if (! $fh) {
+            if ($! == ENOENT) {
+                # directory doesn't exist, so let's manually create it
+                eval { File::Path::mkpath($path, 0, 0755); };
+                return $self->system_error("Unable to create directory", "path = $path, file = $file") if $@;
+
+                # should be created, call self recursively to try
+                return $self->attempt_open($path, $file);
+            } else {
+                return $self->system_error("Internal error", "error = $!, path = $path, file = $file");
+            }
         }
 
-        # associate descriptor from aio_open with filehandle for aio_write/aio_close
-        unless ($self->{put_fh} = IO::Handle->new_from_fd($fd, "w")) {
-            my $err = "$!";
-
-            # log the output of readlink
-            my $linkinfo;
-            eval {
-                # eval because some systems don't have symbolic link support
-                $linkinfo = readlink "/proc/self/fd/$fd";
-                $linkinfo ||= "Error obtaining link info: $!";
-            };
-
-            # now log this whole thing in the system log (and send to the user)
-            return $self->system_error("Unable to create file", 
-                                       "error = $err, path = $path, file = $file, fd = $fd ($linkinfo)");
-        }
+        $self->{put_fh} = $fh;
         $self->{put_pos} = 0;
         $self->handle_put;
     });
@@ -313,11 +302,13 @@ sub handle_put {
 
     # okay, file is open, write some data
     $self->{put_in_progress} = 1;
+
     Perlbal::AIO::aio_write($self->{put_fh}, $self->{put_pos}, $count, $data, sub {
         return if $self->{closed};
 
         # see how many bytes written
         my $bytes = shift() + 0;
+
         $self->{put_pos} += $bytes;
         $self->{put_in_progress} = 0;
 
@@ -329,7 +320,7 @@ sub handle_put {
             unless ($self->{content_length_remain}) {
                 # close it
                 # FIXME this should be done through AIO
-                if ($self->{put_fh} && $self->{put_fh}->close) {
+                if ($self->{put_fh} && CORE::close($self->{put_fh})) {
                     $self->{put_fh} = undef;
                     return $self->send_response(200);
                 } else {

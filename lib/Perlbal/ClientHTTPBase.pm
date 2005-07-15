@@ -28,7 +28,6 @@ use fields ('service',             # Perlbal::Service object
             # reproxy support
             'reproxy_file',        # filename the backend told us to start opening
             'reproxy_file_size',   # size of file, once we stat() it
-            'reproxy_fd',          # integer fd of reproxying file, once we open() it
             'reproxy_fh',          # if needed, IO::Handle of fd
             'reproxy_file_offset', # how much we've sent from the file.
 
@@ -87,7 +86,7 @@ sub close {
     return if $self->{closed};
 
     # close the file we were reproxying, if any
-    POSIX::close($self->{reproxy_fd}) if $self->{reproxy_fd};
+    CORE::close($self->{reproxy_fh}) if $self->{reproxy_fh};
 
     # now pass up the line
     $self->SUPER::close(@_);
@@ -143,7 +142,6 @@ sub http_response_sent {
     $self->{req_headers} = undef;
     $self->{res_headers} = undef;
     $self->{reproxy_fh} = undef;
-    $self->{reproxy_fd} = 0;
     $self->{reproxy_file} = undef;
     $self->{reproxy_file_size} = 0;
     $self->{reproxy_file_offset} = 0;
@@ -162,31 +160,26 @@ sub http_response_sent {
     return 1;
 }
 
+use Carp qw(cluck);
+
 sub reproxy_fh {
     my Perlbal::ClientHTTPBase $self = shift;
-    unless (defined $self->{reproxy_fh}) {
-        $self->{reproxy_fh} = IO::Handle->new_from_fd($self->{reproxy_fd}, 'r')
-            if $self->{reproxy_fd};
+
+    # setter
+    if (@_) {
+        my ($fh, $size) = @_;
+        $self->state('xfer_disk');
+        $self->{reproxy_fh} = $fh;
+        $self->{reproxy_file_offset} = 0;
+        $self->{reproxy_file_size} = $size;
+        # call hook that we're reproxying a file
+        return $fh if $self->{service}->run_hook("start_send_file", $self);
+        # turn on writes (the hook might not have wanted us to)
+        $self->watch_write(1);
+        return $fh;
     }
+
     return $self->{reproxy_fh};
-}
-
-sub reproxy_fd {
-    my Perlbal::ClientHTTPBase $self = shift;
-    return $self->{reproxy_fd} unless @_;
-
-    my ($fd, $size) = @_;
-    $self->state('xfer_disk');
-    $self->{reproxy_file_offset} = 0;
-    $self->{reproxy_file_size} = $size;
-    $self->{reproxy_fd} = $fd;
-    
-    # call hook that we're reproxying a file
-    return $fd if $self->{service}->run_hook("start_send_file", $self);
-
-    # turn on writes (the hook might not have wanted us to)    
-    $self->watch_write(1);
-    return $fd;
 }
 
 sub event_write {
@@ -197,12 +190,12 @@ sub event_write {
     # subclasses can decide what's appropriate for timeout.
     $self->{alive_time} = time;
 
-    if ($self->{reproxy_fd}) {
+    if ($self->{reproxy_fh}) {
         my $to_send = $self->{reproxy_file_size} - $self->{reproxy_file_offset};
         $self->tcp_cork(1) if $self->{reproxy_file_offset} == 0;
         my $sent = syscall($SYS_sendfile,
                            $self->{fd},
-                           $self->{reproxy_fd},
+                           fileno($self->{reproxy_fh}),
                            0, # NULL offset means kernel moves offset
                            $to_send);
         print "REPROXY Sent: $sent\n" if Perlbal::DEBUG >= 2;
@@ -217,9 +210,8 @@ sub event_write {
 
         if ($sent >= $to_send) {
             # close the sendfile fd
-            my $rv = POSIX::close($self->{reproxy_fd});
+            CORE::close($self->{reproxy_fh});
 
-            $self->{reproxy_fd} = undef;
             $self->{reproxy_fh} = undef;
             $self->http_response_sent;
         }
@@ -256,12 +248,12 @@ sub _serve_request {
 
     # start_serve_request hook
     return 1 if $self->{service}->run_hook('start_serve_request', $self, \$uri);
-    
+
     my $file = $svc->{docroot} . $uri;
 
     # update state, since we're now waiting on stat
     $self->state('wait_stat');
-    
+
     Perlbal::AIO::aio_stat($file, sub {
         # client's gone anyway
         return if $self->{closed};
@@ -300,18 +292,18 @@ sub _serve_request {
 
             # state update
             $self->state('wait_open');
-            
+
             Perlbal::AIO::aio_open($file, 0, 0, sub {
-                my $rp_fd = shift;
+                my $rp_fh = shift;
 
                 # if client's gone, just close filehandle and abort
                 if ($self->{closed}) {
-                    POSIX::close($rp_fd) if $rp_fd >= 0;
+                    CORE::close($rp_fh) if $rp_fh;
                     return;
                 }
 
                 # handle errors
-                if ($rp_fd < 0) {
+                if (! $rp_fh) {
                     # couldn't open the file we had already successfully stat'ed.
                     # FIXME: do 500 vs. 404 vs whatever based on $!
                     return $self->close('aio_open_failure');
@@ -320,7 +312,7 @@ sub _serve_request {
                 $self->state('xfer_disk');
                 $self->tcp_cork(1);  # cork writes to self
                 $self->write($res->to_string_ref);
-                $self->reproxy_fd($rp_fd, $size);
+                $self->reproxy_fh($rp_fh, $size);
             });
 
         } elsif (-d _) {
@@ -332,7 +324,7 @@ sub _serve_request {
 sub try_index_files {
     my Perlbal::ClientHTTPBase $self = shift;
     my ($hd, $res, $filepos) = @_;
-    
+
     # make sure this starts at 0 initially, and fail if it's past the end
     $filepos ||= 0;
     if ($filepos >= scalar(@{$self->{service}->{index_files} || []})) {
