@@ -130,12 +130,12 @@ sub event_read {
             $self->{content_length_remain} = $clen - $self->{read_size};
         } else {
             # setup to read the file
-            $self->{read_buf} = '';            
+            $self->{read_buf} = '';
             $self->{content_length} = $self->{content_length_remain} = $clen;
         }
 
         # setup the directory asynchronously
-        $self->setup_put;       
+        $self->setup_put;
         return;
     } elsif ($self->{service}->{enable_delete} && $hd->request_method eq 'DELETE') {
         # delete a file

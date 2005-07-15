@@ -28,3 +28,8 @@ doc/todo.txt
 conf/nodelist.dat
 conf/perlbal.conf
 t/00-use.t
+t/10-testharness.t
+t/15-webserver.t
+t/20-put.t
+
+
