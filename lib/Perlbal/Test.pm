@@ -6,7 +6,8 @@ use IO::Socket::INET;
 require Exporter;
 use vars qw(@ISA @EXPORT);
 @ISA = qw(Exporter);
-@EXPORT = qw(ua start_server foreach_aio manage filecontent tempdir new_port);
+@EXPORT = qw(ua start_server foreach_aio manage filecontent tempdir new_port
+             wait_on_child);
 
 our $i_am_parent = 0;
 our $msock;  # management sock of child
