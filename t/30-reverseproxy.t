@@ -9,12 +9,6 @@ use Test::More 'no_plan';
 # option setup
 my $start_servers = 3; # web servers to start
 
-# helper routines
-sub status {
-    my $port = shift;
-
-}
-
 # setup a few web servers that we can work with
 my @web_ports = map { start_webserver() } 1..$start_servers;
 @web_ports = grep { $_ > 0 } map { $_ += 0 } @web_ports;
@@ -41,6 +35,17 @@ $conf .= "POOL a ADD 127.0.0.1:$_\n"
 my $msock = start_server($conf);
 ok($msock, 'perlbal started');
 
-#my $pid = status($web_port);
+my $wc = new Perlbal::Test::WebClient;
+$wc->server("127.0.0.1:$pb_port");
+$wc->keepalive(0);
+$wc->http_version('1.0');
+ok($wc, 'web client object created');
+
+my $resp = $wc->request('status');
+ok($resp, 'status response ok');
+
+my $content = $resp ? $resp->content : '';
+my $pid = $content =~ /^pid = (\d+)$/ ? $1 : 0;
+ok($pid > 0, 'web server functioning');
 
 1;

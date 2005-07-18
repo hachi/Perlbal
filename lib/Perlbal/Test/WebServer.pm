@@ -4,6 +4,8 @@ package Perlbal::Test::WebServer;
 
 use strict;
 use IO::Socket::INET;
+use HTTP::Request;
+
 use Perlbal::Test;
 
 require Exporter;
@@ -41,11 +43,6 @@ sub start_webserver {
         exit 0 unless $csock;
         fork and next; # parent starts waiting for next request
 
-        my $eat = sub {
-            while (<$csock>) {
-                last if ! $_ || /^\r?\n/;
-            }
-        };
         my $response = sub {
             my ($code, $msg, $content, $ctype) = @_;
             $msg ||= { 200 => 'OK', 500 => 'Internal Server Error' }->{$code};
@@ -59,15 +56,24 @@ sub start_webserver {
                    "$content";
         };
 
-        my $req = <$csock>;
-
-        my @cmds;
-        if ($req =~ m!^GET /(\S+) HTTP/1\.\d+\r?\n?$!) {
-            @cmds = split(/\s*,\s*/, durl($1));
+        my $req = '';
+        while (<$csock>) {
+            $req .= $_;
+            last if ! $_ || /^\r?\n/;
         }
 
-        # 500 if no commands were given
-        unless (@cmds) {
+        # parse out things we want to have
+        my @cmds;
+        my $httpver; # 0 = 1.0, 1 = 1.1, undef = neither
+        if ($req =~ m!^GET /(\S+) HTTP/(1\.\d+)\r?\n?!) {
+            @cmds = split(/\s*,\s*/, durl($1));
+            $httpver = ($2 eq '1.0' ? 0 : ($2 eq '1.1' ? 1 : undef));
+        }
+        my $msg = HTTP::Request->parse($req);
+
+        # 500 if no commands were given or we don't know their HTTP version
+        # or we didn't parse a proper HTTP request
+        unless (@cmds && defined $httpver && $msg) {
             print $csock $response->(500);
             exit 0;
         }
