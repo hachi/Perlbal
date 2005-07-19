@@ -66,7 +66,7 @@ sub new_response {
     Perlbal::objctor($self, $self->{type});
     return $self;
 }
-*new_response_PERL = &new_response;
+*new_response_PERL = \&new_response;
 
 sub new {
     my Perlbal::HTTPHeaders $self = shift;
@@ -178,7 +178,7 @@ sub new {
 
     return $self;
 }
-*new_PERL = &new;
+*new_PERL = \&new;
 
 sub _codetext {
     my Perlbal::HTTPHeaders $self = shift;
