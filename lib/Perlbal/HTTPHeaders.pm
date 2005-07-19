@@ -44,7 +44,7 @@ sub fail {
 
 sub http_code_english {
     my Perlbal::HTTPHeaders $self = shift;
-    return $HTTPCode->{$self->{code}};
+    return $HTTPCode->{$self->response_code};
 }
 
 sub new_response {
@@ -66,6 +66,7 @@ sub new_response {
     Perlbal::objctor($self, $self->{type});
     return $self;
 }
+*new_response_PERL = &new_response;
 
 sub new {
     my Perlbal::HTTPHeaders $self = shift;
@@ -177,6 +178,7 @@ sub new {
 
     return $self;
 }
+*new_PERL = &new;
 
 sub _codetext {
     my Perlbal::HTTPHeaders $self = shift;
