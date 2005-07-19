@@ -62,7 +62,7 @@ sub serve_client {
 
         # parse out things we want to have
         my @cmds;
-        my $httpver; # 0 = 1.0, 1 = 1.1, undef = neither
+        my $httpver = 0; # 0 = 1.0, 1 = 1.1, undef = neither
         if ($req =~ m!^GET /(\S+) HTTP/(1\.\d+)\r?\n?!) {
             my $cmds = durl($1);
             @cmds = split(/\s*,\s*/, $cmds);
@@ -81,14 +81,15 @@ sub serve_client {
             my $hdr_keepalive = "";
 
             unless (defined $keeping_alive) {
+                my $hdr_connection = $msg->header('Connection') || '';
                 if ($httpver == 1) {
-                    if ($msg->header("Connection") =~ /\bclose\b/i) {
+                    if ($hdr_connection =~ /\bclose\b/i) {
                         $keeping_alive = 0;
                     } else {
                         $keeping_alive = "1.1implicit";
                     }
                 }
-                if ($httpver == 0 && $msg->header("Connection") =~ /\bkeep-alive\b/i) {
+                if ($httpver == 0 && $hdr_connection =~ /\bkeep-alive\b/i) {
                     $keeping_alive = "1.0keepalive";
                 }
             }
