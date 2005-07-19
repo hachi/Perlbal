@@ -5,7 +5,7 @@ package Perlbal::Test::WebClient;
 use strict;
 use IO::Socket::INET;
 use HTTP::Response;
-use Socket qw(MSG_NOSIGNAL);
+use Socket qw(MSG_NOSIGNAL IPPROTO_TCP TCP_NODELAY SOL_SOCKET);
 
 require Exporter;
 use vars qw(@ISA @EXPORT $FLAG_NOSIGNAL);
@@ -56,6 +56,8 @@ sub request {
     my $self = shift;
     return undef unless $self->{server};
 
+    my $opts = ref $_[0] eq "HASH" ? shift : {};
+
     my $cmds = join(',', map { eurl($_) } @_);
     return undef unless $cmds;
 
@@ -93,42 +95,52 @@ sub request {
                 PeerAddr => $self->{server},
                 Timeout => 3,
             ) or return undef;
+        setsockopt($sock, IPPROTO_TCP, TCP_NODELAY, pack("l", 1)) or die;
+
         $rv = send($sock, $send, $FLAG_NOSIGNAL);
         if ($! || $rv != $len) {
             return undef;
         }
     }
 
-    my $res = '';
-    my $firstline = undef;
-    while (<$sock>) {
-        $res .= $_;
-        $firstline = $_ unless defined $firstline;
-        last if ! $_ || /^\r?\n/;
-    }
-
-    my $resp = HTTP::Response->parse($res);
-    return undef unless $resp;
-
-    my $cl = $resp->header('Content-Length');
-    if ($cl > 0) {
-        my $content = '';
-        while (($cl -= read($sock, $content, $cl)) > 0) {
-            # don't do anything, the loop is it
+    my $parse_it = sub {
+        my $res = '';
+        my $firstline = undef;
+        while (<$sock>) {
+            $res .= $_;
+            $firstline = $_ unless defined $firstline;
+            last if ! $_ || /^\r?\n/;
         }
-        $resp->content($content);
-    }
 
-    my $conhdr = $resp->header("Connection");
-    if (($firstline =~ m!\bHTTP/1\.1\b! && $conhdr !~ m!\bclose\b!i) ||
-        ($firstline =~ m!\bHTTP/1\.0\b! && $conhdr =~ m!\bkeep-alive\b!i)) {
-        $self->{_sock} = $sock;
-        $self->{_reqdone}++;
+        my $resp = HTTP::Response->parse($res);
+        return undef unless $resp;
+
+        my $cl = $resp->header('Content-Length');
+        if ($cl > 0) {
+            my $content = '';
+            while (($cl -= read($sock, $content, $cl)) > 0) {
+                # don't do anything, the loop is it
+            }
+            $resp->content($content);
+        }
+
+        my $conhdr = $resp->header("Connection");
+        if (($firstline =~ m!\bHTTP/1\.1\b! && $conhdr !~ m!\bclose\b!i) ||
+            ($firstline =~ m!\bHTTP/1\.0\b! && $conhdr =~ m!\bkeep-alive\b!i)) {
+            $self->{_sock} = $sock;
+            $self->{_reqdone}++;
+        } else {
+            $self->{_reqdone} = 0;
+        }
+
+        return $resp;
+    };
+
+    if ($opts->{return_reader}) {
+        return $parse_it;
     } else {
-        $self->{_reqdone} = 0;
+        return $parse_it->();
     }
-
-    return $resp;
 }
 
 sub reqdone {

@@ -25,6 +25,7 @@ SET test.listen = 127.0.0.1:$pb_port
 SET test.persist_client = 1
 SET test.persist_backend = 1
 SET test.pool = a
+SET test.connect_ahead = 0
 ENABLE test
 
 };
@@ -35,7 +36,7 @@ ok($msock, 'perlbal started');
 add_all();
 
 # make first web client
-my $wc = new Perlbal::Test::WebClient;
+my $wc = Perlbal::Test::WebClient->new;
 $wc->server("127.0.0.1:$pb_port");
 $wc->keepalive(0);
 $wc->http_version('1.0');
@@ -54,19 +55,42 @@ $resp = $wc->request('status');
 is(reqnum($resp), 2, "second request");
 is($wc->reqdone, 1, "persist to perlbal");
 $resp = $wc->request('status');
-is(reqnum($resp), 3, "thrid request");
+is(reqnum($resp), 3, "third request");
 is($wc->reqdone, 2, "persist to perlbal again");
 
 # turn persisent off and see that they're not going up
-ok(manage("SET test.persist_backend = 0"), "persist off");
+ok(manage("SET test.persist_backend = 0"), "persist backend off");
 
 # do some request to get rid of that perlbal->backend connection (it's
 # undefined whether disabling backend connections immediately
 # disconnects them all or not)
-$resp = $wc->request('status');
+$resp = $wc->request('status');  # dummy request
 $resp = $wc->request('status');
 is(reqnum($resp), 1, "first request");
 
+# make a second webclient now to test multiple requests at once, and
+# perlbal making multiple backend connections
+ok(manage("SET test.persist_backend = 1"), "persist backend back on");
+
+# testing that backend persistence works
+$resp = $wc->request('status');
+$pid = pid_of_resp($resp);
+$resp = $wc->request('status');
+ok($pid == pid_of_resp($resp), "used same backend");
+
+# multiple parallel backends in operation
+my $wc2 = Perlbal::Test::WebClient->new;
+$wc2->server("127.0.0.1:$pb_port");
+$wc2->keepalive(1);
+$wc2->http_version('1.0');
+
+my $reader1 = $wc->request({return_reader=>1}, "status", "sleep:2.0");
+select undef, undef, undef, 0.5;  # let perlbal schedule one incoming connection so two don't arrive at once
+my $reader2 = $wc2->request({return_reader=>1}, "status", "sleep:0.8");
+
+$resp = $reader1->();
+my $resp2 = $reader2->();
+ok(pid_of_resp($resp) != pid_of_resp($resp2), "got 2 different backends");
 
 sub add_all {
     foreach (@web_ports) {

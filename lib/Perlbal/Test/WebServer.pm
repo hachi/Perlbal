@@ -5,7 +5,7 @@ package Perlbal::Test::WebServer;
 use strict;
 use IO::Socket::INET;
 use HTTP::Request;
-
+use Socket qw(MSG_NOSIGNAL IPPROTO_TCP TCP_NODELAY SOL_SOCKET);
 use Perlbal::Test;
 
 require Exporter;
@@ -42,6 +42,7 @@ sub start_webserver {
     while (my $csock = $ssock->accept) {
         exit 0 unless $csock;
         fork and next; # parent starts waiting for next request
+        setsockopt($csock, IPPROTO_TCP, TCP_NODELAY, pack("l", 1)) or die;
         serve_client($csock);
     }
 }
@@ -69,7 +70,7 @@ sub serve_client {
             $httpver = ($2 eq '1.0' ? 0 : ($2 eq '1.1' ? 1 : undef));
         }
         my $msg = HTTP::Request->parse($req);
-        my $keeping_alive = 0;
+        my $keeping_alive = undef;
 
         my $response = sub {
             my ($code, $codetext, $content, $ctype) = @_;
@@ -77,22 +78,30 @@ sub serve_client {
             $content ||= "$code $codetext";
             my $clen = length $content;
             $ctype ||= "text/plain";
-            my $keepalive = "";
-            if ($httpver == 1) {
-                if ($msg->header("Connection") =~ /\bclose\b/i) {
-                    $keeping_alive = 0;
-                } else {
-                    $keeping_alive = "1.1implicit";
+            my $hdr_keepalive = "";
+
+            unless (defined $keeping_alive) {
+                if ($httpver == 1) {
+                    if ($msg->header("Connection") =~ /\bclose\b/i) {
+                        $keeping_alive = 0;
+                    } else {
+                        $keeping_alive = "1.1implicit";
+                    }
+                }
+                if ($httpver == 0 && $msg->header("Connection") =~ /\bkeep-alive\b/i) {
+                    $keeping_alive = "1.0keepalive";
                 }
             }
-            if ($httpver == 0 && $msg->header("Connection") =~ /\bkeep-alive\b/i) {
-                $keeping_alive = "1.0keepalive";
-                $keepalive = "Connection: keep-alive\n";
+
+            if ($keeping_alive) {
+                $hdr_keepalive = "Connection: keep-alive\n";
+            } else {
+                $hdr_keepalive = "Connection: close\n";
             }
 
             return "HTTP/1.0 $code $codetext\r\n" .
                 "Content-Type: $ctype\r\n" .
-                $keepalive .
+                $hdr_keepalive .
                 "Content-Length: $clen\r\n" .
                 "\r\n" .
                 "$content";
@@ -121,6 +130,10 @@ sub serve_client {
 
             if ($cmd =~ /^sleep:([\d\.]+)$/i) {
                 select undef, undef, undef, $1;
+            }
+
+            if ($cmd =~ /^keepalive:([01])$/i) {
+                $keeping_alive = $1;
             }
 
             if ($cmd eq "status") {
