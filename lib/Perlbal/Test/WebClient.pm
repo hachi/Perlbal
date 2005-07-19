@@ -61,14 +61,18 @@ sub request {
 
     # keep-alive header if 1.0, also means add content-length header
     my $headers = '';
-    $headers .= "Connection: keep-alive\r\n"
-        if $self->{keepalive};
+    if ($self->{keepalive}) {
+        $headers .= "Connection: keep-alive\r\n";
+    } else {
+        $headers .= "Connection: close\r\n";
+    }
+
     my $send = "GET /$cmds HTTP/$self->{http_version}\r\n$headers\r\n";
     my $len = length $send;
 
     # send setup
     my $rv;
-    my $sock = $self->{_sock};
+    my $sock = delete $self->{_sock};
     local $SIG{'PIPE'} = "IGNORE" unless $FLAG_NOSIGNAL;
 
     ### send it cached
@@ -83,6 +87,8 @@ sub request {
 
     # failing that, send it through a new socket
     unless ($rv) {
+        $self->{_reqdone} = 0;
+
         $sock = IO::Socket::INET->new(
                 PeerAddr => $self->{server},
                 Timeout => 3,
@@ -91,13 +97,13 @@ sub request {
         if ($! || $rv != $len) {
             return undef;
         }
-        $self->{_sock} = $sock
-            if $self->{keepalive};
     }
 
     my $res = '';
+    my $firstline = undef;
     while (<$sock>) {
         $res .= $_;
+        $firstline = $_ unless defined $firstline;
         last if ! $_ || /^\r?\n/;
     }
 
@@ -113,7 +119,21 @@ sub request {
         $resp->content($content);
     }
 
+    my $conhdr = $resp->header("Connection");
+    if (($firstline =~ m!\bHTTP/1\.1\b! && $conhdr !~ m!\bclose\b!i) ||
+        ($firstline =~ m!\bHTTP/1\.0\b! && $conhdr =~ m!\bkeep-alive\b!i)) {
+        $self->{_sock} = $sock;
+        $self->{_reqdone}++;
+    } else {
+        $self->{_reqdone} = 0;
+    }
+
     return $resp;
+}
+
+sub reqdone {
+    my $self = shift;
+    return $self->{_reqdone};
 }
 
 # general purpose URL escaping function

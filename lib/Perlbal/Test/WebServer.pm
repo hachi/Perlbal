@@ -29,7 +29,7 @@ sub start_webserver {
         my $sock = wait_on_child($child, $port);
         die "Unable to spawn webserver on port $port\n"
             unless $sock;
-        print $sock "GET /status HTTP/1.0\r\n\r\n";
+        print $sock "GET /reqdecr,status HTTP/1.0\r\n\r\n";
         my $line = <$sock>;
         die "Didn't get 200 OK: $line"
             unless $line =~ /200 OK/;
@@ -42,20 +42,17 @@ sub start_webserver {
     while (my $csock = $ssock->accept) {
         exit 0 unless $csock;
         fork and next; # parent starts waiting for next request
+        serve_client($csock);
+    }
+}
 
-        my $response = sub {
-            my ($code, $msg, $content, $ctype) = @_;
-            $msg ||= { 200 => 'OK', 500 => 'Internal Server Error' }->{$code};
-            $content ||= "$code $msg";
-            my $clen = length $content;
-            $ctype ||= "text/plain";
-            return "HTTP/1.0 $code $msg\r\n" .
-                   "Content-Type: $ctype\r\n" .
-                   "Content-Length: $clen\r\n" .
-                   "\r\n" .
-                   "$content";
-        };
+sub serve_client {
+    my $csock = shift;
+    my $req_num = 0;
+    my @reqs;
 
+  REQ:
+    while (1) {
         my $req = '';
         while (<$csock>) {
             $req .= $_;
@@ -66,16 +63,52 @@ sub start_webserver {
         my @cmds;
         my $httpver; # 0 = 1.0, 1 = 1.1, undef = neither
         if ($req =~ m!^GET /(\S+) HTTP/(1\.\d+)\r?\n?!) {
-            @cmds = split(/\s*,\s*/, durl($1));
+            my $cmds = durl($1);
+            @cmds = split(/\s*,\s*/, $cmds);
+            $req_num++;
             $httpver = ($2 eq '1.0' ? 0 : ($2 eq '1.1' ? 1 : undef));
         }
         my $msg = HTTP::Request->parse($req);
+        my $keeping_alive = 0;
+
+        my $response = sub {
+            my ($code, $codetext, $content, $ctype) = @_;
+            $codetext ||= { 200 => 'OK', 500 => 'Internal Server Error' }->{$code};
+            $content ||= "$code $codetext";
+            my $clen = length $content;
+            $ctype ||= "text/plain";
+            my $keepalive = "";
+            if ($httpver == 1) {
+                if ($msg->header("Connection") =~ /\bclose\b/i) {
+                    $keeping_alive = 0;
+                } else {
+                    $keeping_alive = "1.1implicit";
+                }
+            }
+            if ($httpver == 0 && $msg->header("Connection") =~ /\bkeep-alive\b/i) {
+                $keeping_alive = "1.0keepalive";
+                $keepalive = "Connection: keep-alive\n";
+            }
+
+            return "HTTP/1.0 $code $codetext\r\n" .
+                "Content-Type: $ctype\r\n" .
+                $keepalive .
+                "Content-Length: $clen\r\n" .
+                "\r\n" .
+                "$content";
+        };
+
+        my $send = sub {
+            my $res = shift;
+            print $csock $res;
+            exit 0 unless $keeping_alive;
+        };
 
         # 500 if no commands were given or we don't know their HTTP version
         # or we didn't parse a proper HTTP request
         unless (@cmds && defined $httpver && $msg) {
-            print $csock $response->(500);
-            exit 0;
+            $send->($response->(500));
+            next REQ;
         }
 
         # prepare a simple 200 to send; undef this if you want to control
@@ -86,21 +119,24 @@ sub start_webserver {
             $cmd =~ s/^\s+//;
             $cmd =~ s/\s+$//;
 
-            if ($cmd =~ /^sleep\s+(\d+)$/i) {
-                sleep $1+0;
+            if ($cmd =~ /^sleep:([\d\.]+)$/i) {
+                select undef, undef, undef, $1;
             }
-            
-            if ($cmd =~ /^status$/i) {
-                $to_send = $response->(200, undef, "pid = $$");
+
+            if ($cmd eq "status") {
+                $to_send = $response->(200, undef, "pid = $$\nreqnum = $req_num\n");
+            }
+
+            if ($cmd eq "reqdecr") {
+                $req_num--;
             }
         }
 
         if (defined $to_send) {
-            print $csock $to_send;
+            $send->($to_send);
+            next REQ;
         }
-        exit 0;
-    }
-    exit 0;
+    } # while(1)
 }
 
 # de-url escape
