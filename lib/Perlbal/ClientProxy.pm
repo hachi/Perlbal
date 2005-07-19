@@ -201,13 +201,33 @@ sub start_reproxy_file {
             return $self->_simple_response(404);
         }
 
+        # if the thing we're reproxying is indeed a file, advertise that
+        # we support byteranges on it
+        if (-f _) {
+            $hd->header("Accept-Ranges", "bytes");
+        }
+
+        my ($status, $range_start, $range_end) = $self->{req_headers}->range($size);
+        my $not_satisfiable = 0;
+
+        if ($status == 416) {
+            $hd = Perlbal::HTTPHeaders->new_response(416);
+            $hd->header("Content-Range", $size ? "*/$size" : "*");
+            $not_satisfiable = 1;
+        }
+
+        # change the status code to 200 if the backend gave us 204 No Content
+        $hd->code(200) if $hd->response_code == 204;
+
         # fixup the Content-Length header with the correct size (application
         # doesn't need to provide a correct value if it doesn't want to stat())
-        $hd->header("Content-Length", $size);
-
-        # change the status code to 200, if, for instance, the backend
-        # gave us a 204 no content.
-        $hd->code(200);
+        if ($status == 200) {
+            $hd->header("Content-Length", $size);
+        } elsif ($status == 206) {
+            $hd->header("Content-Range", "$range_start-$range_end/$size");
+            $hd->header("Content-Length", $range_end - $range_start + 1);
+            $hd->code(206);
+        }
 
         # don't send this internal header to the client:
         $hd->header('X-REPROXY-FILE', undef);
@@ -218,7 +238,7 @@ sub start_reproxy_file {
         # just send the header, now that we cleaned it.
         $self->write($hd->to_string_ref);
 
-        if ($self->{req_headers}->request_method eq 'HEAD') {
+        if ($self->{req_headers}->request_method eq 'HEAD' || $not_satisfiable) {
             $self->write(sub { $self->http_response_sent; });
             return;
         }
@@ -237,6 +257,12 @@ sub start_reproxy_file {
             if (! $fh) {
                 # FIXME: do 500 vs. 404 vs whatever based on $! ?
                 return $self->_simple_response(500);
+            }
+
+            # seek if partial content
+            if ($status == 206) {
+                sysseek($fh, $range_start, &POSIX::SEEK_SET);
+                $size = $range_end - $range_start + 1;
             }
 
             $self->reproxy_fh($fh, $size);

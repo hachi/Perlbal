@@ -1,3 +1,6 @@
+    -- byte range support for both webserver mode and reproxy-file mode
+       Giao Phan <giao@guba.com>.  so clients can resume large transfers.
+
     -- test suite
 
     -- IO::AIO support (brad)

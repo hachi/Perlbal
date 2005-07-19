@@ -262,7 +262,24 @@ sub _serve_request {
         my $lastmod = HTTP::Date::time2str((stat(_))[9]);
         my $not_mod = ($hd->header("If-Modified-Since") || "") eq $lastmod && -f _;
 
-        my $res = $self->{res_headers} = Perlbal::HTTPHeaders->new_response($not_mod ? 304 : 200);
+        my $res;
+        my $not_satisfiable = 0;
+        my $size = -s _ if -f _;
+
+        my ($status, $range_start, $range_end) = $hd->range($size);
+
+        if ($not_mod) {
+            $res = $self->{res_headers} = Perlbal::HTTPHeaders->new_response(304);
+        } elsif ($status == 416) {
+            $res = $self->{res_headers} = Perlbal::HTTPHeaders->new_response(416);
+            $res->header("Content-Range", $size ? "*/$size" : "*");
+            $not_satisfiable = 1;
+        } elsif ($status == 206) {
+            # partial content
+            $res = $self->{res_headers} = Perlbal::HTTPHeaders->new_response(206);
+        } else {
+            $res = $self->{res_headers} = Perlbal::HTTPHeaders->new_response(200);
+        }
 
         # now set whether this is keep-alive or not
         $res->header("Date", HTTP::Date::time2str());
@@ -270,18 +287,26 @@ sub _serve_request {
         $res->header("Last-Modified", $lastmod);
 
         if (-f _) {
-            my $size = -s _;
-            unless ($not_mod) {
+            # advertise that we support byte range requests
+            $res->header("Accept-Ranges", "bytes");
+
+            unless ($not_mod && $not_satisfiable) {
                 my ($ext) = ($file =~ /\.(\w+)$/);
                 $res->header("Content-Type",
                              (defined $ext && exists $MimeType->{$ext}) ? $MimeType->{$ext} : "text/plain");
-                $res->header("Content-Length", $size);
+
+                unless ($status == 206) {
+                    $res->header("Content-Length", $size);
+                } else {
+                    $res->header("Content-Range", "$range_start-$range_end/$size");
+                    $res->header("Content-Length", $range_end-$range_start + 1);
+                }
             }
 
             # has to happen after content-length is set to work:
             $self->setup_keepalive($res);
 
-            if ($rm eq "HEAD" || $not_mod) {
+            if ($rm eq "HEAD" || $not_mod || $not_satisfiable) {
                 # we can return already, since we know the size
                 $self->tcp_cork(1);
                 $self->state('xfer_resp');
@@ -312,6 +337,13 @@ sub _serve_request {
                 $self->state('xfer_disk');
                 $self->tcp_cork(1);  # cork writes to self
                 $self->write($res->to_string_ref);
+
+                # seek if partial content
+                if ($status == 206) {
+                    sysseek($rp_fh, $range_start, &POSIX::SEEK_SET);
+                    $size = $range_end - $range_start + 1;
+                  }
+
                 $self->reproxy_fh($rp_fh, $size);
             });
 

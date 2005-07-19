@@ -23,10 +23,12 @@ use fields (
 our $HTTPCode = {
     200 => 'OK',
     204 => 'No Content',
+    206 => 'Partial Content',
     304 => 'Not Modified',
     400 => 'Bad request',
     403 => 'Forbidden',
     404 => 'Not Found',
+    416 => 'Request range not satisfiable',
     500 => 'Internal Server Error',
     501 => 'Not Implemented',
     503 => 'Service Unavailable',
@@ -134,7 +136,7 @@ sub new {
         if ($line =~ /^\s/) {
             next unless defined $last_header;
             $self->{headers}{$last_header} .= $line;
-        } elsif ($line =~ /^([^\x00-\x20\x7f()<>@,;:\\"\/\[\]?={}]+):\s*(.*)$/) {
+        } elsif ($line =~ /^([^\x00-\x20\x7f()<>@,;:\\\"\/\[\]?={}]+):\s*(.*)$/) {
             # RFC 2616:
             # sec 4.2:
             #     message-header = field-name ":" [ field-value ]
@@ -361,6 +363,39 @@ sub res_keep_alive {
     # (not here, obviously)
     return 1;
 }
+
+# returns (status, range_start, range_end) when given a size
+# status = 200 - invalid or non-existent range header.  serve normally.
+# status = 206 - parsable range is good.  serve partial content.
+# status = 416 - Range is unsatisfiable
+sub range {
+    my Perlbal::HTTPHeaders $self = $_[0];
+    my $size = $_[1];
+
+    my $not_satisfiable;
+    my $range = $self->header("Range");
+
+    return 200 unless $range && defined $size;
+
+    my ($range_start, $range_end) = $range =~ /^bytes=(\d*)-(\d*)$/;
+    undef $range_start if $range_start eq '';
+    undef $range_end if $range_end eq '';
+    return 200 unless defined($range_start) or defined($range_end);
+
+    if (defined($range_start) and defined($range_end) and $range_start > $range_end)  {
+        return 416;
+    } elsif (not defined($range_start) and defined($range_end) and $range_end == 0)  {
+        return 416;
+    } elsif (defined($range_start) and $size <= $range_start) {
+        return 416;
+    }
+
+    $range_start = 0        unless defined($range_start);
+    $range_end  = $size - 1 unless defined($range_end) and $range_end < $size;
+
+    return (206, $range_start, $range_end);
+}
+
 
 sub DESTROY {
     my Perlbal::HTTPHeaders $self = shift;
