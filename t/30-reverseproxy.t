@@ -92,6 +92,13 @@ $resp = $reader1->();
 my $resp2 = $reader2->();
 ok(pid_of_resp($resp) != pid_of_resp($resp2), "got 2 different backends");
 
+# making the web server suggest not to keep the connection alive, see if
+# perlbal respects it
+$resp = $wc->request('keepalive:0', 'status');
+$pid = pid_of_resp($resp);
+$resp = $wc->request('keepalive:0', 'status');
+ok(pid_of_resp($resp) != $pid, "discarding keep-alive?");
+
 sub add_all {
     foreach (@web_ports) {
         manage("POOL a ADD 127.0.0.1:$_") or die;
