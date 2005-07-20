@@ -102,9 +102,15 @@ ok_reproxy_file();
 ok_reproxy_url();
 ok_reproxy_file();
 ok_status();
-
 ok($wc->reqdone >= 12, "9 transitions");
 
+# try to reproxy to a list of URLs, where the first one is bogus, and last one is good
+ok_reproxy_url_list();
+
+sub ok_reproxy_url_list {
+    my $resp = $wc->request("reproxy_url_multi:$deadport:$webport:/foo.txt");
+    ok($resp->content eq $file_content, "reproxy URL w/ dead one first");
+}
 
 sub ok_reproxy_file {
     my $resp = $wc->request("reproxy_file:$dir/foo.txt");

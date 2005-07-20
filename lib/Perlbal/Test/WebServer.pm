@@ -172,6 +172,16 @@ sub serve_client {
                 $to_send = $response->(headers => "X-Reproxy-URL: $1\r\n");
             }
 
+            if ($cmd =~ /^reproxy_url_multi:((?:\d+:){2,})(\S+)/i) {
+                my $ports = $1;
+                my $path = $2;
+                my @urls;
+                foreach my $port (split(/:/, $ports)) {
+                    push @urls, "http://127.0.0.1:$port$path";
+                }
+                $to_send = $response->(headers => "X-Reproxy-URL: @urls\r\n");
+            }
+
             if ($cmd =~ /^reproxy_file:(.+)/i) {
                 $to_send = $response->(headers => "X-Reproxy-File: $1\r\n");
             }
