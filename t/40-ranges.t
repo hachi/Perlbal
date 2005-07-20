@@ -4,7 +4,7 @@ use strict;
 use Perlbal::Test;
 use Perlbal::Test::WebServer;
 use Perlbal::Test::WebClient;
-use Test::More tests => 23;
+use Test::More tests => 47;
 
 my ($back_port) = start_webserver();
 
@@ -87,19 +87,32 @@ foreach my $meth (qw(http rp_file rp_url)) {
         $resp = $ua->request({ headers => "Range: $range\r\n"}, $path);
     };
 
-    $send->("bytes=0-6");
-    ok($resp && $resp->content eq "foo bar", "$meth: range $range");
-    ok($resp->status_line =~ /^206/, "is partial") or diag(dump_res($resp));
+    my @aios = ("-");
+    if ($meth eq "rp_file" || $meth eq "http") {
+        @aios = qw(none linux ioaio);
+    }
 
-    $send->("bytes=" . length($phrase) . "-");
-    ok($resp && $resp->content eq ($phrase x 999), "$meth: range $range");
-    ok($resp->status_line =~ /^206/, "is partial") or diag(dump_res($resp));
+    foreach my $aio (@aios) {
+        my $setaio = $aio eq "-" ? 1 : manage("SERVER aio_mode = $aio");
+      SKIP: {
+          skip "can't do AIO mode $aio", 7 unless $setaio;
 
-    $send->("bytes=" . length($file_content) . "-");
-    ok($resp && $resp->status_line =~ /^416/, "$meth: can't satisify") or diag(dump_res($resp));
+          $send->("bytes=0-6");
+          ok($resp && $resp->content eq "foo bar", "$meth/$aio: range $range");
+          ok($resp->status_line =~ /^206/, "is partial") or diag(dump_res($resp));
 
-    $send->("bytes=5-1");
-    ok($resp && $resp->status_line =~ /^416/, "$meth: can't satisify") or diag(dump_res($resp));
+          $send->("bytes=" . length($phrase) . "-");
+          ok($resp && $resp->content eq ($phrase x 999), "$meth/$aio: range $range");
+          ok($resp->status_line =~ /^206/, "is partial") or diag(dump_res($resp));
+
+          $send->("bytes=" . length($file_content) . "-");
+          ok($resp && $resp->status_line =~ /^416/, "$meth/$aio: can't satisify") or diag(dump_res($resp));
+
+          $send->("bytes=5-1");
+          ok($resp && $resp->status_line =~ /^416/, "$meth/$aio: can't satisify") or diag(dump_res($resp));
+      }
+    }
+
 }
 
 

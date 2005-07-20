@@ -88,19 +88,23 @@ ok($wc->reqdone >= 4, "4 on same conn");
 #  status        X      X    X
 #  file          X      X    X
 #  url           X      X    X
-ok_status();
-ok_status();
-ok_reproxy_file();
-ok_reproxy_url();
-ok_status();
-ok_reproxy_url();
-ok_reproxy_url();
-ok_reproxy_file();
-ok_reproxy_file();
-ok_reproxy_url();
-ok_reproxy_file();
-ok_status();
-ok($wc->reqdone >= 12, "9 transitions");
+foreach_aio {
+    my $mode = shift;
+
+    ok_status();
+    ok_status();
+    ok_reproxy_file();
+    ok_reproxy_url();
+    ok_status();
+    ok_reproxy_url();
+    ok_reproxy_url();
+    ok_reproxy_file();
+    ok_reproxy_file();
+    ok_reproxy_url();
+    ok_reproxy_file();
+    ok_status();
+    ok($wc->reqdone >= 12, "AIO mode $mode: 9 transitions");
+};
 
 # try to reproxy to a list of URLs, where the first one is bogus, and last one is good
 ok_reproxy_url_list();
