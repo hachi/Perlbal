@@ -117,7 +117,7 @@ sub ok_reproxy_file {
 
 sub ok_reproxy_url {
     my $resp = $wc->request("reproxy_url:http://127.0.0.1:$webport/foo.txt");
-    ok($resp->content eq $file_content, "reproxy URL");
+    ok($resp->content eq $file_content, "reproxy URL") or diag(dump_res($resp));
 }
 
 sub ok_status {

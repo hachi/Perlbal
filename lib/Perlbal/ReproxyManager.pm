@@ -221,7 +221,7 @@ sub backend_response_received {
 sub dump_state {
     my $out = shift;
     return unless $out;
-    
+
     # spits out what we have connecting
     while (my ($hostip, $dat) = each %ReproxyConnecting) {
         $out->("connecting $hostip 1") if defined $dat;

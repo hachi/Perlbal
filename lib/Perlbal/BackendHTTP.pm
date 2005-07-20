@@ -371,7 +371,8 @@ sub event_read {
                     $thd->header('X-REPROXY-EXPECTED-SIZE', undef);
 
                     # also update the response code, in case of 206 partial content
-                    $thd->code(206) if $hd->response_code == 206;
+                    my $rescode = $hd->response_code;
+                    $thd->code($rescode) if $rescode == 206 || $rescode == 416;
                 }
 
                 $client->write($thd->to_string_ref);

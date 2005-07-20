@@ -4,7 +4,7 @@ use strict;
 use Perlbal::Test;
 use Perlbal::Test::WebServer;
 use Perlbal::Test::WebClient;
-use Test::More tests => 17;
+use Test::More tests => 23;
 
 my ($back_port) = start_webserver();
 
@@ -88,12 +88,18 @@ foreach my $meth (qw(http rp_file rp_url)) {
     };
 
     $send->("bytes=0-6");
-    ok($resp && $resp->content eq "foo bar", "$meth range $range");
+    ok($resp && $resp->content eq "foo bar", "$meth: range $range");
     ok($resp->status_line =~ /^206/, "is partial") or diag(dump_res($resp));
 
     $send->("bytes=" . length($phrase) . "-");
-    ok($resp && $resp->content eq ($phrase x 999), "$meth range $range");
+    ok($resp && $resp->content eq ($phrase x 999), "$meth: range $range");
     ok($resp->status_line =~ /^206/, "is partial") or diag(dump_res($resp));
+
+    $send->("bytes=" . length($file_content) . "-");
+    ok($resp && $resp->status_line =~ /^416/, "$meth: can't satisify") or diag(dump_res($resp));
+
+    $send->("bytes=5-1");
+    ok($resp && $resp->status_line =~ /^416/, "$meth: can't satisify") or diag(dump_res($resp));
 }
 
 

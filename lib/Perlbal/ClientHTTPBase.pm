@@ -275,7 +275,8 @@ sub _serve_request {
             $res = $self->{res_headers} = Perlbal::HTTPHeaders->new_response(304);
         } elsif ($status == 416) {
             $res = $self->{res_headers} = Perlbal::HTTPHeaders->new_response(416);
-            $res->header("Content-Range", $size ? "*/$size" : "*");
+            $res->header("Content-Range", $size ? "bytes */$size" : "*");
+            $res->header("Content-Length", 0);
             $not_satisfiable = 1;
         } elsif ($status == 206) {
             # partial content
@@ -293,7 +294,7 @@ sub _serve_request {
             # advertise that we support byte range requests
             $res->header("Accept-Ranges", "bytes");
 
-            unless ($not_mod && $not_satisfiable) {
+            unless ($not_mod || $not_satisfiable) {
                 my ($ext) = ($file =~ /\.(\w+)$/);
                 $res->header("Content-Type",
                              (defined $ext && exists $MimeType->{$ext}) ? $MimeType->{$ext} : "text/plain");
@@ -301,8 +302,8 @@ sub _serve_request {
                 unless ($status == 206) {
                     $res->header("Content-Length", $size);
                 } else {
-                    $res->header("Content-Range", "$range_start-$range_end/$size");
-                    $res->header("Content-Length", $range_end-$range_start + 1);
+                    $res->header("Content-Range", "bytes $range_start-$range_end/$size");
+                    $res->header("Content-Length", $range_end - $range_start + 1);
                 }
             }
 

@@ -161,9 +161,19 @@ sub backend_response_received {
     # we fail if we got something that's NOT a 2xx code, OR, if we expected
     # a certain size and got back something different
     my $code = $be->{res_headers}->response_code + 0;
-    if ($code < 200 || $code > 299 ||
-            (defined $self->{reproxy_expected_size} &&
-             $self->{reproxy_expected_size} != $be->{res_headers}->header('Content-length'))) {
+
+    my $bad_code = sub {
+        return 0 if $code >= 200 && $code <= 299;
+        return 0 if $code == 416;
+        return 1;
+    };
+
+    my $bad_size = sub {
+        return 0 unless defined $self->{reproxy_expected_size};
+        return $self->{reproxy_expected_size} != $be->{res_headers}->header('Content-length');
+    };
+
+    if ($bad_code->() || $bad_size->()) {
         # fall back to an alternate URL
         $be->{client} = undef;
         $be->close('non_200_reproxy');
@@ -219,7 +229,7 @@ sub start_reproxy_file {
 
         if ($status == 416) {
             $hd = Perlbal::HTTPHeaders->new_response(416);
-            $hd->header("Content-Range", $size ? "*/$size" : "*");
+            $hd->header("Content-Range", $size ? "bytes */$size" : "*");
             $not_satisfiable = 1;
         }
 
@@ -231,7 +241,7 @@ sub start_reproxy_file {
         if ($status == 200) {
             $hd->header("Content-Length", $size);
         } elsif ($status == 206) {
-            $hd->header("Content-Range", "$range_start-$range_end/$size");
+            $hd->header("Content-Range", "bytes $range_start-$range_end/$size");
             $hd->header("Content-Length", $range_end - $range_start + 1);
             $hd->code(206);
         }
