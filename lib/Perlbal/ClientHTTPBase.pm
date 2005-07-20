@@ -342,7 +342,7 @@ sub _serve_request {
                 if ($status == 206) {
                     sysseek($rp_fh, $range_start, &POSIX::SEEK_SET);
                     $size = $range_end - $range_start + 1;
-                  }
+                }
 
                 $self->reproxy_fh($rp_fh, $size);
             });
