@@ -24,10 +24,8 @@ WriteMakefile(
     ),
 
     PREREQ_PM               => {
-        'Linux::AIO'  => '1.3',
-        'Danga::Socket' => '1.36',
+        'Danga::Socket' => '1.43',
         'BSD::Resource' => 0,
-        'Net::Netmask' => 0,
         'Test::More' => 0,
         'File::Find' => 0,
     },

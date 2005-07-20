@@ -176,11 +176,7 @@ sub assign_client {
     $hds->header("X-Proxy-Capabilities", "reproxy-file");
 
     # decide whether we trust the upstream or not
-    my $trust = $self->{service}->{always_trusted}; # set to default auto-trust level
-    if ($self->{service} && $self->{service}->{trusted_upstreams}) {
-        $trust = 1
-            if $self->{service}->{trusted_upstreams}->match($client->peer_ip_string);
-    }
+    my $trust = $self->{service}->trusted_ip($client->peer_ip_string);
 
     # if we're not going to trust the upstream, reset these for security reasons
     unless ($trust) {

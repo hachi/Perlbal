@@ -6,8 +6,6 @@ package Perlbal::Service;
 use strict;
 use warnings;
 
-use Net::Netmask;
-
 use Perlbal::BackendHTTP;
 
 use fields (
@@ -552,6 +550,21 @@ sub role {
     return $self->{role};
 }
 
+# called by BackendHTTP to ask if a client's IP is in our trusted list
+sub trusted_ip {
+    my Perlbal::Service $self = shift;
+    my $ip = shift;
+
+    return 1 if $self->{'always_trusted'};
+
+    my $tmap = $self->{trusted_upstreams};
+    return 0 unless $tmap;
+
+    # try to use it as a Net::Netmask object
+    return 1 if eval { $tmap->match($ip); };
+    return 0;
+}
+
 # manage some header stuff
 sub header_management {
     my Perlbal::Service $self = shift;
@@ -646,6 +659,9 @@ sub set {
     };
 
     if ($key eq 'trusted_upstream_proxies') {
+        my $loaded = eval { require Net::Netmask; 1; };
+        return $err->("Net::Netmask not installed") unless $loaded;
+
         if ($self->{trusted_upstreams} = Net::Netmask->new2($val)) {
             # set, all good
             return $ok->();
