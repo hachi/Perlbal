@@ -73,11 +73,14 @@ sub serve_client {
         my $keeping_alive = undef;
 
         my $response = sub {
-            my ($code, $codetext, $content, $ctype) = @_;
-            $codetext ||= { 200 => 'OK', 500 => 'Internal Server Error' }->{$code};
-            $content ||= "$code $codetext";
+            my ($code, $codetext, $content, $ctype, $extra_hdr) = @_;
+            $extra_hdr ||= '';
+            $codetext ||= { 200 => 'OK', 500 => 'Internal Server Error', 204 => "No Content" }->{$code};
+            $content ||= $code == 204 ? "" : "$code $codetext";
             my $clen = length $content;
-            $ctype ||= "text/plain";
+            $ctype ||= "text/plain" unless $code == 204;
+            $extra_hdr .= "Content-Type: $ctype\r\n" if $ctype;
+
             my $hdr_keepalive = "";
 
             unless (defined $keeping_alive) {
@@ -101,9 +104,9 @@ sub serve_client {
             }
 
             return "HTTP/1.0 $code $codetext\r\n" .
-                "Content-Type: $ctype\r\n" .
                 $hdr_keepalive .
                 "Content-Length: $clen\r\n" .
+                $extra_hdr .
                 "\r\n" .
                 "$content";
         };
@@ -124,6 +127,7 @@ sub serve_client {
         # prepare a simple 200 to send; undef this if you want to control
         # your own output below
         my $to_send = $response->(200);
+        my $status = 200;
 
         foreach my $cmd (@cmds) {
             $cmd =~ s/^\s+//;
@@ -138,11 +142,23 @@ sub serve_client {
             }
 
             if ($cmd eq "status") {
-                $to_send = $response->(200, undef, "pid = $$\nreqnum = $req_num\n");
+                $to_send = $response->($status, undef, "pid = $$\nreqnum = $req_num\n");
             }
 
             if ($cmd eq "reqdecr") {
                 $req_num--;
+            }
+
+            if ($cmd =~ /^setstatus:(\d+)$/) {
+                $status = $1;
+            }
+
+            if ($cmd =~ /^reproxy_url:(.+)/i) {
+                $to_send = $response->($status, undef, "", "", "X-Reproxy-URL: $1\r\n");
+            }
+
+            if ($cmd =~ /^reproxy_file:(.+)/i) {
+                $to_send = $response->($status, undef, "", "", "X-Reproxy-File: $1\r\n");
             }
         }
 

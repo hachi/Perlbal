@@ -112,11 +112,16 @@ sub request {
             last if ! $_ || /^\r?\n/;
         }
 
+        unless ($firstline) {
+            print STDERR "Didn't get a firstline in HTTP response.\n";
+            return undef;
+        }
+
         my $resp = HTTP::Response->parse($res);
         return undef unless $resp;
 
         my $cl = $resp->header('Content-Length');
-        if ($cl > 0) {
+        if (defined $cl && $cl > 0) {
             my $content = '';
             while (($cl -= read($sock, $content, $cl)) > 0) {
                 # don't do anything, the loop is it
@@ -124,7 +129,7 @@ sub request {
             $resp->content($content);
         }
 
-        my $conhdr = $resp->header("Connection");
+        my $conhdr = $resp->header("Connection") || "";
         if (($firstline =~ m!\bHTTP/1\.1\b! && $conhdr !~ m!\bclose\b!i) ||
             ($firstline =~ m!\bHTTP/1\.0\b! && $conhdr =~ m!\bkeep-alive\b!i)) {
             $self->{_sock} = $sock;

@@ -33,4 +33,6 @@ t/12-headers.t
 t/15-webserver.t
 t/20-put.t
 t/30-reverseproxy.t
+t/35-reproxy.t
+
 
