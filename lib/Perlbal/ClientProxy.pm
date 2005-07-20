@@ -236,6 +236,7 @@ sub start_reproxy_file {
         $self->setup_keepalive($hd);
 
         # just send the header, now that we cleaned it.
+        $self->{res_headers} = $hd;
         $self->write($hd->to_string_ref);
 
         if ($self->{req_headers}->request_method eq 'HEAD' || $not_satisfiable) {

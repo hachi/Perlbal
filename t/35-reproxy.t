@@ -78,14 +78,17 @@ ok(filecontent("$dir/foo.txt") eq $file_content, "file good via disk");
 # try to get that file, via internal file redirect
 $resp = $wc->request("reproxy_file:$dir/foo.txt");
 ok($resp && $resp->content eq $file_content, "reproxy file");
-
-# try to get that file, via internal file redirect
 $resp = $wc->request("reproxy_file:$dir/foo.txt");
 ok($resp && $resp->content eq $file_content, "reproxy file");
+ok($wc->reqdone >= 2, "2 on same conn");
 
 # reproxy URL support
 $resp = $wc->request("reproxy_url:http://127.0.0.1:$webport/foo.txt");
 ok($resp->content eq $file_content, "reproxy URL");
+$resp = $wc->request("reproxy_url:http://127.0.0.1:$webport/foo.txt");
+ok($resp->content eq $file_content, "reproxy URL");
+ok($wc->reqdone >= 4, "4 on same conn");
+
 #print "resp = $resp, ", $resp->status_line, "\n";
 #print "content: ", $resp->content, "\n";
 

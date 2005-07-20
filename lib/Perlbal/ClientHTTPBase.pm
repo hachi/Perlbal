@@ -124,9 +124,12 @@ sub http_response_sent {
     my Perlbal::ClientHTTPBase $self = $_[0];
 
     # close if we're supposed to
-    if (!defined $self->{res_headers} ||
-        $self->{res_headers}->header('Connection') =~ m/\bclose\b/i ||
-        $self->{do_die}) {
+    if (
+        ! defined $self->{res_headers} ||
+        ! $self->{res_headers}->res_keep_alive ||
+        $self->{do_die}
+        )
+    {
         # close if we have no response headers or they say to close
         $self->close("no_keep_alive");
         return 0;
@@ -405,7 +408,6 @@ sub try_index_files {
         $self->{replacement_uri} = $hd->request_uri . '/' . $file;
         return $self->_serve_request($hd);
     });
-    
 }
 
 sub _simple_response {
