@@ -58,7 +58,11 @@ sub event_read {
             Perlbal::ClientManage->new($self->{service}, $psock);
         } elsif ($service_role eq "web_server") {
             Perlbal::ClientHTTP->new($self->{service}, $psock);
+        } elsif ($service_role eq "selector") {
+            # will be cast to a more specific class later...
+            Perlbal::ClientHTTPBase->new($self->{service}, $psock, $self->{service});
         }
+
     }
 }
 

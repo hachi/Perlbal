@@ -50,7 +50,7 @@ sub register {
         my Perlbal::ClientProxy $obj = $be->{client};
         my $ot = $sobj->{pending}->{"$obj"};
         return 0 unless defined $ot;
-        
+
         # now construct data to put in recent
         if (defined $obj->{req_headers}) {
             my $uri = 'http://' . ($obj->{req_headers}->header('Host') || 'unknown') . $obj->{req_headers}->request_uri;
@@ -92,12 +92,13 @@ sub load {
                 $gsobj->{$key} += $sobj->{$key};
             }
         }
-        
+
         # global stats
         foreach my $key (sort @statkeys) {
             push @res, sprintf("%-15s %-25s %12d", 'total', $key, $gsobj->{$key});
         }
-        
+
+        push @res, ".";
         return \@res;
     });
 
@@ -109,6 +110,8 @@ sub load {
             push @res, "$svc $_"
                 foreach @{$sobj->{recent}};
         }
+
+        push @res, ".";
         return \@res;
     });
 

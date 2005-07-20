@@ -37,6 +37,24 @@ sub new {
     $self->SUPER::new($service, $sock);       # init base fields
 
     Perlbal::objctor($self);
+    bless $self, ref $class || $class;
+
+    $self->init;
+    $self->watch_read(1);
+    return $self;
+}
+
+sub new_from_base {
+    my $class = shift;
+    my Perlbal::ClientHTTPBase $cb = shift;
+    bless $cb, $class;
+    $cb->init;
+    $cb->event_read($cb->{req_headers});  # see comments in event_read: we're jumping into the middle of the process
+    return $cb;
+}
+
+sub init {
+    my Perlbal::ClientProxy $self = $_[0];
 
     $self->{last_request_time} = 0;
 
@@ -54,10 +72,6 @@ sub new {
     $self->{reproxy_uris} = undef;
     $self->{reproxy_expected_size} = undef;
     $self->{currently_reproxying} = undef;
-
-    bless $self, ref $class || $class;
-    $self->watch_read(1);
-    return $self;
 }
 
 # call this with a string of space separated URIs to start a process
@@ -391,6 +405,8 @@ sub event_write {
 sub event_read {
     my Perlbal::ClientProxy $self = shift;
 
+    my $base_headers = shift;  # not from Danga::Socket:  if new_from_base calls us, it gives us the headers to assume we just read
+
     # mark alive so we don't get killed for being idle
     $self->{alive_time} = time;
 
@@ -404,8 +420,9 @@ sub event_read {
         $self->tcp_cork(1);  # cork writes to self
     };
 
-    unless ($self->{req_headers}) {
-        if (my $hd = $self->read_request_headers) {
+    if (! $self->{req_headers} || $base_headers) {
+
+        if (my $hd = ($base_headers || $self->read_request_headers)) {
             print "Got headers!  Firing off new backend connection.\n"
                 if Perlbal::DEBUG >= 2;
 

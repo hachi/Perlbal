@@ -32,6 +32,9 @@ use fields ('service',             # Perlbal::Service object
             'reproxy_file_offset', # how much we've sent from the file.
 
             'requests',            # number of requests this object has performed for the user
+
+            # service selector parent
+            'selector_svc',        # the original service from which we came
             );
 
 use Errno qw( EPIPE ECONNRESET );
@@ -61,18 +64,20 @@ our $MimeType = {qw(
 
 # ClientHTTPBase
 sub new {
-    my ($class, $service, $sock) = @_;
+    my ($class, $service, $sock, $selector_svc) = @_;
 
     my $self = $class;
     $self = fields::new($class) unless ref $self;
     $self->SUPER::new($sock);       # init base fields
 
-    $self->{service} = $service;
+    $self->{service}         = $service;
     $self->{replacement_uri} = undef;
-    $self->{headers_string} = '';
+    $self->{headers_string}  = '';
+    $self->{requests}        = 0;
+    $self->{scratch}         = {};
+    $self->{selector_svc}    = $selector_svc;
+
     $self->state('reading_headers');
-    $self->{requests} = 0;
-    $self->{scratch} = {};
 
     bless $self, ref $class || $class;
     $self->watch_read(1);
@@ -156,6 +161,10 @@ sub http_response_sent {
     # reset state
     $self->state('persist_wait');
 
+    if (my $selector_svc = $self->{selector_svc}) {
+        $selector_svc->return_to_base($self);
+    }
+
     # NOTE: because we only speak 1.0 to clients they can't have
     # pipeline in a read that we haven't read yet.
     $self->watch_read(1);
@@ -183,6 +192,27 @@ sub reproxy_fh {
     }
 
     return $self->{reproxy_fh};
+}
+
+sub event_read {
+    my Perlbal::ClientHTTPBase $self = shift;
+
+    # see if we have headers?
+    die "Shouldn't get here!  This is an abstract base class, pretty much, except in the case of the 'selector' role."
+        if $self->{req_headers};
+
+    my $hd = $self->read_request_headers;
+    return unless $hd;
+
+    $self->watch_read(0);
+
+    # now that we have headers, it's time to tell the selector
+    # plugin that it's time for it to select which real service to
+    # use
+    my $selector = $self->{'service'}->selector();
+    return $self->_simple_response(500, "No service selector configured.")
+        unless ref $selector eq "CODE";
+    $selector->($self);
 }
 
 sub event_write {

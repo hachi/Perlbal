@@ -139,8 +139,9 @@ sub unregister_global_hook {
 }
 
 sub run_global_hook {
-    my $ref = $hooks{$_[0]};
-    return $ref->(@_) if defined $ref;
+    my $hookname = shift;
+    my $ref = $hooks{$hookname};
+    return $ref->(@_) if defined $ref;   # @_ is now: $cmd, $ok CODE, $err CODE, $out CODE
     return undef;
 }
 
@@ -148,6 +149,7 @@ sub service_names {
     return sort keys %service;
 }
 
+# class method:  given a service name, returns a service object
 sub service {
     my $class = shift;
     return $service{$_[0]};
@@ -744,8 +746,15 @@ sub run_manage_command {
 
     # call any hooks if they've been defined
     my $lcmd = $cmd =~ /^(.+?)\s+/ ? $1 : $cmd;
-    my $rval = run_global_hook("manage_command.$lcmd", $cmd);
-    return $out->($rval, '.') if defined $rval;
+    my $rval = run_global_hook("manage_command.$lcmd", $cmd, $ok, $err, $out);
+    if (defined $rval) {
+        # commands may return boolean, or arrayref to mass-print
+        if (ref $rval eq "ARRAY") {
+            $out->($rval);
+            return 1;
+        }
+        return $rval;
+    }
 
     return $err->("unknown command: $cmd");
 }

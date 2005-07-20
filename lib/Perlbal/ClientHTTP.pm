@@ -30,12 +30,24 @@ sub new {
 
     my $self = fields::new($class);
     $self->SUPER::new(@_);
+    $self->init;
+    return $self;
+}
 
+sub new_from_base {
+    my $class = shift;
+    my Perlbal::ClientHTTPBase $cb = shift;
+    bless $cb, $class;
+    $cb->init;
+    $cb->event_read(1);  # 1 = coming_from_base
+    return $cb;
+}
+
+sub init {
+    my Perlbal::ClientHTTP $self = shift;
     $self->{put_in_progress} = 0;
     $self->{put_fh} = undef;
     $self->{put_pos} = 0;
-
-    return $self;
 }
 
 sub close {
@@ -59,6 +71,8 @@ sub send_response {
 
 sub event_read {
     my Perlbal::ClientHTTP $self = shift;
+
+    my $coming_from_base = shift;  # not passed in by Danga::Socket, but from ourselves in new_from_base above
 
     # see if we have headers?
     if ($self->{req_headers}) {
@@ -88,6 +102,8 @@ sub event_read {
             # handling above, let's just disable read notification, because
             # we won't do anything with the data
             $self->watch_read(0);
+
+            $self->handle_request if $coming_from_base;
         }
         return;
     }
@@ -95,6 +111,13 @@ sub event_read {
     # try and get the headers, if they're all here
     my $hd = $self->read_request_headers;
     return unless $hd;
+
+    $self->handle_request;
+}
+
+sub handle_request {
+    my Perlbal::ClientHTTP $self = shift;
+    my $hd = $self->{req_headers};
 
     # fully formed request received
     $self->{requests}++;

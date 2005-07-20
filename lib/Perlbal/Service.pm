@@ -56,6 +56,7 @@ use fields (
             'generation', # int; generation count so we can slough off backends from old pools
             'backend_no_spawn', # { "ip:port" => 1 }; if on, spawn_backends will ignore this ip:port combo
             'buffer_backend_connect', # 0 for of, else, number of bytes to buffer before we ask for a backend
+            'selector',    # CODE ref, or undef, for role 'selector' services
             );
 
 sub new {
@@ -424,7 +425,7 @@ sub request_backend_connection {
         my $hicookie = $cookie{$cname} || "";
         $hi_pri = index($hicookie, $self->{high_priority_cookie_contents}) != -1;
     }
-    
+
     # now, call hook to see if this should be high priority
     $hi_pri = $self->run_hook('make_high_priority', $cp)
         unless $hi_pri; # only if it's not already
@@ -600,6 +601,42 @@ sub munge_headers {
     }
 }
 
+# getter/setter
+sub selector {
+    my Perlbal::Service $self = shift;
+    $self->{selector} = shift if @_;
+    return $self->{selector};
+}
+
+# given a base client from a 'selector' role, down-cast it to its specific type
+sub adopt_base_client {
+    my Perlbal::Service $self = shift;
+    my Perlbal::ClientHTTPBase $cb = shift;
+
+    $cb->{service} = $self;
+
+    if ($self->{'role'} eq "web_server") {
+        Perlbal::ClientHTTP->new_from_base($cb);
+        return;
+    } elsif ($self->{'role'} eq "reverse_proxy") {
+        Perlbal::ClientProxy->new_from_base($cb);
+        return;
+    } else {
+        $cb->_simple_response(500, "Can't map to service type $self->{'role'}");
+    }
+}
+
+sub return_to_base {
+    my Perlbal::Service $self = shift;
+    my Perlbal::ClientHTTPBase $cb = shift;  # actually a subclass of Perlbal::ClientHTTPBase
+
+    $cb->{service} = $self;
+    bless $cb, "Perlbal::ClientHTTPBase";
+
+    $cb->watch_write(0);
+    $cb->watch_read(1);
+}
+
 # Service
 sub set {
     my Perlbal::Service $self = shift;
@@ -632,8 +669,10 @@ sub set {
     };
 
     if ($key eq "role") {
-        return $err->("Unknown service role")
-            unless $val eq "reverse_proxy" || $val eq "management" || $val eq "web_server";
+        return $err->("Unknown service role") unless
+            $val eq "reverse_proxy" || $val eq "management" ||
+            $val eq "web_server"    || $val eq "selector";
+
         return $set->();
     }
 

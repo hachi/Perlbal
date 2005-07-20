@@ -108,6 +108,7 @@ sub load {
             push @res, "SET $svc->{name}.highpri.host_pattern = $svc->{extra_config}->{highpri_host_check_str}";
         }
 
+        push @res, ".";
         return \@res;
     });
 
