@@ -76,22 +76,50 @@ ok(filecontent("$dir/foo.txt") eq $file_content, "file good via disk");
 }
 
 # try to get that file, via internal file redirect
-$resp = $wc->request("reproxy_file:$dir/foo.txt");
-ok($resp && $resp->content eq $file_content, "reproxy file");
-$resp = $wc->request("reproxy_file:$dir/foo.txt");
-ok($resp && $resp->content eq $file_content, "reproxy file");
+ok_reproxy_file();
+ok_reproxy_file();
 ok($wc->reqdone >= 2, "2 on same conn");
 
 # reproxy URL support
-$resp = $wc->request("reproxy_url:http://127.0.0.1:$webport/foo.txt");
-ok($resp->content eq $file_content, "reproxy URL");
-$resp = $wc->request("reproxy_url:http://127.0.0.1:$webport/foo.txt");
-ok($resp->content eq $file_content, "reproxy URL");
+ok_reproxy_url();
+ok_reproxy_url();
 ok($wc->reqdone >= 4, "4 on same conn");
 
-#print "resp = $resp, ", $resp->status_line, "\n";
-#print "content: ", $resp->content, "\n";
+# back and forth every combo
+#  FROM / TO:  status  file  url
+#  status        X      X    X
+#  file          X      X    X
+#  url           X      X    X
+ok_status();
+ok_status();
+ok_reproxy_file();
+ok_reproxy_url();
+ok_status();
+ok_reproxy_url();
+ok_reproxy_url();
+ok_reproxy_file();
+ok_reproxy_file();
+ok_reproxy_url();
+ok_reproxy_file();
+ok_status();
 
+ok($wc->reqdone >= 12, "9 transitions");
+
+
+sub ok_reproxy_file {
+    my $resp = $wc->request("reproxy_file:$dir/foo.txt");
+    ok($resp && $resp->content eq $file_content, "reproxy file");
+}
+
+sub ok_reproxy_url {
+    my $resp = $wc->request("reproxy_url:http://127.0.0.1:$webport/foo.txt");
+    ok($resp->content eq $file_content, "reproxy URL");
+}
+
+sub ok_status {
+    my $resp = $wc->request('status');
+    ok($resp && $resp->content =~ /\bpid\b/, 'status ok');
+}
 
 sub add_all {
     foreach (@web_ports) {

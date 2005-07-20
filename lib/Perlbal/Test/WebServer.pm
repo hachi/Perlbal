@@ -8,6 +8,8 @@ use HTTP::Request;
 use Socket qw(MSG_NOSIGNAL IPPROTO_TCP TCP_NODELAY SOL_SOCKET);
 use Perlbal::Test;
 
+use Perlbal::Test::WebClient;
+
 require Exporter;
 use vars qw(@ISA @EXPORT);
 @ISA = qw(Exporter);
@@ -59,6 +61,7 @@ sub serve_client {
             $req .= $_;
             last if ! $_ || /^\r?\n/;
         }
+        exit 0 unless $req;
 
         # parse out things we want to have
         my @cmds;
@@ -73,10 +76,19 @@ sub serve_client {
         my $keeping_alive = undef;
 
         my $response = sub {
-            my ($code, $codetext, $content, $ctype, $extra_hdr) = @_;
+            my %opts = @_;
+            my $code = delete $opts{code};
+            my $codetext = delete $opts{codetext};
+            my $content = delete $opts{content};
+            my $ctype = delete $opts{type};
+            my $extra_hdr = delete $opts{headers};
+            die "unknown data in opts: %opts" if %opts;
+
             $extra_hdr ||= '';
+            $code ||= $content ? 200 : 200;
             $codetext ||= { 200 => 'OK', 500 => 'Internal Server Error', 204 => "No Content" }->{$code};
-            $content ||= $code == 204 ? "" : "$code $codetext";
+            $content ||= "";
+
             my $clen = length $content;
             $ctype ||= "text/plain" unless $code == 204;
             $extra_hdr .= "Content-Type: $ctype\r\n" if $ctype;
@@ -120,21 +132,28 @@ sub serve_client {
         # 500 if no commands were given or we don't know their HTTP version
         # or we didn't parse a proper HTTP request
         unless (@cmds && defined $httpver && $msg) {
-            $send->($response->(500));
+            print STDERR "500 response!\n";
+            $send->($response->(code => 500));
             next REQ;
         }
 
         # prepare a simple 200 to send; undef this if you want to control
         # your own output below
-        my $to_send = $response->(200);
-        my $status = 200;
+        my $to_send;
 
         foreach my $cmd (@cmds) {
             $cmd =~ s/^\s+//;
             $cmd =~ s/\s+$//;
 
             if ($cmd =~ /^sleep:([\d\.]+)$/i) {
+                my $sleeptime = $1;
+                print "I, $$, should sleep for $sleeptime.\n";
+                use Time::HiRes;
+                my $t1 = Time::HiRes::time();
                 select undef, undef, undef, $1;
+                my $t2 = Time::HiRes::time();
+                my $td = $t2 - $t1;
+                print "I, $$, slept for $td\n";
             }
 
             if ($cmd =~ /^keepalive:([01])$/i) {
@@ -142,30 +161,37 @@ sub serve_client {
             }
 
             if ($cmd eq "status") {
-                $to_send = $response->($status, undef, "pid = $$\nreqnum = $req_num\n");
+                $to_send = $response->(content => "pid = $$\nreqnum = $req_num\n");
             }
 
             if ($cmd eq "reqdecr") {
                 $req_num--;
             }
 
-            if ($cmd =~ /^setstatus:(\d+)$/) {
-                $status = $1;
-            }
-
             if ($cmd =~ /^reproxy_url:(.+)/i) {
-                $to_send = $response->($status, undef, "", "", "X-Reproxy-URL: $1\r\n");
+                $to_send = $response->(headers => "X-Reproxy-URL: $1\r\n");
             }
 
             if ($cmd =~ /^reproxy_file:(.+)/i) {
-                $to_send = $response->($status, undef, "", "", "X-Reproxy-File: $1\r\n");
+                $to_send = $response->(headers => "X-Reproxy-File: $1\r\n");
+            }
+
+            if ($cmd =~ /^subreq:(\d+)$/) {
+                my $port = $1;
+                my $wc = Perlbal::Test::WebClient->new;
+                $wc->server("127.0.0.1:$port");
+                $wc->keepalive(0);
+                $wc->http_version('1.0');
+                my $resp = $wc->request("status");
+                my $subpid;
+                if ($resp && $resp->content =~ /^pid = (\d+)$/m) {
+                    $subpid = $1;
+                }
+                $to_send = $response->(content => "pid = $$\nsubpid = $subpid\nreqnum = $req_num\n");
             }
         }
 
-        if (defined $to_send) {
-            $send->($to_send);
-            next REQ;
-        }
+        $send->($to_send || $response->());
     } # while(1)
 }
 

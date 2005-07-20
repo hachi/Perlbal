@@ -79,18 +79,11 @@ $resp = $wc->request('status');
 ok($pid == pid_of_resp($resp), "used same backend");
 
 # multiple parallel backends in operation
-my $wc2 = Perlbal::Test::WebClient->new;
-$wc2->server("127.0.0.1:$pb_port");
-$wc2->keepalive(1);
-$wc2->http_version('1.0');
-
-my $reader1 = $wc->request({return_reader=>1}, "status", "sleep:2.0");
-select undef, undef, undef, 0.5;  # let perlbal schedule one incoming connection so two don't arrive at once
-my $reader2 = $wc2->request({return_reader=>1}, "status", "sleep:0.8");
-
-$resp = $reader1->();
-my $resp2 = $reader2->();
-ok(pid_of_resp($resp) != pid_of_resp($resp2), "got 2 different backends");
+$resp = $wc->request("subreq:$pb_port");
+$pid = pid_of_resp($resp);
+my $subpid = subpid_of_resp($resp);
+ok($subpid, "got subpid");
+ok($subpid != $pid, "two different backends in use");
 
 # making the web server suggest not to keep the connection alive, see if
 # perlbal respects it
@@ -98,6 +91,7 @@ $resp = $wc->request('keepalive:0', 'status');
 $pid = pid_of_resp($resp);
 $resp = $wc->request('keepalive:0', 'status');
 ok(pid_of_resp($resp) != $pid, "discarding keep-alive?");
+
 
 sub add_all {
     foreach (@web_ports) {
@@ -120,6 +114,12 @@ sub flush_pools {
 sub pid_of_resp {
     my $resp = shift;
     return 0 unless $resp && $resp->content =~ /^pid = (\d+)$/m;
+    return $1;
+}
+
+sub subpid_of_resp {
+    my $resp = shift;
+    return 0 unless $resp && $resp->content =~ /^subpid = (\d+)$/m;
     return $1;
 }
 
