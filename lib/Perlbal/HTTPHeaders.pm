@@ -44,7 +44,8 @@ sub fail {
 
 sub http_code_english {
     my Perlbal::HTTPHeaders $self = shift;
-    return $HTTPCode->{$self->response_code};
+    return "" unless $self->response_code;
+    return $HTTPCode->{$self->response_code} || "";
 }
 
 sub new_response {
@@ -58,8 +59,7 @@ sub new_response {
     $self->{method} = undef;
     $self->{uri} = undef;
 
-    my $msg = $HTTPCode->{$code} || "";
-    $self->{responseLine} = "HTTP/1.0 $code $msg";
+    $self->{responseLine} = "HTTP/1.0 $code " . $self->http_code_english;
     $self->{code} = $code;
     $self->{type} = "httpres";
 
@@ -189,8 +189,13 @@ sub _codetext {
 sub code {
     my Perlbal::HTTPHeaders $self = shift;
     my ($code, $text) = @_;
-    $self->{code} = $code+0;
     $self->{codetext} = $text;
+    if (! defined $self->{code} || $code != $self->{code}) {
+        $self->{code} = $code+0;
+        if ($self->{responseLine}) {
+            $self->{responseLine} = "HTTP/1.0 $code " . $self->http_code_english;
+        }
+    }
 }
 
 sub response_code {

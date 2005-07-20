@@ -69,6 +69,10 @@ sub request {
         $headers .= "Connection: close\r\n";
     }
 
+    if ($opts->{'headers'}) {
+        $headers .= $opts->{'headers'};
+    }
+
     my $send = "GET /$cmds HTTP/$self->{http_version}\r\n$headers\r\n";
     my $len = length $send;
 

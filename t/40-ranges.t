@@ -4,21 +4,14 @@ use strict;
 use Perlbal::Test;
 use Perlbal::Test::WebServer;
 use Perlbal::Test::WebClient;
-use Test::More 'no_plan';
+use Test::More tests => 17;
 
-# option setup
-my $start_servers = 2; # web servers to start
-
-# setup a few web servers that we can work with
-my @web_ports = map { start_webserver() } 1..$start_servers;
-@web_ports = grep { $_ > 0 } map { $_ += 0 } @web_ports;
-ok(scalar(@web_ports) == $start_servers, 'web servers started');
+my ($back_port) = start_webserver();
 
 # setup a simple perlbal that uses the above server
 my $webport = new_port();
 my $dir = tempdir();
 my $deadport = new_port();
-
 my $pb_port = new_port();
 
 my $conf = qq{
@@ -45,10 +38,8 @@ ENABLE ws
 
 my $msock = start_server($conf);
 ok($msock, 'perlbal started');
+ok(manage("POOL a ADD 127.0.0.1:$back_port"), "backend port added");
 
-add_all();
-
-# make first web client
 my $wc = Perlbal::Test::WebClient->new;
 $wc->server("127.0.0.1:$pb_port");
 $wc->keepalive(1);
@@ -58,52 +49,56 @@ $wc->http_version('1.0');
 my $resp = $wc->request('status');
 ok($resp, 'status response ok');
 
+
 # make a file on disk, verifying we can get it via disk/URL
-my $file_content = "foo bar yo this is my content.\n" x 1000;
+my $phrase = "foo bar yo this is my content.\n";
+my $file_content = $phrase x 1000;
 open(F, ">$dir/foo.txt");
 print F $file_content;
 close(F);
 ok(filecontent("$dir/foo.txt") eq $file_content, "file good via disk");
-{
-    my $wc2 = Perlbal::Test::WebClient->new;
-    $wc2->server("127.0.0.1:$webport");
-    $wc2->keepalive(1);
-    $wc2->http_version('1.0');
-    $resp = $wc2->request('foo.txt');
-    ok($resp && $resp->content eq $file_content, 'file good via network');
+
+my $hc = Perlbal::Test::WebClient->new;
+$hc->server("127.0.0.1:$webport");
+$hc->keepalive(1);
+$hc->http_version('1.0');
+$resp = $hc->request('foo.txt');
+ok($resp && $resp->content eq $file_content, 'file good via network');
+
+
+# now request some ranges on it.....
+
+foreach my $meth (qw(http rp_file rp_url)) {
+    my $ua = {
+        'http' => $hc,
+        'rp_file' => $wc,
+        'rp_url' => $wc,
+    }->{$meth} || die;
+    my $path = {
+        'http' => "foo.txt",
+        'rp_file' => "reproxy_file:$dir/foo.txt",
+        'rp_url' => "reproxy_url:http://127.0.0.1:$webport/foo.txt",
+    }->{$meth} || die;
+
+    my $resp;
+    my $range;
+    my $send = sub {
+        $range = shift;
+        $resp = $ua->request({ headers => "Range: $range\r\n"}, $path);
+    };
+
+    $send->("bytes=0-6");
+    ok($resp && $resp->content eq "foo bar", "$meth range $range");
+    ok($resp->status_line =~ /^206/, "is partial") or diag(dump_res($resp));
+
+    $send->("bytes=" . length($phrase) . "-");
+    ok($resp && $resp->content eq ($phrase x 999), "$meth range $range");
+    ok($resp->status_line =~ /^206/, "is partial") or diag(dump_res($resp));
 }
 
-# try to get that file, via internal file redirect
-ok_reproxy_file();
-ok_reproxy_file();
-ok($wc->reqdone >= 2, "2 on same conn");
-
-# reproxy URL support
-ok_reproxy_url();
-ok_reproxy_url();
-ok($wc->reqdone >= 4, "4 on same conn");
-
-# back and forth every combo
-#  FROM / TO:  status  file  url
-#  status        X      X    X
-#  file          X      X    X
-#  url           X      X    X
-ok_status();
-ok_status();
-ok_reproxy_file();
-ok_reproxy_url();
-ok_status();
-ok_reproxy_url();
-ok_reproxy_url();
-ok_reproxy_file();
-ok_reproxy_file();
-ok_reproxy_url();
-ok_reproxy_file();
-ok_status();
-ok($wc->reqdone >= 12, "9 transitions");
 
 # try to reproxy to a list of URLs, where the first one is bogus, and last one is good
-ok_reproxy_url_list();
+#ok_reproxy_url_list();
 
 sub ok_reproxy_url_list {
     my $resp = $wc->request("reproxy_url_multi:$deadport:$webport:/foo.txt");
@@ -124,24 +119,5 @@ sub ok_status {
     my $resp = $wc->request('status');
     ok($resp && $resp->content =~ /\bpid\b/, 'status ok');
 }
-
-sub add_all {
-    foreach (@web_ports) {
-        manage("POOL a ADD 127.0.0.1:$_") or die;
-    }
-}
-
-sub remove_all {
-    foreach (@web_ports) {
-        manage("POOL a REMOVE 127.0.0.1:$_") or die;
-    }
-}
-
-sub flush_pools {
-    remove_all();
-    add_all();
-}
-
-
 
 1;

@@ -7,7 +7,7 @@ require Exporter;
 use vars qw(@ISA @EXPORT);
 @ISA = qw(Exporter);
 @EXPORT = qw(ua start_server foreach_aio manage filecontent tempdir new_port
-             wait_on_child);
+             wait_on_child dump_res);
 
 our $i_am_parent = 0;
 our $msock;  # management sock of child
@@ -18,6 +18,24 @@ our $free_port = 60000;
 
 END {
     manage("shutdown") if $i_am_parent;
+}
+
+sub dump_res {
+    my $res = shift;
+    my ($pkg, $filename, $line) = caller;
+    my $ret = "$filename:$line ==> ";
+    unless ($res) {
+        $ret .= "[response undefined]\n";
+        return $ret;
+    }
+    my $ct = $res->content;
+    my $len = length $ct;
+    if ($len > 80) {
+        $ct = substr($ct, 0, 80) . "...";
+    }
+    my $status = $res->status_line;
+    $status =~ s/[\r\n]//g;
+    return $ret . "status=[$status] content=${len}[$ct]\n";
 }
 
 sub tempdir {

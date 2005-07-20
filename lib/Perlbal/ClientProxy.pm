@@ -132,7 +132,14 @@ sub use_reproxy_backend {
     # now send request
     $self->{backend} = $be;
     $be->{client} = $self;
-    my $headers = "GET $datref->[2] HTTP/1.0\r\nConnection: keep-alive\r\n\r\n";
+
+    my $extra_hdr = "";
+    if (my $range = $self->{req_headers}->header("Range")) {
+        $extra_hdr .= "Range: $range\r\n";
+    }
+
+    my $headers = "GET $datref->[2] HTTP/1.0\r\nConnection: keep-alive\r\n${extra_hdr}\r\n";
+
     $be->{req_headers} = Perlbal::HTTPHeaders->new(\$headers);
     $be->state('sending_req');
     $self->state('backend_req_sent');
