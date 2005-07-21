@@ -58,10 +58,6 @@ sub init {
 
     $self->{last_request_time} = 0;
 
-    $self->{read_buf} = [];        # scalar refs of bufs read from client
-    $self->{read_ahead} = 0;       # bytes sitting in read_buf
-    $self->{read_size} = 0;        # total bytes read from client
-
     $self->{backend} = undef;
     $self->{high_priority} = 0;
 

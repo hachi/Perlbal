@@ -4,7 +4,7 @@ use strict;
 use Perlbal::Test;
 use Perlbal::Test::WebServer;
 use Perlbal::Test::WebClient;
-use Test::More 'no_plan';
+use Test::More tests => 25;
 
 # option setup
 my $start_servers = 2; # web servers to start
@@ -17,8 +17,6 @@ ok(scalar(@web_ports) == $start_servers, 'web servers started');
 # setup a simple perlbal that uses the above server
 my $dir = tempdir();
 my $pb_port = new_port();
-
-print "pb_port: $pb_port\n";
 
 my $conf = qq{
 LOAD vhosts
@@ -67,9 +65,10 @@ $wc->server("127.0.0.1:$pb_port");
 $wc->keepalive(1);
 $wc->http_version('1.0');
 
+my $resp;
 # see if a single request works
-my $resp = $wc->request({ host => "proxy" }, 'status');
-ok($resp && $resp->content =~ /\bpid\b/, 'status response ok') or diag(dump_res($resp));
+okay_status();
+is($wc->reqdone, 1, "one done");
 
 # put a file
 my $file_content = "foo bar yo this is my content.\n" x 1000;
@@ -79,11 +78,64 @@ $resp = $wc->request({
     content => $file_content,
     host => "webserver",
 }, 'foo.txt');
+ok($resp && $resp->code =~ /^2\d\d$/, "Good PUT");
+is($wc->reqdone, 2, "two done");
 
 # see if it made it
 ok(filecontent("$dir/foo.txt") eq $file_content, "file good via disk");
-$resp = $wc->request({ host => "webserver" }, 'foo.txt');
-ok($resp && $resp->content eq $file_content, 'file good via network') or diag(dump_res($resp));
+okay_network();
+is($wc->reqdone, 3, "three done");
 
+# try a post
+my $blob = "x bar yo yo yeah\r\n\r\n" x 5000;
+my $bloblen = length $blob;
+
+$resp = $wc->request({
+    method => "POST",
+    content => $blob,
+    host => "proxy",
+}, 'status');
+ok($resp && $resp->content =~ /^method = POST$/m && $resp->content =~ /^length = $bloblen$/m, "proxy post");
+is($wc->reqdone, 4, "four done");
+okay_network();
+is($wc->reqdone, 5, "five done");
+okay_status();
+is($wc->reqdone, 6, "six done");
+
+# test the vhost matching
+$resp = $wc->request({ host => "foo.proxy" }, 'status');
+ok($resp && $resp->code =~ /^[45]/, "foo.proxy - bad");
+
+$resp = $wc->request({ host => "foo.webserver" }, 'foo.txt');
+ok($resp && $resp->code =~ /^2/, "foo.webserver - good") or diag(dump_res($resp));
+
+$resp = $wc->request({ host => "foo.bar.webserver" }, 'foo.txt');
+ok($resp && $resp->code =~ /^2/, "foo.bar.webserver - good");
+
+$resp = $wc->request({ host => "bob" }, 'foo.txt');
+ok($resp && $resp->code =~ /^[45]/, "bob - bad");
+
+ok(manage("VHOST ss * = ws"), "enabling a default");
+
+$resp = $wc->request({ host => "bob" }, 'foo.txt');
+ok($resp && $resp->code =~ /^2/, "bob - good");
+
+# test some management comments
+ok(! manage("VHOST ss * ws"), "missing equals");
+ok(! manage("VHOST bad_service * = ws"), "bad service");
+ok(! manage("VHOST ss *!sdfsdf = ws"), "bad hostname");
+ok(! manage("VHOST ss * = ws!!sdf"), "bad target");
+
+
+
+sub okay_status {
+    my $resp = $wc->request({ host => "proxy" }, 'status');
+    ok($resp && $resp->content =~ /\bpid\b/, 'status response ok') or diag(dump_res($resp));
+}
+
+sub okay_network {
+    my $resp = $wc->request({ host => "webserver" }, 'foo.txt');
+    ok($resp && $resp->content eq $file_content, 'file good via network') or diag(dump_res($resp));
+}
 
 1;

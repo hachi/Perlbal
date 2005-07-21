@@ -57,8 +57,10 @@ sub serve_client {
   REQ:
     while (1) {
         my $req = '';
+        my $clen = undef;
         while (<$csock>) {
             $req .= $_;
+            if (/^content-length:\s*(\d+)/i) { $clen = $1; };
             last if ! $_ || /^\r?\n/;
         }
         exit 0 unless $req;
@@ -66,14 +68,23 @@ sub serve_client {
         # parse out things we want to have
         my @cmds;
         my $httpver = 0; # 0 = 1.0, 1 = 1.1, undef = neither
-        if ($req =~ m!^GET /(\S+) HTTP/(1\.\d+)\r?\n?!) {
-            my $cmds = durl($1);
+        my $method;
+        if ($req =~ m!^([A-Z]+) /(\S+) HTTP/(1\.\d+)\r?\n?!) {
+            $method = $1;
+            my $cmds = durl($2);
             @cmds = split(/\s*,\s*/, $cmds);
             $req_num++;
-            $httpver = ($2 eq '1.0' ? 0 : ($2 eq '1.1' ? 1 : undef));
+            $httpver = ($3 eq '1.0' ? 0 : ($3 eq '1.1' ? 1 : undef));
         }
         my $msg = HTTP::Request->parse($req);
         my $keeping_alive = undef;
+
+        my $body;
+        if ($clen) {
+            die "Can't read a body on a GET or HEAD" if $method =~ /^GET|HEAD$/;
+            my $read = read $csock, $body, $clen;
+            die "Didn't read $clen bytes.  Got $read." if $clen != $read;
+        }
 
         my $response = sub {
             my %opts = @_;
@@ -161,7 +172,8 @@ sub serve_client {
             }
 
             if ($cmd eq "status") {
-                $to_send = $response->(content => "pid = $$\nreqnum = $req_num\n");
+                my $len = $clen || 0;
+                $to_send = $response->(content => "pid = $$\nreqnum = $req_num\nmethod = $method\nlength = $len");
             }
 
             if ($cmd eq "reqdecr") {

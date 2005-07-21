@@ -66,6 +66,10 @@ sub new {
     $self->{state} = undef;
     $self->{do_die} = 0;
 
+    $self->{read_buf} = [];        # scalar refs of bufs read from client
+    $self->{read_ahead} = 0;       # bytes sitting in read_buf
+    $self->{read_size} = 0;        # total bytes read from client
+
     my $now = time;
     $self->{alive_time} = $self->{create_time} = $now;
 

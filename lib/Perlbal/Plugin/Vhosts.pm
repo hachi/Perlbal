@@ -22,7 +22,7 @@ sub load {
     Perlbal::register_global_hook('manage_command.vhost', sub {
         my ($cmd, $ok, $err, $out) = @_;
         return $err->("invalid syntax")
-            unless $cmd =~ /^vhost\s+(\w+)\s+(\S+)\s*=\s*(\w+)/;
+            unless $cmd =~ /^vhost\s+(\w+)\s+(\S+)\s*=\s*(\w+)$/;
 
         my ($selname, $host, $target) = ($1, $2, $3);
 
@@ -90,6 +90,7 @@ sub vhost_selector {
 
         my $map_name = $maps->{$match_on};
         my $svc = $map_name ? Perlbal->service($map_name) : undef;
+
         return 0 unless $svc || $force;
 
         unless ($svc) {
