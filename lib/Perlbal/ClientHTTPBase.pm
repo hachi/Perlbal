@@ -204,8 +204,6 @@ sub event_read {
     my $hd = $self->read_request_headers;
     return unless $hd;
 
-    $self->watch_read(0);
-
     # now that we have headers, it's time to tell the selector
     # plugin that it's time for it to select which real service to
     # use

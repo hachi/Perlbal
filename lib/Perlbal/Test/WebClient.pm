@@ -32,6 +32,16 @@ sub server {
     }
 }
 
+# get/set what hostname we send with requests
+sub host {
+    my $self = shift;
+    if (@_) {
+        return $self->{host} = shift;
+    } else {
+        return $self->{host};
+    }
+}
+
 # set which HTTP version to emulate; specify '1.0' or '1.1'
 sub http_version {
     my $self = shift;
@@ -73,7 +83,18 @@ sub request {
         $headers .= $opts->{'headers'};
     }
 
-    my $send = "GET /$cmds HTTP/$self->{http_version}\r\n$headers\r\n";
+    if (my $hostname = $opts->{host} || $self->{host}) {
+        $headers .= "Host: $hostname\r\n";
+    }
+    my $method = $opts->{method} || "GET";
+    my $body = "";
+
+    if ($opts->{content}) {
+        $headers .= "Content-Length: " . length($opts->{'content'}) . "\r\n";
+        $body = $opts->{content};
+    }
+
+    my $send = "$method /$cmds HTTP/$self->{http_version}\r\n$headers\r\n$body";
     my $len = length $send;
 
     # send setup

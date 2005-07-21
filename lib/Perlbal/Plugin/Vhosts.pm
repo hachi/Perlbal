@@ -13,71 +13,120 @@ package Perlbal::Plugin::Vhosts;
 use strict;
 use warnings;
 
-# keep track of services we're loaded for
-our %Services;
+our %Services;  # service_name => $svc
+
+# when "LOAD" directive loads us up
+sub load {
+    my $class = shift;
+
+    Perlbal::register_global_hook('manage_command.vhost', sub {
+        my ($cmd, $ok, $err, $out) = @_;
+        return $err->("invalid syntax")
+            unless $cmd =~ /^vhost\s+(\w+)\s+(\S+)\s*=\s*(\w+)/;
+
+        my ($selname, $host, $target) = ($1, $2, $3);
+
+        my $ss = Perlbal->service($selname);
+        return $err->("Service '$selname' is not a selector service")
+            unless $ss && $ss->{role} eq "selector";
+
+        $host = lc $host;
+        return $err->("invalid host pattern: '$host'")
+            unless $host =~ /^[\w\-\_\.\*]+$/;
+
+        $ss->{extra_config}->{_vhosts} ||= {};
+        $ss->{extra_config}->{_vhosts}{$host} = $target;
+
+        return $ok->();
+    });
+    return 1;
+}
+
+# unload our global commands, clear our service object
+sub unload {
+    my $class = shift;
+
+    Perlbal::unregister_global_hook('manage_command.vhost');
+    unregister($class, $_) foreach (values %Services);
+    return 1;
+}
 
 # called when we're being added to a service
 sub register {
     my ($class, $svc) = @_;
+    unless ($svc && $svc->{role} eq "selector") {
+        die "You can't load the vhost plugin on a service not of role selector.\n";
+    }
 
     $svc->selector(\&vhost_selector);
+    $svc->{extra_config}->{_vhosts} = {};
 
     $Services{"$svc"} = $svc;
+    return 1;
+}
 
+# called when we're no longer active on a service
+sub unregister {
+    my ($class, $svc) = @_;
+    $svc->selector(undef);
+    delete $Services{"$svc"};
     return 1;
 }
 
 # call back from Service via ClientHTTPBase's event_read calling service->select_new_service(Perlbal::ClientHTTPBase)
 sub vhost_selector {
     my Perlbal::ClientHTTPBase $cb = shift;
+
     my $req = $cb->{req_headers};
-    print "REQ: $req\n";
     return $cb->_simple_response(404, "Not Found (no reqheaders)") unless $req;
 
     my $vhost = $req->header("Host");
-    print " vhost = $vhost\n";
-    return $cb->_simple_response(404, "Not Found (no vhost)") unless $vhost; # TEMP
 
-    my $svc_name = {
-        "brad.lj" => "web_proxy",
-        "docs.brad.lj" => "docs",
-    }->{$vhost};
+    my $maps = $cb->{service}{extra_config}{_vhosts} ||= {};
 
-    my $svc = Perlbal->service($svc_name);
-    print "svc_name = $svc_name, svc = $svc\n";
-    return $cb->_simple_response(404, "Not Found (no configured vhost)") unless $svc;
+    # returns 1 if done with client, 0 if no action taken
+    my $map_using = sub {
+        my ($match_on, $force) = @_;
 
-    $svc->adopt_base_client($cb);
-}
+        my $map_name = $maps->{$match_on};
+        my $svc = $map_name ? Perlbal->service($map_name) : undef;
+        return 0 unless $svc || $force;
 
-# called when we're no longer active on a service
-sub unregister {
-    my ($class, $svc) = @_;
+        unless ($svc) {
+            $cb->_simple_response(404, "Not Found (no configured vhost)");
+            return 1;
+        }
 
-    # clean up time
-    #$svc->unregister_hooks('Highpri');
-    #$svc->unregister_setters('Highpri');
-    return 1;
-}
-
-# load global commands for querying this plugin on what's up
-sub load {
-    # setup a command to see what the patterns are
-    Perlbal::register_global_hook('manage_command.vhost', sub {
-        my ($cmd, $ok, $err, $out) = @_;
-
-        $out->("You said [$cmd]");
+        $svc->adopt_base_client($cb);
         return 1;
-    });
+    };
 
-    return 1;
-}
+    #  foo.site.com  should match:
+    #      foo.site.com
+    #    *.foo.site.com  -- this one's questionable, but might as well?
+    #        *.site.com
+    #        *
 
-# unload our global commands, clear our service object
-sub unload {
-    #Perlbal::unregister_global_hook('manage_command.patterns');
-    %Services = ();
-    return 1;
+    # if no vhost, just try the * mapping
+    return $map_using->("*", 1) unless $vhost;
+
+    # try the literal mapping
+    return if $map_using->($vhost);
+
+    # and now try wildcard mappings, removing one part of the domain
+    # at a time until we find something, or end up at "*"
+
+    # first wildcard, prepending the "*."
+    my $wild = "*.$vhost";
+    return if $map_using->($wild);
+
+    # now peel away subdomains
+    while ($wild =~ s/^\*\.[\w\-\_]+/*/) {
+        return if $map_using->($wild);
+    }
+
+    # last option: use the "*" wildcard
+    return $map_using->("*", 1);
 }
 
 1;

@@ -39,7 +39,7 @@ sub new_from_base {
     my Perlbal::ClientHTTPBase $cb = shift;
     bless $cb, $class;
     $cb->init;
-    $cb->event_read(1);  # 1 = coming_from_base
+    $cb->handle_request;
     return $cb;
 }
 
@@ -72,8 +72,6 @@ sub send_response {
 sub event_read {
     my Perlbal::ClientHTTP $self = shift;
 
-    my $coming_from_base = shift;  # not passed in by Danga::Socket, but from ourselves in new_from_base above
-
     # see if we have headers?
     if ($self->{req_headers}) {
         if ($self->{req_headers}->request_method eq 'PUT') {
@@ -102,8 +100,6 @@ sub event_read {
             # handling above, let's just disable read notification, because
             # we won't do anything with the data
             $self->watch_read(0);
-
-            $self->handle_request if $coming_from_base;
         }
         return;
     }

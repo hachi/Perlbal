@@ -801,12 +801,12 @@ sub set {
             eval "Perlbal::Plugin::$plugin->unregister(\$self);";
             return $err->($@) if $@;
         }
-        
+
         # clear out loaded plugins and hooks
         $self->{hooks} = {};
         $self->{plugins} = {};
         $self->{plugin_order} = [];
-        
+
         # load some plugins
         foreach my $plugin (split /[\s,]+/, $val) {
             next if $plugin eq 'none';
@@ -821,9 +821,9 @@ sub set {
 
             # now register it
             eval "Perlbal::Plugin::$fn->register(\$self);";
+            return $err->($@) if $@;
             $self->{plugins}->{$fn} = 1;
             push @{$self->{plugin_order}}, $fn;
-            return $err->($@) if $@;
         }
         return $ok->();
     }
