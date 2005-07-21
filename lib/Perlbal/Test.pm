@@ -7,7 +7,7 @@ require Exporter;
 use vars qw(@ISA @EXPORT);
 @ISA = qw(Exporter);
 @EXPORT = qw(ua start_server foreach_aio manage filecontent tempdir new_port
-             wait_on_child dump_res);
+             mgmt_port wait_on_child dump_res);
 
 our $i_am_parent = 0;
 our $msock;  # management sock of child
@@ -15,6 +15,8 @@ our $to_kill = 0;
 our $mgmt_port;
 
 our $free_port = 60000;
+
+sub mgmt_port { return $mgmt_port; }
 
 END {
     manage("shutdown") if $i_am_parent;

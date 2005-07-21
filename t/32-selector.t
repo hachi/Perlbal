@@ -4,7 +4,7 @@ use strict;
 use Perlbal::Test;
 use Perlbal::Test::WebServer;
 use Perlbal::Test::WebClient;
-use Test::More tests => 25;
+use Test::More tests => 26;
 
 # option setup
 my $start_servers = 2; # web servers to start
@@ -31,6 +31,7 @@ CREATE SERVICE ss
   VHOST ss proxy         = pr
   VHOST ss webserver     = ws
   VHOST ss *.webserver   = ws
+  VHOST ss manage        = mgmt
 ENABLE ss
 
 CREATE SERVICE pr
@@ -120,12 +121,15 @@ ok(manage("VHOST ss * = ws"), "enabling a default");
 $resp = $wc->request({ host => "bob" }, 'foo.txt');
 ok($resp && $resp->code =~ /^2/, "bob - good");
 
-# test some management comments
+# test sending a request to a management service
+$resp = $wc->request({ host => "manage" }, 'foo');
+ok($resp && $resp->code =~ /^5/, "mapping to invalid service");
+
+# test some management commands
 ok(! manage("VHOST ss * ws"), "missing equals");
 ok(! manage("VHOST bad_service * = ws"), "bad service");
 ok(! manage("VHOST ss *!sdfsdf = ws"), "bad hostname");
 ok(! manage("VHOST ss * = ws!!sdf"), "bad target");
-
 
 
 sub okay_status {
