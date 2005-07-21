@@ -18,6 +18,7 @@ lib/Perlbal/Plugin/Palimg.pm
 lib/Perlbal/Plugin/Queues.pm
 lib/Perlbal/Plugin/Stats.pm
 lib/Perlbal/Plugin/Highpri.pm
+lib/Perlbal/Plugin/Vhosts.pm
 lib/Perlbal/ReproxyManager.pm
 META.yml                                 Module meta-data (added by MakeMaker)
 doc/Classes.txt
