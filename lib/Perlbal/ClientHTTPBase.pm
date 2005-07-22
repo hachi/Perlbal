@@ -97,28 +97,33 @@ sub close {
     $self->SUPER::close(@_);
 }
 
-# given our request headers, determine if we should be sending
-# keep-alive header information back to the client
+# given the response headers we just got, and considering our request
+# headers, determine if we should be sending keep-alive header
+# information back to the client
 sub setup_keepalive {
     my Perlbal::ClientHTTPBase $self = $_[0];
 
     # now get the headers we're using
-    my Perlbal::HTTPHeaders $hd = $_[1];
+    my Perlbal::HTTPHeaders $reshd = $_[1];
     my Perlbal::HTTPHeaders $rqhd = $self->{req_headers};
 
     # for now, we enforce outgoing HTTP 1.0
-    $hd->set_version("1.0");
+    $reshd->set_version("1.0");
+
+    # if we came in via a selector service, that's whose settings
+    # we respect for persist_client
+    my $svc = $self->{selector_svc} || $self->{service};
 
     # do keep alive if they sent content-length or it's a head request
-    my $do_keepalive = $self->{service}->{persist_client} &&
-                       $rqhd->req_keep_alive($hd);
+    my $do_keepalive = $svc->{persist_client} &&
+                       $rqhd->req_keep_alive($reshd);
     if ($do_keepalive) {
         my $timeout = $self->max_idle_time;
-        $hd->header('Connection', 'keep-alive');
-        $hd->header('Keep-Alive', $timeout ? "timeout=$timeout, max=100" : undef);
+        $reshd->header('Connection', 'keep-alive');
+        $reshd->header('Keep-Alive', $timeout ? "timeout=$timeout, max=100" : undef);
     } else {
-        $hd->header('Connection', 'close');
-        $hd->header('Keep-Alive', undef);
+        $reshd->header('Connection', 'close');
+        $reshd->header('Keep-Alive', undef);
     }
 }
 

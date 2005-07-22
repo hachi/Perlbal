@@ -4,7 +4,7 @@ use strict;
 use Perlbal::Test;
 use Perlbal::Test::WebServer;
 use Perlbal::Test::WebClient;
-use Test::More tests => 26;
+use Test::More tests => 38;
 
 # option setup
 my $start_servers = 2; # web servers to start
@@ -102,6 +102,21 @@ okay_network();
 is($wc->reqdone, 5, "five done");
 okay_status();
 is($wc->reqdone, 6, "six done");
+
+# test that persist_client is based on the selector service, not the selected service
+ok(manage("SET pr.persist_client = 0"), "pr.persist_client off");
+okay_status();
+is($wc->reqdone, 7, "seven done");
+okay_status();
+is($wc->reqdone, 8, "eight done");
+ok(manage("SET ss.persist_client = 0"), "ss.persist_client off");
+okay_status();
+is($wc->reqdone, 0, "zero done");
+ok(manage("SET ss.persist_client = 1"), "ss.persist_client on");
+okay_status();
+is($wc->reqdone, 1, "one done");
+ok(manage("SET pr.persist_client = 1"), "pr.persist_client on");
+
 
 # test the vhost matching
 $resp = $wc->request({ host => "foo.proxy" }, 'status');
