@@ -10,16 +10,14 @@
 * Investigate when BackendHTTP fails on a call to get_res_headers?
 
 * Fix shutdown graceful to close off persistent clients and bored backends (reproxy too?)
+  (This is done already?)
 
 * Document the 'reproxy bored' queue [old...new] self cleaning on the old side, but
   uses the new side when it needs a connection
 
-* Investigate why Perlbal is slow to accept connections
-
 * Lots of work can be done to reduce system calls:
   - coalesce epoll_ctl calls
   - make socket by hand without IO::Socket::INET
-  - edge-triggered epoll in Danga::Socket
   - don't cork twice on reproxy & send
 
 * Support dictionary (scratch hash) per service
@@ -27,3 +25,14 @@
   - backends can set keys in dictionary (so they propogate to other backends, etc)
 
 * Allow configurable response code that means "backend dead; replay request"
+
+* Plugins to say what HTTP requests are known idempotent and re-playable in case
+  of errors.  Also option to say that all GETs or urls matching certain rules
+  are idempotent
+
+* rule service selector
+
+* way for management commands to hold state (absorbing all future commands)
+  .. for defining rules, etc
+
+* let rules map to pools (selectors), or set things like idempotent

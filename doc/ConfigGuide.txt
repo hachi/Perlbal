@@ -1,0 +1,36 @@
+All Perlbal configuration commands:
+===================================
+
+Admin commands:
+- - - - - - - -
+shutdown                   -- shuts down the server, killing all active connections
+shutdown graceful          -- closes listening sockets and stays alive until clients bleed off
+xs                         -- show status of XS modules loaded
+xs enable <module>         -- turn on an already-loaded XS module
+xs disable <module>        -- turn off an already-loaded XS module
+
+
+
+
+Diagnostic commands:
+- - - - - - - - - -
+obj                        -- shows objects counts in scope
+fd                         -- show file descriptors in use
+proc                       -- show CPU usage, current time, pid, and total requests processed
+nodes                      -- show BackendHTTP statistics for all backend nodes
+node <ip[:port]>           -- show BackendHTTP statistics for specified node
+prof on                    -- enable profiling
+prof off                   -- disable profiling
+prof data                  -- dump profile data
+uptime                     -- show time server was started, and current uptime
+track                      -- dump out objects tracked, sorted by age
+
+backends
+noverify
+pending
+states
+
+
+
+
+

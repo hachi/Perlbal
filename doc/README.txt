@@ -1,7 +1,7 @@
-Perlbal is not yet documented.
+Perlbal is probably not documented enough.
 
-See the website, conf/ directory for examples, and post questions on
-the mailing list for now.
+See the website, doc/ directory, and conf/ directory for examples, and
+post questions on the mailing list for now.
 
 Website:
 http://www.danga.com/perlbal/

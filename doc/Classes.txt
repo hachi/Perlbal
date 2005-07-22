@@ -22,7 +22,10 @@ conforms to HTTP specifications.
 ClientHTTPBase -- descends from Perlbal::Socket
   Provides base functionality to ClientHTTP and ClientProxy.  Notably, the
 ability to efficiently send files to the remote user.  Also handles most of
-the state logic for statistics and such.
+the state logic for statistics and such. Is also used for services of type
+"selector".  The ClientHTTPBase then reads in the request headers, and asks
+the service to re-bless the client instance to a more specific type, for
+either a ClientProxy or ClientHTTP (depending on selector's mapping).
 
 ClientHTTP -- descends from Perlbal::ClientHTTPBase
   Very simple and lightweight class.  Handles sending files to the user

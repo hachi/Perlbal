@@ -1,3 +1,6 @@
+TO_DOCUMENT:
+  -- hooking management commands
+
 Perlbal Hooks --
 
                             -- INTRODUCTION --
