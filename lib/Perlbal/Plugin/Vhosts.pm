@@ -20,24 +20,22 @@ sub load {
     my $class = shift;
 
     Perlbal::register_global_hook('manage_command.vhost', sub {
-        my ($cmd, $ok, $err, $out) = @_;
-        return $err->("invalid syntax")
-            unless $cmd =~ /^vhost\s+(\w+)\s+(\S+)\s*=\s*(\w+)$/;
-
-        my ($selname, $host, $target) = ($1, $2, $3);
+        my $mc = shift->parse(qr/^vhost\s+(\w+)\s+(\S+)\s*=\s*(\w+)$/,
+                              "usage: VHOST <service> <host_or_pattern> = <dest_service>");
+        my ($selname, $host, $target) = $mc->args;
 
         my $ss = Perlbal->service($selname);
-        return $err->("Service '$selname' is not a selector service")
+        return $mc->err("Service '$selname' is not a selector service")
             unless $ss && $ss->{role} eq "selector";
 
         $host = lc $host;
-        return $err->("invalid host pattern: '$host'")
+        return $mc->err("invalid host pattern: '$host'")
             unless $host =~ /^[\w\-\_\.\*]+$/;
 
         $ss->{extra_config}->{_vhosts} ||= {};
         $ss->{extra_config}->{_vhosts}{$host} = $target;
 
-        return $ok->();
+        return $mc->ok;
     });
     return 1;
 }
@@ -106,6 +104,7 @@ sub vhost_selector {
     #      foo.site.com
     #    *.foo.site.com  -- this one's questionable, but might as well?
     #        *.site.com
+    #        *.com
     #        *
 
     # if no vhost, just try the * mapping

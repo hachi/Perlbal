@@ -14,6 +14,8 @@ lib/Perlbal/Socket.pm
 lib/Perlbal/StatsListener.pm
 lib/Perlbal/TCPListener.pm
 lib/Perlbal/Test.pm
+lib/Perlbal/ManageCommand.pm
+lib/Perlbal/Pool.pm
 lib/Perlbal/Plugin/Palimg.pm
 lib/Perlbal/Plugin/Queues.pm
 lib/Perlbal/Plugin/Stats.pm

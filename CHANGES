@@ -1,3 +1,10 @@
+    -- entirely redone management command parsing/dispatching (major
+       code cleanup)
+
+    -- virtual host plugin on service selector framework
+
+    -- service selector framework
+
     -- make Net::Netmask optional
 
     -- byte range support for both webserver mode and reproxy-file mode

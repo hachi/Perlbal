@@ -56,11 +56,9 @@ sub new {
 
 sub set {
     my Perlbal::Pool $self = shift;
-    
-    my ($key, $val, $out, $verbose) = @_;
-    my $err = sub { $out->("ERROR: $_[0]");   return 0;       };
-    my $ok  = sub { $out->("OK") if $verbose; return 1;       };
-    my $set = sub { $self->{$key} = $val;     return $ok->(); };
+
+    my ($key, $val, $mc) = @_;
+    my $set = sub { $self->{$key} = $val; return $mc->ok; };
 
     if ($key eq 'nodefile') {
         # allow to unset it, which stops us from checking it further,
@@ -70,11 +68,11 @@ sub set {
             $self->{'nodefile.lastmod'} = 0;
             $self->{'nodefile.checking'} = 0;
             $self->{'nodefile.lastcheck'} = 0;
-            return $ok->();
+            return $mc->ok;
         }
 
         # enforce that it exists from here on out
-        return $err->("File not found")
+        return $mc->err("File not found")
             unless -e $val;
 
         # force a reload
@@ -83,7 +81,7 @@ sub set {
         $self->{'nodefile.checking'} = 0;
         $self->load_nodefile;
         $self->{'nodefile.lastcheck'} = time;
-        return $ok->();
+        return $mc->ok;
     }
 
     if ($key eq "balance_method") {
@@ -91,27 +89,26 @@ sub set {
             'sendstats' => BM_SENDSTATS,
             'random' => BM_RANDOM,
         }->{$val};
-        return $err->("Unknown balance method")
+        return $mc->err("Unknown balance method")
             unless $val;
         return $set->();
     }
-    
+
     if ($key =~ /^sendstats\./) {
-        return $err->("Can only set sendstats listening address on service with balancing method 'sendstats'")
+        return $mc->err("Can only set sendstats listening address on service with balancing method 'sendstats'")
             unless $self->{balance_method} == BM_SENDSTATS;
         if ($key eq "sendstats.listen") {
-            return $err->("Invalid host:port")
+            return $mc->err("Invalid host:port")
                 unless $val =~ m!^\d+\.\d+\.\d+\.\d+:\d+$!;
-            
+
             if (my $pbs = $self->{"sendstats.listen.socket"}) {
                 $pbs->close;
             }
-            
+
             unless ($self->{"sendstats.listen.socket"} =
                     Perlbal::StatsListener->new($val, $self)) {
-                return $err->("Error creating stats listener: $Perlbal::last_error");
+                return $mc->err("Error creating stats listener: $Perlbal::last_error");
             }
-            
             $self->populate_sendstats_hosts;
         }
         return $set->();
