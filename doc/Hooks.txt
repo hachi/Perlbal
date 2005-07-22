@@ -56,6 +56,12 @@ The following hooks are defined in the Perlbal distribution:
 GENERAL     end_proxy_request           Perlbal::ClientProxy
 This hook is called when the ClientProxy object is being closed.
 
+HANDLER     start_http_request          Perlbal::ClientProxy / Perlbal::ClientHTTP
+A generic hook that works for both webserver and proxy modes, run
+after either the specific "start_proxy_request" or "start_web_request"
+hooks below.  Like those, you return true from this hook to takeover
+the connection.
+
 HANDLER     start_proxy_request         Perlbal::ClientProxy
 Called as soon as we've read in headers from a user but right before we've
 requested a backend connection.  If a true value is returned, Perlbal will

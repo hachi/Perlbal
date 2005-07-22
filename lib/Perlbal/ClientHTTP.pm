@@ -119,7 +119,8 @@ sub handle_request {
     $self->{requests}++;
 
     # notify that we're about to serve
-    return if $self->{service}->run_hook('start_web_request', $self);
+    return if $self->{service}->run_hook('start_web_request',  $self);
+    return if $self->{service}->run_hook('start_http_request', $self);
 
     # see what method it is?
     if ($hd->request_method eq 'GET' || $hd->request_method eq 'HEAD') {

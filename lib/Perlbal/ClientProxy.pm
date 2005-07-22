@@ -423,6 +423,7 @@ sub event_read {
                 if Perlbal::DEBUG >= 2;
 
             return if $self->{service}->run_hook('start_proxy_request', $self);
+            return if $self->{service}->run_hook('start_http_request',  $self);
 
             # if defined we're waiting on some amount of data.  also, we have to
             # subtract out read_size, which is the amount of data that was
