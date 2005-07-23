@@ -190,6 +190,9 @@ sub run_manage_command {
 
     my $mc = Perlbal::ManageCommand->new($basecmd, $cmd, $out, $ok, $err, $orig, $verbose);
 
+    # for testing auto crashing and recovery:
+    if ($basecmd eq "crash") { die "Intentional crash." };
+
     no strict 'refs';
     if (my $handler = *{"MANAGE_$basecmd"}{CODE}) {
         my $rv = eval { $handler->($mc); };
@@ -404,7 +407,7 @@ sub MANAGE_prof {
         my $href = Danga::Socket->ProfilingData;
         foreach my $key (sort keys %$href) {
             my ($utime, $stime, $calls) = @{$href->{$key}};
-            $mc->out(sprintf("%s %0.5f %0.5f %d %0.7f %0.7f", 
+            $mc->out(sprintf("%s %0.5f %0.5f %d %0.7f %0.7f",
                              $key, $utime, $stime, $calls, $utime / $calls, $stime / $calls));
         }
         $mc->end;
@@ -919,12 +922,17 @@ sub run {
         Perlbal::Socket->EventLoop();
     };
 
+    my $clean_exit = 1;
+
     # closing messages
     if ($@) {
         Perlbal::log('crit', "crash log: $_") foreach split(/\r?\n/, $@);
+        $clean_exit = 0;
     }
     Perlbal::log('info', 'ending run');
     closelog();
+
+    return $clean_exit;
 }
 
 sub log {

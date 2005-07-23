@@ -1,3 +1,6 @@
+    -- exit with 0 vs non-zero when/if Perlbal crashes.  new command
+       "crash" to fake a crash, for testing.
+
     -- entirely redone management command parsing/dispatching (major
        code cleanup)
 

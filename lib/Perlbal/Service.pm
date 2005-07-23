@@ -200,7 +200,7 @@ sub unregister_setters {
     my Perlbal::Service $self = shift;
     my $pclass = shift;
     return unless $pclass;
-    delete $self->{plugin_setters}->{lc $pclass};    
+    delete $self->{plugin_setters}->{lc $pclass};
 }
 
 # take a backend we've created and mark it as pending if we do not
@@ -767,7 +767,7 @@ sub set {
         return $mc->err("Can only set docroot on a web_server service")
             unless $self->{role} eq "web_server";
         $val =~ s!/$!!;
-        return $mc->err("Directory not found")
+        return $mc->err("Directory not found for service $self->{name}")
             unless $val && -d $val;
         return $set->();
     }
