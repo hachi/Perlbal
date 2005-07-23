@@ -36,3 +36,5 @@
   .. for defining rules, etc
 
 * let rules map to pools (selectors), or set things like idempotent
+
+* disabling services that have no listen configured anyway --- can they still be selected to?

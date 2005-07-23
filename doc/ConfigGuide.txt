@@ -1,15 +1,53 @@
-All Perlbal configuration commands:
+All Perlbal configuration commands: (case insensitive)
 ===================================
 
 Admin commands:
 - - - - - - - -
 shutdown                   -- shuts down the server, killing all active connections
 shutdown graceful          -- closes listening sockets and stays alive until clients bleed off
+
+create pool <name>               -- create an empty pool
+pool <name> add    <ip[:port]>   -- add a node to a pool
+pool <name> remove <ip[:port]>   -- remove a node to a pool
+set <pool>.<param> = <value>     -- set a property on a pool:
+   ....
+
+create service <name>              -- create an empty service
+set <service>.<param> = <value>    -- set a property on a service
+   ....
+
+enable <service>                   -- enable a service (start listening)
+disable <service>                  -- disable a service (stops listening)
+
+header <service> remove <header>           -- remove a header before going to backend node
+header <service> insert <header>: <value>  -- insert a header before going to backend node
+
+load <plugin>              -- load a plugin
+unload <plugin>            -- unload a plugin
+
+plugins                    -- list plugins
+
 xs                         -- show status of XS modules loaded
 xs enable <module>         -- turn on an already-loaded XS module
 xs disable <module>        -- turn off an already-loaded XS module
 
+show service               -- list all services
+show service <service>     -- show details of given service
+show pool                  -- list all pools, nodes, and services using them
+show pool <poolname>       -- show members of a pool
 
+reproxy_state              -- dump state of reproxy status
+
+server <param> = <value>   -- set a server parameter, where param is one of:
+   max_reproxy_connections
+   max_connections
+   nice_level
+   aio_mode                : one of "none", "linux" (Linux::AIO), or "ioaio" (IO::AIO)
+                             This controls how disk IO is done asynchronosly.  Highly recommended
+                             to use Linux::AIO or IO::AIO for webserving or reproxying files.
+                             For purely reverse proxy or only reproxying URLs, none is fine.
+   aio_threads             : number of child threads doing disk IO.  (use between 2-50)
+   track_obj               : developer option to track objects
 
 
 Diagnostic commands:
@@ -28,7 +66,10 @@ track                      -- dump out objects tracked, sorted by age
 backends
 noverify
 pending
-states
+states [<service>]
+leaks [....]
+queues
+state changes
 
 
 
