@@ -78,11 +78,11 @@ our $tunables = {
     'listen' => {
         des => "The ip:port to listen on.  For a service to work, you must either make it listen, or make another selector service map to a non-listening service.",
         check_type => ["regexp", qr/^\d+\.\d+\.\d+\.\d+:\d+$!/, "Expecting IP:port of form a.b.c.d:port."],
-        on_set => sub {
+        setter => sub {
             my ($self, $val, $set) = @_;
 
             # close/reopen listening socket
-            if ($val ne $self->{listen} && $self->{enabled}) {
+            if ($val ne ($self->{listen} || "") && $self->{enabled}) {
                 $self->disable(undef, "force");
                 $self->{listen} = $val;
                 $self->enable(undef);
@@ -144,12 +144,12 @@ our $tunables = {
 
     'queue_relief_chance' => {
         default => 0,
-        check_type => ["code", sub {
+        check_type => sub {
             my ($self, $val, $errref) = @_;
             return 1 if $val =~ /^\d+$/ && $val >= 0 && $val <= 100;
             $$errref = "Expecting integer value between 0 and 100, inclusive.";
             return 0;
-        }],
+        },
         check_role => "reverse_proxy",
     },
 
@@ -163,13 +163,13 @@ our $tunables = {
         default => 0,
         check_role => "web_server",
         val_modify => sub { my $valref = shift; $$valref =~ s!/$!!; },
-        check_type => ["code", sub {
+        check_type => sub {
             my ($self, $val, $errref) = @_;
             #FIXME: require absolute paths?
             return 1 if $val && -d $val;
             $$errref = "Directory not found for service $self->{name}";
             return 0;
-        }],
+        },
     },
 
     'enable_put' => {
@@ -204,7 +204,7 @@ our $tunables = {
         default => 0,
         check_type => "int",
         check_role => "reverse_proxy",
-        on_okay => sub {
+        setter => sub {
             my ($self, $val, $set) = @_;
             $set->();
             $self->spawn_backends if $self->{enabled};
@@ -228,7 +228,7 @@ our $tunables = {
     },
 
     'trusted_upstream_proxies' => {
-        check_type => ["code", sub {
+        check_type => sub {
             my ($self, $val, $errref) = @_;
             unless (my $loaded = eval { require Net::Netmask; 1; }) {
                 $$errref = "Net::Netmask not installed";
@@ -238,12 +238,44 @@ our $tunables = {
             return 1 if $self->{trusted_upstreams} = Net::Netmask->new2($val);
             $$errref = "Error defining trusted upstream proxies: " . Net::Netmask::errstr();
             return 0;
-        }],
+        },
 
     },
 
-};
+    'index_files' => {
+        check_role => "web_server",
+        default => "index.html",
+        des => "Comma-seperated list of filenames to load when a user visits a directory URL, listed in order of preference.",
+        setter => sub {
+            my ($self, $val, $set) = @_;
+            my @list = split(/[\s,]+/, $val);
+            $self->{index_files} = \@list;
+            $set->();
+        },
+    },
 
+    'pool' => {
+        check_role => "reverse_proxy",
+        check_type => sub {
+            my ($self, $val, $errref) = @_;
+            my $pl = Perlbal->pool($val);
+            unless ($pl) {
+                $$errref = "Pool '$val' not found";
+                return 0;
+            }
+            $self->{pool}->decrement_use_count if $self->{pool};
+            $self->{pool} = $pl;
+            $self->{pool}->increment_use_count;
+            $self->{generation}++;
+        },
+        setter => sub {
+            # override the default, which is to set "pool" to the
+            # stringified name of the pool, but we already set it in
+            # the type-checking phase.  instead, we do nothing here.
+        },
+
+    },
+};
 
 sub new {
     my Perlbal::Service $self = shift;
@@ -262,7 +294,7 @@ sub new {
                       dirindexing buffer_backend_connect
                       buffer_size buffer_size_reproxy_url
                       queue_relief_size queue_relief_chance
-                      always_trusted connect_ahead
+                      always_trusted connect_ahead index_files
                       )) {
         $self->{$param} = $tunables->{$param}{default};
     }
@@ -285,8 +317,9 @@ sub new {
     $self->{waiting_clients_highpri} = [];
     $self->{waiting_client_count} = 0;
 
-    # directory handling
-    $self->{index_files} = [ 'index.html' ];
+    # index_files needs to be fixed up from its default value (which
+    # isn't an arrayref)
+    $self->{index_files} = [ split(/[\s,]+/, $self->{index_files}) ];
 
     # don't have an object for this yet
     $self->{trusted_upstreams} = undef;
@@ -354,10 +387,9 @@ sub set {
                 my $re    = $req_type->[1];
                 my $emsg  = $req_type->[2];
                 return $mc->err($emsg) unless $val =~ /$re/;
-            } elsif (ref $req_type eq "ARRAY" && $req_type->[0] eq "code") {
-                my $code  = $req_type->[1];
+            } elsif (ref $req_type eq "CODE") {
                 my $emsg  = "";
-                return $mc->err($emsg) unless $code->($self, $val, \$emsg);
+                return $mc->err($emsg) unless $req_type->($self, $val, \$emsg);
             } elsif ($req_type eq "bool") {
                 $val = $bool->($val);
                 return $mc->err("Expecting boolean value for parameter '$key'")
@@ -374,22 +406,14 @@ sub set {
             }
         }
 
-        my $on_okay = $tun->{on_okay} || "set";
-        return $set->() if $on_okay eq "set";
+        my $setter = $tun->{setter};
 
-        if (ref $on_okay eq "CODE") {
-            $on_okay->($self, $val, $set);
-            return $mc->okay;
+        if (ref $setter eq "CODE") {
+            $setter->($self, $val, $set);
+            return $mc->ok;
+        } else {
+            return $set->();
         }
-    }
-
-
-    if ($key eq "index_files") {
-        return $mc->err("Can only set index_files on a web_server service")
-            unless $self->{role} eq "web_server";
-        my @list = split(/[\s,]+/, $val);
-        $self->{index_files} = \@list;
-        return $mc->ok;
     }
 
     if ($key eq 'plugins') {
@@ -431,16 +455,6 @@ sub set {
         return $mc->ok;
     }
 
-    if ($key eq 'pool') {
-        my $pl = Perlbal->pool($val);
-        return $mc->err("Pool '$val' not found") unless $pl;
-        $self->{pool}->decrement_use_count if $self->{pool};
-        $self->{pool} = $pl;
-        $self->{pool}->increment_use_count;
-        $self->{generation}++;
-        return $mc->ok;
-    }
-
     # see if it happens to be a plugin set command?
     if ($key =~ /^(.+)\.(.+)$/) {
         if (my $coderef = $self->{plugin_setters}->{$1}->{$2}) {
@@ -448,7 +462,7 @@ sub set {
         }
     }
 
-    return $mc->err("Unknown parameter '$key'");
+    return $mc->err("Unknown service parameter '$key'");
 }
 
 # run the hooks in a list one by one until one hook returns 1.  returns
