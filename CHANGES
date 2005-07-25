@@ -1,3 +1,5 @@
+    -- remove sendstats support
+
     -- exit with 0 vs non-zero when/if Perlbal crashes.  new command
        "crash" to fake a crash, for testing.
 

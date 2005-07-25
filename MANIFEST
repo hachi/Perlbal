@@ -11,7 +11,6 @@ lib/Perlbal/ClientProxy.pm
 lib/Perlbal/HTTPHeaders.pm
 lib/Perlbal/Service.pm
 lib/Perlbal/Socket.pm
-lib/Perlbal/StatsListener.pm
 lib/Perlbal/TCPListener.pm
 lib/Perlbal/Test.pm
 lib/Perlbal/ManageCommand.pm

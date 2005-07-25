@@ -11,8 +11,7 @@ use Perlbal::BackendHTTP;
 # how often to reload the nodefile
 use constant NODEFILE_RELOAD_FREQ => 3;
 
-# balance methods we support
-use constant BM_SENDSTATS => 1;
+# balance methods we support (note: sendstats mode is now removed)
 use constant BM_ROUNDROBIN => 2;
 use constant BM_RANDOM => 3;
 
@@ -23,10 +22,6 @@ use fields (
             'node_count',      # int; number of nodes
             'node_used',       # hashref; { ip:port => use count }
             'balance_method',  # int; BM_ constant from above
-
-            # used in sendstats mode
-            'sendstats.listen',        # what IP/port the stats listener runs on
-            'sendstats.listen.socket', # Perlbal::StatsListener object
 
             # used in nodefile mode
             'nodefile',           # string; filename to read nodes from
@@ -86,7 +81,6 @@ sub set {
 
     if ($key eq "balance_method") {
         $val = {
-            'sendstats' => BM_SENDSTATS,
             'random' => BM_RANDOM,
         }->{$val};
         return $mc->err("Unknown balance method")
@@ -94,44 +88,12 @@ sub set {
         return $set->();
     }
 
-    if ($key =~ /^sendstats\./) {
-        return $mc->err("Can only set sendstats listening address on service with balancing method 'sendstats'")
-            unless $self->{balance_method} == BM_SENDSTATS;
-        if ($key eq "sendstats.listen") {
-            return $mc->err("Invalid host:port")
-                unless $val =~ m!^\d+\.\d+\.\d+\.\d+:\d+$!;
-
-            if (my $pbs = $self->{"sendstats.listen.socket"}) {
-                $pbs->close;
-            }
-
-            unless ($self->{"sendstats.listen.socket"} =
-                    Perlbal::StatsListener->new($val, $self)) {
-                return $mc->err("Error creating stats listener: $Perlbal::last_error");
-            }
-            $self->populate_sendstats_hosts;
-        }
-        return $set->();
-    }
-
-}
-
-sub populate_sendstats_hosts {
-    my Perlbal::Pool $self = shift;
-
-    # tell the sendstats listener about the new list of valid
-    # IPs to listen from
-    if ($self->{balance_method} == BM_SENDSTATS) {
-        my $ss = $self->{'sendstats.listen.socket'};
-        $ss->set_hosts(map { $_->[0] } @{$self->{nodes}}) if $ss;
-    }
 }
 
 # returns string of balance method
 sub balance_method {
     my Perlbal::Pool $self = $_[0];
     my $methods = {
-        &BM_SENDSTATS => "sendstats",
         &BM_ROUNDROBIN => "round_robin",
         &BM_RANDOM => "random",
     };
@@ -167,10 +129,9 @@ sub _parse_nodefile {
             push @{$self->{nodes}}, [ $ip, $port || 80 ];
         }
     }
-    
+
     # setup things using new data
     $self->{node_count} = scalar @{$self->{nodes}};
-    $self->populate_sendstats_hosts;
 }
 
 sub _load_nodefile_sync {
@@ -218,7 +179,7 @@ sub _load_nodefile_async {
         $self->_parse_nodefile(\$nodes);
         return;
     });
-    
+
     return 1;
 }
 
@@ -246,20 +207,13 @@ sub get_backend_endpoint {
     my Perlbal::Pool $self = $_[0];
 
     my @endpoint;  # (IP,port)
-    
+
     # re-load nodefile if necessary
     if ($self->{nodefile}) {
         my $now = time;
         if ($now > $self->{'nodefile.lastcheck'} + NODEFILE_RELOAD_FREQ) {
             $self->{'nodefile.lastcheck'} = $now;
             $self->load_nodefile;
-        }
-    }
-
-    if ($self->{balance_method} == BM_SENDSTATS) {
-        my $ss = $self->{'sendstats.listen.socket'};
-        if ($ss && (@endpoint = $ss->get_endpoint)) {
-            return @endpoint;
         }
     }
 
