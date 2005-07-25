@@ -69,7 +69,7 @@ ok(! -f $disk_file, "file gone");
 ok(! delete_file(), "deleting non-existent file");
 
 # min_put_directory
-ok(manage("SET test.min_put_directory = 2"));
+ok(manage("SET test.min_put_directory = 2"), "min_put = 2");
 foreach_aio {
     my $mode = shift;
 

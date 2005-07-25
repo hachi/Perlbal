@@ -11,21 +11,29 @@ use Perlbal::BackendHTTP;
 use fields (
             'name',
             'enabled', # bool
-            'role',    # currently 'reverse_proxy' or 'management'
-            'listen',  # scalar: "$ip:$port"
-            'pool',      # Perlbal::Pool that we're using to allocate nodes if we're in proxy mode
+            'role',
+            'listen',
+            'pool',            # Perlbal::Pool that we're using to allocate nodes if we're in proxy mode
+            'listener',
+
             'docroot',            # document root for webserver role
             'dirindexing',        # bool: direcotry indexing?  (for webserver role)  not async.
             'index_files',        # arrayref of filenames to try for index files
-            'listener',
+            'enable_put', # bool: whether PUT is supported
+            'max_put_size', # int: max size in bytes of a put file
+            'min_put_directory', # int: number of directories required to exist at beginning of URIs in put
+            'enable_delete', # bool: whether DELETE is supported
+
             'waiting_clients',         # arrayref of clients waiting for backendhttp conns
             'waiting_clients_highpri', # arrayref of high-priority clients waiting for backendhttp conns
             'waiting_client_count',    # number of clients waiting for backendds
             'waiting_client_map'  ,    # map of clientproxy fd -> 1 (if they're waiting for a conn)
             'pending_connects',        # hashref of "ip:port" -> $time (only one pending connect to backend at a time)
             'pending_connect_count',   # number of outstanding backend connects
+
             'high_priority_cookie',          # cookie name to check if client can 'cut in line' and get backends faster
             'high_priority_cookie_contents', # aforementioned cookie value must contain this substring
+
             'connect_ahead',           # scalar: number of spare backends to connect to in advance all the time
             'backend_persist_cache',   # scalar: max number of persistent backends to hold onto while no clients
             'bored_backends',          # arrayref of backends we've already connected to, but haven't got clients
@@ -38,10 +46,6 @@ use fields (
             'plugin_order', # arrayref: name, name, name...
             'plugin_setters', # hashref: { plugin_name => { key_name => coderef } }
             'extra_config', # hashref: extra config options; name => values
-            'enable_put', # bool: whether PUT is supported
-            'max_put_size', # int: max size in bytes of a put file
-            'min_put_directory', # int: number of directories required to exist at beginning of URIs in put
-            'enable_delete', # bool: whether DELETE is supported
             'buffer_size', # int: specifies how much data a ClientProxy object should buffer from a backend
             'buffer_size_reproxy_url', # int: same as above but for backends that are reproxying for us
             'spawn_lock', # bool: if true, we're currently in spawn_backends
@@ -59,6 +63,188 @@ use fields (
             'selector',    # CODE ref, or undef, for role 'selector' services
             );
 
+our $tunables = {
+
+    'role' => {
+        des => "What type of service.  One of 'reverse_proxy' for a service that load balances to a pool of backend webserver nodes, 'web_server' for a typical webserver', 'management' for a Perlbal management interface (speaks both command-line or HTTP, auto-detected), or 'selector', for a virtual service that maps onto other services.",
+
+        default => "",
+        required => 1,
+
+        check_type => ["enum", ["reverse_proxy", "web_server", "management", "selector"]],
+        check_role => '*',
+    },
+
+    'listen' => {
+        des => "The ip:port to listen on.  For a service to work, you must either make it listen, or make another selector service map to a non-listening service.",
+        check_type => ["regexp", qr/^\d+\.\d+\.\d+\.\d+:\d+$!/, "Expecting IP:port of form a.b.c.d:port."],
+        on_set => sub {
+            my ($self, $val, $set) = @_;
+
+            # close/reopen listening socket
+            if ($val ne $self->{listen} && $self->{enabled}) {
+                $self->disable(undef, "force");
+                $self->{listen} = $val;
+                $self->enable(undef);
+            }
+
+            return $set->();
+        },
+    },
+
+    'backend_persist_cache' => {
+        check_type => "int",
+        default => 2,
+        check_role => "reverse_proxy",
+    },
+
+    'persist_client' => {
+        default => 0,
+        check_type => "bool",
+        check_role => "*",
+    },
+
+    'persist_backend' => {
+        default => 0,
+        check_type => "bool",
+        check_role => "reverse_proxy",
+    },
+
+    'verify_backend' => {
+        default => 0,
+        check_type => "bool",
+        check_role => "reverse_proxy",
+    },
+
+    'max_backend_uses' => {
+        default => 0,
+    },
+
+    'max_put_size' => {
+        default => 0,  # no limit
+        check_type => "size",
+        check_role => "web_server",
+    },
+
+    'buffer_size' => {
+        default => 256_000,
+        check_type => "size",
+    },
+
+    'buffer_size_reproxy_url' => {
+        default => 51_2000,
+        check_type => "size",
+    },
+
+    'queue_relief_size' => {
+        default => 0,
+        check_type => "int",
+        check_role => "reverse_proxy",
+    },
+
+    'queue_relief_chance' => {
+        default => 0,
+        check_type => ["code", sub {
+            my ($self, $val, $errref) = @_;
+            return 1 if $val =~ /^\d+$/ && $val >= 0 && $val <= 100;
+            $$errref = "Expecting integer value between 0 and 100, inclusive.";
+            return 0;
+        }],
+        check_role => "reverse_proxy",
+    },
+
+    'buffer_backend_connect' => {
+        default => 0,
+        check_type => "int",
+        check_role => "reverse_proxy",
+    },
+
+    'docroot' => {
+        default => 0,
+        check_role => "web_server",
+        val_modify => sub { my $valref = shift; $$valref =~ s!/$!!; },
+        check_type => ["code", sub {
+            my ($self, $val, $errref) = @_;
+            #FIXME: require absolute paths?
+            return 1 if $val && -d $val;
+            $$errref = "Directory not found for service $self->{name}";
+            return 0;
+        }],
+    },
+
+    'enable_put' => {
+        des => "Enable HTTP PUT requests.",
+        default => 0,
+        check_role => "web_server",
+        check_type => "bool",
+    },
+
+    'enable_delete' => {
+        des => "Enable HTTP DELETE requests.",
+        default => 0,
+        check_role => "web_server",
+        check_type => "bool",
+    },
+
+    'min_put_directory' => {
+        des => "If PUT requests are enabled, require this many levels of directories to already exist.  If not, fail.",
+        default => 0,   # no limit
+        check_role => "web_server",
+        check_type => "int",
+    },
+
+    'dirindexing' => {
+        des => "Show directory indexes when an HTTP request is for a directory.  Warning:  this is not an async operation, so will slow down Perlbal on heavily loaded sites.",
+        default => 0,
+        check_role => "web_server",
+        check_type => "bool",
+    },
+
+    'connect_ahead' => {
+        default => 0,
+        check_type => "int",
+        check_role => "reverse_proxy",
+        on_okay => sub {
+            my ($self, $val, $set) = @_;
+            $set->();
+            $self->spawn_backends if $self->{enabled};
+            return 1;
+        },
+    },
+
+    'always_trusted' => {
+        des => "Whether to trust all incoming requests' X-Forwarded-For and related headers.  Set to true only if you know that all incoming requests from your own proxy servers that clean/set those headers.",
+        default => 0,
+        check_type => "bool",
+        check_role => "reverse_proxy",
+    },
+
+    'high_priority_cookie' => {
+        check_role => "reverse_proxy",
+    },
+
+    'high_priority_cookie_contents' => {
+        check_role => "reverse_proxy",
+    },
+
+    'trusted_upstream_proxies' => {
+        check_type => ["code", sub {
+            my ($self, $val, $errref) = @_;
+            unless (my $loaded = eval { require Net::Netmask; 1; }) {
+                $$errref = "Net::Netmask not installed";
+                return 0;
+            }
+
+            return 1 if $self->{trusted_upstreams} = Net::Netmask->new2($val);
+            $$errref = "Error defining trusted upstream proxies: " . Net::Netmask::errstr();
+            return 0;
+        }],
+
+    },
+
+};
+
+
 sub new {
     my Perlbal::Service $self = shift;
     $self = fields::new($self) unless ref $self;
@@ -67,38 +253,32 @@ sub new {
 
     $self->{name} = $name;
     $self->{enabled} = 0;
-    $self->{listen} = "";
-    $self->{persist_client} = 0;
-    $self->{persist_backend} = 0;
-    $self->{verify_backend} = 0;
-    $self->{max_backend_uses} = 0;
-    $self->{backend_persist_cache} = 2;
-    $self->{generation} = 0;
+
+    for my $param (qw(
+                      listen persist_client persist_backend
+                      verify_backend max_backend_uses
+                      backend_persist_cache max_put_size
+                      min_put_directory enable_put enable_delete
+                      dirindexing buffer_backend_connect
+                      buffer_size buffer_size_reproxy_url
+                      queue_relief_size queue_relief_chance
+                      always_trusted connect_ahead
+                      )) {
+        $self->{$param} = $tunables->{$param}{default};
+    }
+
+
     $self->{backend_no_spawn} = {};
-    $self->{buffer_backend_connect} = 0;
+    $self->{generation} = 0;
 
     $self->{hooks} = {};
     $self->{plugins} = {};
     $self->{plugin_order} = [];
 
-    $self->{enable_put} = 0;
-    $self->{max_put_size} = 0; # 0 means no max size
-    $self->{min_put_directory} = 0;
-    $self->{enable_delete} = 0;
-
-    # disable pressure relief by default
-    $self->{queue_relief_size} = 0;
-    $self->{queue_relief_chance} = 0;
-
-    # set some default maximum buffer sizes
-    $self->{buffer_size} = 256_000;
-    $self->{buffer_size_reproxy_url} = 51_200;
-
     # track pending connects to backend
     $self->{pending_connects} = {};
     $self->{pending_connect_count} = 0;
     $self->{bored_backends} = [];
-    $self->{connect_ahead} = 0;
 
     # waiting clients
     $self->{waiting_clients} = [];
@@ -106,17 +286,169 @@ sub new {
     $self->{waiting_client_count} = 0;
 
     # directory handling
-    $self->{dirindexing} = 0;
     $self->{index_files} = [ 'index.html' ];
 
     # don't have an object for this yet
     $self->{trusted_upstreams} = undef;
-    $self->{always_trusted} = 0;
 
     # bare data structure for extra header info
     $self->{extra_headers} = { remove => [], insert => [] };
 
     return $self;
+}
+
+# Service
+sub set {
+    my Perlbal::Service $self = shift;
+
+    my ($key, $val, $mc) = @_;
+    my $set = sub { $self->{$key} = $val; return $mc->ok; };
+
+    my $pool_set = sub {
+        # if we don't have a pool, automatically create one named $NAME_pool
+        unless ($self->{pool}) {
+            # die if necessary
+            die "ERROR: Attempt to vivify pool $self->{name}_pool but one or more pools\n" .
+                "       have already been created manually.  Please set $key on a\n" .
+                "       previously created pool.\n" unless $Perlbal::vivify_pools;
+
+            # create the pool and ensure that vivify stays on
+            Perlbal::run_manage_command("CREATE POOL $self->{name}_pool", $mc->out);
+            Perlbal::run_manage_command("SET $self->{name}.pool = $self->{name}_pool");
+            $Perlbal::vivify_pools = 1;
+        }
+
+        # now we actually do the set
+        warn "WARNING: '$key' set on service $self->{name} on auto-vivified pool.\n" .
+             "         This behavior is obsolete.  This value should be set on a\n" .
+             "         pool object and not on a service.\n" if $Perlbal::vivify_pools;
+        return $mc->err("No pool defined for service") unless $self->{pool};
+        return $self->{pool}->set($key, $val, $mc);
+    };
+
+    # this is now handled by Perlbal::Pool, so we pass this set command on
+    # through in case people try to use it on us like the old method.
+    return $pool_set->()
+        if $key eq 'nodefile' ||
+           $key eq 'balance_method';
+
+
+    my $bool = sub {
+        my $val = shift;
+        return 1 if $val =~ /^1|true|on|yes$/i;
+        return 0 if $val =~ /^0|false|off|no$/i;
+        return undef;
+    };
+
+    if (my $tun = $tunables->{$key}) {
+        if (my $req_role = $tun->{check_role}) {
+            return $mc->err("The '$key' option can only be set on a '$req_role' service")
+                unless ($self->{role}||"") eq $req_role || $req_role eq "*";
+        }
+
+        if (my $req_type = $tun->{check_type}) {
+            if (ref $req_type eq "ARRAY" && $req_type->[0] eq "enum") {
+                return $mc->err("Value of '$key' must be one of: " . join(", ", @{$req_type->[1]}))
+                    unless grep { $val eq $_ } @{$req_type->[1]};
+            } elsif (ref $req_type eq "ARRAY" && $req_type->[0] eq "regexp") {
+                my $re    = $req_type->[1];
+                my $emsg  = $req_type->[2];
+                return $mc->err($emsg) unless $val =~ /$re/;
+            } elsif (ref $req_type eq "ARRAY" && $req_type->[0] eq "code") {
+                my $code  = $req_type->[1];
+                my $emsg  = "";
+                return $mc->err($emsg) unless $code->($self, $val, \$emsg);
+            } elsif ($req_type eq "bool") {
+                $val = $bool->($val);
+                return $mc->err("Expecting boolean value for parameter '$key'")
+                    unless defined $val;
+            } elsif ($req_type eq "int") {
+                return $mc->err("Expecting integer value for parameter '$key'")
+                    unless $val =~ /^\d+$/;
+            } elsif ($req_type eq "size") {
+                $val = $1               if $val =~ /^(\d+)b$/i;
+                $val = $1 * 1024        if $val =~ /^(\d+)k$/i;
+                $val = $1 * 1024 * 1024 if $val =~ /^(\d+)m$/i;
+                return $mc->err("Expecting size unit value for parameter '$key' in bytes, or suffixed with 'K' or 'M'")
+                    unless $val =~ /^\d+$/;
+            }
+        }
+
+        my $on_okay = $tun->{on_okay} || "set";
+        return $set->() if $on_okay eq "set";
+
+        if (ref $on_okay eq "CODE") {
+            $on_okay->($self, $val, $set);
+            return $mc->okay;
+        }
+    }
+
+
+    if ($key eq "index_files") {
+        return $mc->err("Can only set index_files on a web_server service")
+            unless $self->{role} eq "web_server";
+        my @list = split(/[\s,]+/, $val);
+        $self->{index_files} = \@list;
+        return $mc->ok;
+    }
+
+    if ($key eq 'plugins') {
+        # unload existing plugins
+        foreach my $plugin (keys %{$self->{plugins}}) {
+            eval "Perlbal::Plugin::$plugin->unregister(\$self);";
+            return $mc->err($@) if $@;
+        }
+
+        # clear out loaded plugins and hooks
+        $self->{hooks} = {};
+        $self->{plugins} = {};
+        $self->{plugin_order} = [];
+
+        # load some plugins
+        foreach my $plugin (split /[\s,]+/, $val) {
+            next if $plugin eq 'none';
+
+            # since we lowercase our input, uppercase the first character here
+            my $fn = uc($1) . lc($2) if $plugin =~ /^(.)(.*)$/;
+            next if $self->{plugins}->{$fn};
+            unless ($Perlbal::plugins{$fn}) {
+                $mc->err("Plugin $fn not loaded; not registered for $self->{name}.");
+                next;
+            }
+
+            # now register it
+            eval "Perlbal::Plugin::$fn->register(\$self);";
+            return $mc->err($@) if $@;
+            $self->{plugins}->{$fn} = 1;
+            push @{$self->{plugin_order}}, $fn;
+        }
+        return $mc->ok;
+    }
+
+    if ($key =~ /^extra\.(.+)$/) {
+        # set some extra configuration data data
+        $self->{extra_config}->{$1} = $val;
+        return $mc->ok;
+    }
+
+    if ($key eq 'pool') {
+        my $pl = Perlbal->pool($val);
+        return $mc->err("Pool '$val' not found") unless $pl;
+        $self->{pool}->decrement_use_count if $self->{pool};
+        $self->{pool} = $pl;
+        $self->{pool}->increment_use_count;
+        $self->{generation}++;
+        return $mc->ok;
+    }
+
+    # see if it happens to be a plugin set command?
+    if ($key =~ /^(.+)\.(.+)$/) {
+        if (my $coderef = $self->{plugin_setters}->{$1}->{$2}) {
+            return $coderef->($mc->out, $2, $val);
+        }
+    }
+
+    return $mc->err("Unknown parameter '$key'");
 }
 
 # run the hooks in a list one by one until one hook returns 1.  returns
@@ -633,221 +965,6 @@ sub return_to_base {
 }
 
 # Service
-sub set {
-    my Perlbal::Service $self = shift;
-
-    my ($key, $val, $mc) = @_;
-    my $set = sub { $self->{$key} = $val; return $mc->ok; };
-
-    my $pool_set = sub {
-        # if we don't have a pool, automatically create one named $NAME_pool
-        unless ($self->{pool}) {
-            # die if necessary
-            die "ERROR: Attempt to vivify pool $self->{name}_pool but one or more pools\n" .
-                "       have already been created manually.  Please set $key on a\n" .
-                "       previously created pool.\n" unless $Perlbal::vivify_pools;
-
-            # create the pool and ensure that vivify stays on
-            Perlbal::run_manage_command("CREATE POOL $self->{name}_pool", $mc->out);
-            Perlbal::run_manage_command("SET $self->{name}.pool = $self->{name}_pool");
-            $Perlbal::vivify_pools = 1;
-        }
-
-        # now we actually do the set
-        warn "WARNING: '$key' set on service $self->{name} on auto-vivified pool.\n" .
-             "         This behavior is obsolete.  This value should be set on a\n" .
-             "         pool object and not on a service.\n" if $Perlbal::vivify_pools;
-        return $mc->err("No pool defined for service") unless $self->{pool};
-        return $self->{pool}->set($key, $val, $mc);
-    };
-
-    if ($key eq "role") {
-        return $mc->err("Unknown service role") unless
-            $val eq "reverse_proxy" || $val eq "management" ||
-            $val eq "web_server"    || $val eq "selector";
-
-        return $set->();
-    }
-
-    if ($key eq "listen") {
-        return $mc->err("Invalid host:port")
-            unless $val =~ m!^\d+\.\d+\.\d+\.\d+:\d+$!;
-
-        # close/reopen listening socket
-        if ($val ne $self->{listen} && $self->{enabled}) {
-            $self->disable(undef, "force");
-            $self->{listen} = $val;
-            $self->enable(undef);
-        }
-
-        return $set->();
-    }
-
-    my $bool = sub {
-        my $val = shift;
-        return 1 if $val =~ /^1|true|on|yes$/i;
-        return 0 if $val =~ /^0|false|off|no$/i;
-        return undef;
-    };
-
-    if ($key eq 'trusted_upstream_proxies') {
-        my $loaded = eval { require Net::Netmask; 1; };
-        return $mc->err("Net::Netmask not installed") unless $loaded;
-
-        if ($self->{trusted_upstreams} = Net::Netmask->new2($val)) {
-            # set, all good
-            return $mc->ok;
-        } else {
-            return $mc->err("Error defining trusted upstream proxies: " . Net::Netmask::errstr());
-        }
-    }
-
-    if ($key eq 'always_trusted') {
-        $val = $bool->($val);
-        return $mc->err("Expecting boolean value for option '$key'")
-            unless defined $val;
-        return $set->();
-    }
-
-    if ($key eq 'enable_put' || $key eq 'enable_delete') {
-        return $mc->err("This can only be used on web_server service")
-            unless $self->{role} eq 'web_server';
-        $val = $bool->($val);
-        return $mc->err("Expecting boolean value for option '$key'.")
-            unless defined $val;
-        return $set->();
-    }
-
-    if ($key eq "persist_client" || $key eq "persist_backend" ||
-        $key eq "verify_backend") {
-        $val = $bool->($val);
-        return $mc->err("Expecting boolean value for option '$key'")
-            unless defined $val;
-        return $set->();
-    }
-
-    # this is now handled by Perlbal::Pool, so we pass this set command on
-    # through in case people try to use it on us like the old method.
-    return $pool_set->()
-        if $key eq 'balance_method' ||
-           $key eq 'nodefile' ||
-           $key =~ /^sendstats\./;
-    if ($key eq "balance_method") {
-        return $mc->err("Can only set balance method on a reverse_proxy service")
-            unless $self->{role} eq "reverse_proxy";
-    }
-
-    if ($key eq "high_priority_cookie" || $key eq "high_priority_cookie_contents") {
-        return $set->();
-    }
-
-    if ($key eq "connect_ahead") {
-        return $mc->err("Expected integer value") unless $val =~ /^\d+$/;
-        $set->();
-        $self->spawn_backends if $self->{enabled};
-        return $mc->ok;
-    }
-
-    if ($key eq "max_backend_uses" || $key eq "backend_persist_cache" ||
-        $key eq "max_put_size" || $key eq "min_put_directory" ||
-        $key eq "buffer_size" || $key eq "buffer_size_reproxy_url" ||
-        $key eq "queue_relief_size" || $key eq "buffer_backend_connect") {
-        return $mc->err("Expected integer value") unless $val =~ /^\d+$/;
-        return $set->();
-    }
-
-    if ($key eq "queue_relief_chance") {
-        return $mc->err("Expected integer value") unless $val =~ /^\d+$/;
-        return $mc->err("Expected integer value between 0 and 100 inclusive")
-            unless $val >= 0 && $val <= 100;
-        return $set->();
-    }
-
-    if ($key eq "docroot") {
-        return $mc->err("Can only set docroot on a web_server service")
-            unless $self->{role} eq "web_server";
-        $val =~ s!/$!!;
-        return $mc->err("Directory not found for service $self->{name}")
-            unless $val && -d $val;
-        return $set->();
-    }
-
-    if ($key eq "dirindexing") {
-        return $mc->err("Can only set dirindexing on a web_server service")
-            unless $self->{role} eq "web_server";
-        return $mc->err("Expected value 0 or 1")
-            unless $val eq '0' || $val eq '1';
-        return $set->();
-    }
-
-    if ($key eq "index_files") {
-        return $mc->err("Can only set index_files on a web_server service")
-            unless $self->{role} eq "web_server";
-        my @list = split(/[\s,]+/, $val);
-        $self->{index_files} = \@list;
-        return $mc->ok;
-    }
-
-    if ($key eq 'plugins') {
-        # unload existing plugins
-        foreach my $plugin (keys %{$self->{plugins}}) {
-            eval "Perlbal::Plugin::$plugin->unregister(\$self);";
-            return $mc->err($@) if $@;
-        }
-
-        # clear out loaded plugins and hooks
-        $self->{hooks} = {};
-        $self->{plugins} = {};
-        $self->{plugin_order} = [];
-
-        # load some plugins
-        foreach my $plugin (split /[\s,]+/, $val) {
-            next if $plugin eq 'none';
-
-            # since we lowercase our input, uppercase the first character here
-            my $fn = uc($1) . lc($2) if $plugin =~ /^(.)(.*)$/;
-            next if $self->{plugins}->{$fn};
-            unless ($Perlbal::plugins{$fn}) {
-                $mc->err("Plugin $fn not loaded; not registered for $self->{name}.");
-                next;
-            }
-
-            # now register it
-            eval "Perlbal::Plugin::$fn->register(\$self);";
-            return $mc->err($@) if $@;
-            $self->{plugins}->{$fn} = 1;
-            push @{$self->{plugin_order}}, $fn;
-        }
-        return $mc->ok;
-    }
-
-    if ($key =~ /^extra\.(.+)$/) {
-        # set some extra configuration data data
-        $self->{extra_config}->{$1} = $val;
-        return $mc->ok;
-    }
-
-    if ($key eq 'pool') {
-        my $pl = Perlbal->pool($val);
-        return $mc->err("Pool '$val' not found") unless $pl;
-        $self->{pool}->decrement_use_count if $self->{pool};
-        $self->{pool} = $pl;
-        $self->{pool}->increment_use_count;
-        $self->{generation}++;
-        return $mc->ok;
-    }
-
-    # see if it happens to be a plugin set command?
-    if ($key =~ /^(.+)\.(.+)$/) {
-        if (my $coderef = $self->{plugin_setters}->{$1}->{$2}) {
-            return $coderef->($mc->out, $2, $val);
-        }
-    }
-
-    return $mc->err("Unknown attribute '$key'");
-}
-
-# Service
 sub enable {
     my Perlbal::Service $self;
     my $mc;
@@ -922,7 +1039,6 @@ sub stats_info
         $out->(" connect-ahead: $bored_count/$self->{connect_ahead}");
         if ($self->{pool}) {
             $out->("          pool: " . $self->{pool}->name);
-            $out->("balance method: " . $self->{pool}->balance_method);
             $out->("         nodes:");
             foreach my $n (@{ $self->{pool}->nodes }) {
                 my $hostport = "$n->[0]:$n->[1]";
