@@ -41,10 +41,11 @@ sub write_file {
     close F;
 }
 
+our $last_res;
 sub get {
     my $url = shift;
     my $req = HTTP::Request->new(GET => $url);
-    my $res = $ua->request($req);
+    my $res = $last_res = $ua->request($req);
     return $res->is_success ? $res->content : undef;
 }
 
@@ -72,5 +73,20 @@ ok(! get("$url/404.txt"), "missing file");
     like($diridx, qr/bar\.txt/, "see dirlist");
 }
 
+# test that index files work
+{
+    my $dirurl = $url;
+    $dirurl =~ s!/[^/]+?$!/!;
+
+    manage("SET test.dirindexing = 0");
+    my $diridx = get($dirurl);
+    like($diridx, qr/Directory listing disabled/, "no dirlist");
+    manage("SET test.index_files = not_here.txt, nor_here.html, bar.txt");
+    $diridx = get($dirurl);
+    like($diridx, qr/foo bar baz/, "got the index file");
+    manage("SET test.index_files = blah.txt");
+    $diridx = get($dirurl);
+    like($diridx, qr/Directory listing disabled/, "no dirlist again");
+}
 
 1;

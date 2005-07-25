@@ -248,9 +248,7 @@ our $tunables = {
         des => "Comma-seperated list of filenames to load when a user visits a directory URL, listed in order of preference.",
         setter => sub {
             my ($self, $val, $set) = @_;
-            my @list = split(/[\s,]+/, $val);
-            $self->{index_files} = \@list;
-            $set->();
+            $self->{index_files} = [ split(/[\s,]+/, $val) ];
         },
     },
 
