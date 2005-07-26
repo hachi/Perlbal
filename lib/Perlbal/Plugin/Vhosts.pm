@@ -20,9 +20,12 @@ sub load {
     my $class = shift;
 
     Perlbal::register_global_hook('manage_command.vhost', sub {
-        my $mc = shift->parse(qr/^vhost\s+(\w+)\s+(\S+)\s*=\s*(\w+)$/,
-                              "usage: VHOST <service> <host_or_pattern> = <dest_service>");
+        my $mc = shift->parse(qr/^vhost\s+(?:(\w+)\s+)?(\S+)\s*=\s*(\w+)$/,
+                              "usage: VHOST [<service>] <host_or_pattern> = <dest_service>");
         my ($selname, $host, $target) = $mc->args;
+        unless ($selname ||= $mc->{ctx}{last_created}) {
+            return $mc->err("omitted service name not implied from context");
+        }
 
         my $ss = Perlbal->service($selname);
         return $mc->err("Service '$selname' is not a selector service")

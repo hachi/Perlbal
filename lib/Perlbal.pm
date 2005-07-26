@@ -44,6 +44,7 @@ use Perlbal::BackendHTTP;
 use Perlbal::ReproxyManager;
 use Perlbal::Pool;
 use Perlbal::ManageCommand;
+use Perlbal::CommandContext;
 
 END {
     Linux::AIO::max_parallel(0)
@@ -162,7 +163,7 @@ sub pool {
 
 # returns 1 if command succeeded, 0 otherwise
 sub run_manage_command {
-    my ($cmd, $out, $verbose) = @_;  # $out is output stream closure
+    my ($cmd, $out, $verbose, $ctx) = @_;  # $out is output stream closure
 
     $cmd =~ s/\#.*//;
     $cmd =~ s/^\s+//;
@@ -174,6 +175,7 @@ sub run_manage_command {
     return 1 unless $cmd =~ /^\S/;
 
     $out ||= sub {};
+    $ctx ||= Perlbal::CommandContext->new;
 
     my $err = sub {
         $out->("ERROR: $_[0]");
@@ -187,7 +189,7 @@ sub run_manage_command {
     return $err->("invalid command") unless $cmd =~ /^(\w+)/;
     my $basecmd = $1;
 
-    my $mc = Perlbal::ManageCommand->new($basecmd, $cmd, $out, $ok, $err, $orig, $verbose);
+    my $mc = Perlbal::ManageCommand->new($basecmd, $cmd, $out, $ok, $err, $orig, $verbose, $ctx);
 
     # for testing auto crashing and recovery:
     if ($basecmd eq "crash") { die "Intentional crash." };
@@ -195,7 +197,7 @@ sub run_manage_command {
     no strict 'refs';
     if (my $handler = *{"MANAGE_$basecmd"}{CODE}) {
         my $rv = eval { $handler->($mc); };
-        return $err->($@) if $@;
+        return $mc->err($@) if $@;
         return $rv;
     }
 
@@ -203,6 +205,7 @@ sub run_manage_command {
 
     # call any hooks if they've been defined
     my $rval = eval { run_global_hook("manage_command.$basecmd", $mc); };
+    return $mc->err($@) if $@;
     if (defined $rval) {
         # commands may return boolean, or arrayref to mass-print
         if (ref $rval eq "ARRAY") {
@@ -212,7 +215,7 @@ sub run_manage_command {
         return $rval;
     }
 
-    return $err->("unknown command: $basecmd");
+    return $mc->err("unknown command: $basecmd");
 }
 
 sub MANAGE_obj {
@@ -745,6 +748,7 @@ sub MANAGE_create {
         return $mc->err("service '$name' already exists") if $service{$name};
         return $mc->err("pool '$name' already exists") if $pool{$name};
         $service{$name} = Perlbal::Service->new($name);
+        $mc->{ctx}{last_created} = $name;
         return $mc->ok;
     }
 
@@ -753,6 +757,7 @@ sub MANAGE_create {
         return $mc->err("service '$name' already exists") if $service{$name};
         $vivify_pools = 0;
         $pool{$name} = Perlbal::Pool->new($name);
+        $mc->{ctx}{last_created} = $name;
         return $mc->ok;
     }
 }
@@ -776,8 +781,13 @@ sub MANAGE_pool {
 }
 
 sub MANAGE_set {
-    my $mc = shift->parse(qr/^set (\w+)\.([\w\.]+) ?= ?(.+)$/);
+    my $mc = shift->parse(qr/^set (?:(\w+)[\. ])?([\w\.]+) ?= ?(.+)$/,
+                          "usage: SET [<service>] <param> = <value>");
     my ($name, $key, $val) = $mc->args;
+    unless ($name ||= $mc->{ctx}{last_created}) {
+        return $mc->err("omitted service/pool name not implied from context");
+    }
+
     if (my Perlbal::Service $svc = $service{$name}) {
         return $svc->set($key, $val, $mc);
     } elsif (my Perlbal::Pool $pl = $pool{$name}) {
@@ -835,12 +845,13 @@ sub load_config {
     my ($file, $writer) = @_;
     open (F, $file) or die "Error opening config file ($file): $!\n";
     my $verbose = 0;
+    my $ctx = Perlbal::CommandContext->new;
     while (<F>) {
         if ($_ =~ /^verbose (on|off)/i) {
             $verbose = (lc $1 eq 'on' ? 1 : 0);
             next;
         }
-        return 0 unless run_manage_command($_, $writer, $verbose);
+        return 0 unless run_manage_command($_, $writer, $verbose, $ctx);
     }
     close(F);
     return 1;

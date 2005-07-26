@@ -1,3 +1,7 @@
+    -- introduce CommandContext, so management commands can be less
+       verbose when in config files (service/pool names can be left off
+       when you just created them a couple lines before)
+
     -- remove sendstats support
 
     -- exit with 0 vs non-zero when/if Perlbal crashes.  new command

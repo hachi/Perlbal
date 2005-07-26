@@ -1,7 +1,5 @@
-######################################################################
-# HTTP connection to backend node
-# possible states: connecting, bored, sending_req, wait_res, xfer_res
-######################################################################
+# class representing a one-liner management command.  all the responses
+# to a command should be done through this instance (out, err, ok, etc)
 
 package Perlbal::ManageCommand;
 use strict;
@@ -15,10 +13,11 @@ use fields (
             'verbose',
             'orig',
             'argn',
+            'ctx',
             );
 
 sub new {
-    my ($class, $base, $cmd, $out, $ok, $err, $orig, $verbose) = @_;
+    my ($class, $base, $cmd, $out, $ok, $err, $orig, $verbose, $ctx) = @_;
     my $self = fields::new($class);
 
     $self->{base} = $base;
@@ -27,6 +26,7 @@ sub new {
     $self->{err}  = $err;
     $self->{out}  = $out;
     $self->{orig} = $orig;
+    $self->{ctx}  = $ctx;
     $self->{verbose} = $verbose;
     $self->{argn}    = [];
     return $self;
@@ -41,7 +41,13 @@ sub loud_crasher {
 
 sub out   { my $mc = shift; return @_ ? $mc->{out}->(@_) : $mc->{out}; }
 sub ok    { my $mc = shift; return $mc->{ok}->(@_);  }
-sub err   { my $mc = shift; return $mc->{err}->(@_); }
+
+sub err   {
+    my ($mc, $err) = @_;
+    $err =~ s/\n$//;
+    $mc->{err}->($err);
+}
+
 sub cmd   { my $mc = shift; return $mc->{cmd};       }
 sub orig  { my $mc = shift; return $mc->{orig};      }
 sub end   { my $mc = shift; $mc->{out}->(".");    1; }
@@ -76,7 +82,7 @@ sub args {
 sub parse_error {
     my $mc = shift;
     my $usage = shift;
-
+    $usage .= "\n" unless $usage =~ /\n$/;
     die $usage || "Invalid syntax to '$mc->{base}' command\n"
 }
 
