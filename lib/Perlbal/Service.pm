@@ -77,9 +77,10 @@ our $tunables = {
         check_type => ["enum", ["reverse_proxy", "web_server", "management", "selector"]],
         check_role => '*',
         setter => sub {
-            my ($self, $val, $set) = @_;
-            $set->();
+            my ($self, $val, $set, $mc) = @_;
+            my $rv = $set->();
             $self->init;  # now that service role is set
+            return $rv;
         },
     },
 
@@ -88,7 +89,7 @@ our $tunables = {
         des => "The ip:port to listen on.  For a service to work, you must either make it listen, or make another selector service map to a non-listening service.",
         check_type => ["regexp", qr/^\d+\.\d+\.\d+\.\d+:\d+$!/, "Expecting IP:port of form a.b.c.d:port."],
         setter => sub {
-            my ($self, $val, $set) = @_;
+            my ($self, $val, $set, $mc) = @_;
 
             # close/reopen listening socket
             if ($val ne ($self->{listen} || "") && $self->{enabled}) {
@@ -228,10 +229,10 @@ our $tunables = {
         check_type => "int",
         check_role => "reverse_proxy",
         setter => sub {
-            my ($self, $val, $set) = @_;
-            $set->();
+            my ($self, $val, $set, $mc) = @_;
+            my $rv = $set->();
             $self->spawn_backends if $self->{enabled};
-            return 1;
+            return $rv;
         },
     },
 
@@ -274,8 +275,9 @@ our $tunables = {
         default => "index.html",
         des => "Comma-seperated list of filenames to load when a user visits a directory URL, listed in order of preference.",
         setter => sub {
-            my ($self, $val, $set) = @_;
+            my ($self, $val, $set, $mc) = @_;
             $self->{index_files} = [ split(/[\s,]+/, $val) ];
+            return $mc->ok;
         },
     },
 
@@ -296,10 +298,11 @@ our $tunables = {
             return 1;
         },
         setter => sub {
+            my ($self, $val, $set, $mc) = @_;
             # override the default, which is to set "pool" to the
             # stringified name of the pool, but we already set it in
             # the type-checking phase.  instead, we do nothing here.
-            return 1;
+            return $mc->ok;
         },
 
     },
@@ -437,8 +440,7 @@ sub set {
         my $setter = $tun->{setter};
 
         if (ref $setter eq "CODE") {
-            $setter->($self, $val, $set);
-            return $mc->ok;
+            return $setter->($self, $val, $set, $mc);
         } else {
             return $set->();
         }

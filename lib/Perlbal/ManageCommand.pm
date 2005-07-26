@@ -13,14 +13,13 @@ use fields (
             'ok',
             'err',
             'out',
-            'verbose',
             'orig',
             'argn',
             'ctx',
             );
 
 sub new {
-    my ($class, $base, $cmd, $out, $ok, $err, $orig, $verbose, $ctx) = @_;
+    my ($class, $base, $cmd, $out, $ok, $err, $orig, $ctx) = @_;
     my $self = fields::new($class);
 
     $self->{base} = $base;
@@ -30,7 +29,6 @@ sub new {
     $self->{out}  = $out;
     $self->{orig} = $orig;
     $self->{ctx}  = $ctx;
-    $self->{verbose} = $verbose;
     $self->{argn}    = [];
     return $self;
 }
@@ -39,7 +37,7 @@ sub new {
 # this does nothing but explode if there any problems.
 sub loud_crasher {
     use Carp qw(confess);
-    __PACKAGE__->new(undef, undef, sub {}, sub {}, sub { confess "MC:err: @_" }, sub {}, "", 0);
+    __PACKAGE__->new(undef, undef, sub {}, sub {}, sub { confess "MC:err: @_" }, "", Perlbal::CommandContext->new);
 }
 
 sub out   { my $mc = shift; return @_ ? $mc->{out}->(@_) : $mc->{out}; }
@@ -54,7 +52,6 @@ sub err   {
 sub cmd   { my $mc = shift; return $mc->{cmd};       }
 sub orig  { my $mc = shift; return $mc->{orig};      }
 sub end   { my $mc = shift; $mc->{out}->(".");    1; }
-sub verbose { my $mc = shift; return $mc->{verbose}; }
 
 sub parse {
     my $mc = shift;

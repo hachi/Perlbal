@@ -113,8 +113,8 @@ SET mgmt.role = management
 ENABLE mgmt
 };
 
-    my $out = sub { print STDOUT join("\n", map { ref $_ eq 'ARRAY' ? @$_ : $_ } @_) . "\n"; };
-    Perlbal::run_manage_command($_, $out) foreach split(/\n/, $conf);
+    my $out = sub { print STDOUT "$_[0]\n"; };
+    die "Configuration error" unless Perlbal::run_manage_commands($conf, $out);
 
     unless (Perlbal::Socket->WatchedSockets() > 0) {
         die "Invalid configuration.  (shouldn't happen?)  Stopping (self=$$).\n";
@@ -141,13 +141,13 @@ sub wait_on_child {
 
     my $start = time;
     while (1) {
-	$msock = IO::Socket::INET->new(PeerAddr => "127.0.0.1:$port");
-	return $msock if $msock;
-	select undef, undef, undef, 0.25;
+        $msock = IO::Socket::INET->new(PeerAddr => "127.0.0.1:$port");
+        return $msock if $msock;
+        select undef, undef, undef, 0.25;
         if (waitpid($pid, WNOHANG) > 0) {
             die "Child process (webserver) died.\n";
         }
-	die "Timeout waiting for port $port to startup" if time > $start + 5;
+        die "Timeout waiting for port $port to startup" if time > $start + 5;
     }
 }
 

@@ -9,7 +9,7 @@ use base "Perlbal::Socket";
 use fields ('service',
             'buf',
             'is_http',  # bool: is an HTTP request?
-            'verbose',  # bool: on/off if we should be verbose for management commands
+            'ctx',      # command context
             );
 
 # ClientManage
@@ -18,7 +18,10 @@ sub new {
     my $self = $class->SUPER::new($sock);
     $self->{service} = $service;
     $self->{buf} = "";   # what we've read so far, not forming a complete line
-    $self->{verbose} = 1;
+
+    $self->{ctx} = Perlbal::CommandContext->new;
+    $self->{ctx}->verbose(1);
+
     bless $self, ref $class || $class;
     $self->watch_read(1);
     return $self;
@@ -50,21 +53,16 @@ sub event_read {
     while ($self->{buf} =~ s/^(.+?)\r?\n//) {
         my $line = $1;
 
-        # enable user to turn verbose on and off for our connection
-        if ($line =~ /^verbose (on|off)$/i) {
-            $self->{verbose} = (lc $1 eq 'on' ? 1 : 0);
-            $self->write("OK\r\n") if $self->{verbose};
-            next;
-        }
-
-        if ($line =~ /^quit/) {
+        if ($line =~ /^quit|exit$/) {
             $self->close('user_requested_quit');
             return;
         }
 
-        Perlbal::run_manage_command($line, sub {
-            $self->write(join("\r\n", map { ref $_ eq 'ARRAY' ? @$_ : $_ } @_) . "\r\n");
-        }, $self->{verbose});
+        my $out = sub {
+            $self->write("$_[0]\r\n");
+        };
+
+        Perlbal::run_manage_command($line, $out, $self->{ctx});
     }
 }
 
@@ -88,7 +86,7 @@ sub handle_http {
         Perlbal::run_manage_command($cmd, sub {
             my $line = $_[0] || "";
             $alt->(\$line) if $alt;
-            $body .= "$line\n"; 
+            $body .= "$line\n";
         });
         $body .= "</pre>\n";
 
@@ -123,7 +121,7 @@ sub handle_http {
     }
 
     $body .= "<hr style='margin-top: 10px' /><a href='/'>Perlbal management</a>.\n";
-    $self->write("HTTP/1.0 $code\r\nContent-type: text/html\r\nContent-Length: " . length($body) . 
+    $self->write("HTTP/1.0 $code\r\nContent-type: text/html\r\nContent-Length: " . length($body) .
                  "\r\n\r\n$body");
     $self->write(sub { $self->close; });
     return;

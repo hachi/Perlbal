@@ -181,9 +181,20 @@ sub pool {
     return $pool{$_[0]};
 }
 
+# run a block of commands.  returns true if they all passed
+sub run_manage_commands {
+    my ($cmd_block, $out, $ctx) = @_;
+
+    $ctx ||= Perlbal::CommandContext->new;
+    foreach my $cmd (split(/\n/, $cmd_block)) {
+        return 0 unless Perlbal::run_manage_command($cmd, $out, $ctx);
+    }
+    return 1;
+}
+
 # returns 1 if command succeeded, 0 otherwise
 sub run_manage_command {
-    my ($cmd, $out, $verbose, $ctx) = @_;  # $out is output stream closure
+    my ($cmd, $out, $ctx) = @_;  # $out is output stream closure
 
     $cmd =~ s/\#.*//;
     $cmd =~ s/^\s+//;
@@ -202,14 +213,14 @@ sub run_manage_command {
         return 0;
     };
     my $ok = sub {
-        $out->("OK") if $verbose;
+        $out->("OK") if $ctx->verbose;
         return 1;
     };
 
     return $err->("invalid command") unless $cmd =~ /^(\w+)/;
     my $basecmd = $1;
 
-    my $mc = Perlbal::ManageCommand->new($basecmd, $cmd, $out, $ok, $err, $orig, $verbose, $ctx);
+    my $mc = Perlbal::ManageCommand->new($basecmd, $cmd, $out, $ok, $err, $orig, $ctx);
 
     # for testing auto crashing and recovery:
     if ($basecmd eq "crash") { die "Intentional crash." };
@@ -229,7 +240,7 @@ sub run_manage_command {
     if (defined $rval) {
         # commands may return boolean, or arrayref to mass-print
         if (ref $rval eq "ARRAY") {
-            $mc->out($rval);
+            $mc->out($_) foreach @$rval;
             return 1;
         }
         return $rval;
@@ -245,6 +256,14 @@ sub MANAGE_obj {
         $mc->out("$_ = $ObjCount{$_} (tot=$ObjTotal{$_})");
     }
     $mc->end;
+}
+
+sub MANAGE_verbose {
+    my $mc = shift->parse(qr/^verbose (on|off)$/,
+                          "usage: VERBOSE {on|off}");
+    my $onoff = $mc->arg(1);
+    $mc->{ctx}->verbose(lc $onoff eq 'on' ? 1 : 0);
+    return $mc->ok;
 }
 
 sub MANAGE_shutdown {
@@ -865,14 +884,10 @@ sub MANAGE_plugins {
 sub load_config {
     my ($file, $writer) = @_;
     open (F, $file) or die "Error opening config file ($file): $!\n";
-    my $verbose = 0;
     my $ctx = Perlbal::CommandContext->new;
+    $ctx->verbose(0);
     while (<F>) {
-        if ($_ =~ /^verbose (on|off)/i) {
-            $verbose = (lc $1 eq 'on' ? 1 : 0);
-            next;
-        }
-        return 0 unless run_manage_command($_, $writer, $verbose, $ctx);
+        return 0 unless run_manage_command($_, $writer, $ctx);
     }
     close(F);
     return 1;

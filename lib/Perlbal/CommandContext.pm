@@ -9,12 +9,19 @@ use strict;
 use warnings;
 use fields (
             'last_created', # the name of the last pool or service created
+            'verbose',      # scalar bool:  verbosity ("OK" on success)
             );
 
 sub new {
     my $class = shift;
     my $self = fields::new($class);
     return $self;
+}
+
+sub verbose {
+    my $self = shift;
+    $self->{verbose} = shift if @_;
+    $self->{verbose};
 }
 
 1;
