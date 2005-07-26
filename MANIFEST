@@ -30,7 +30,7 @@ doc/hacking/classes.txt
 doc/hacking/hooks.txt
 doc/hacking/todo.txt
 conf/nodelist.dat
-conf/web-server.conf
+conf/webserver.conf
 conf/load-balancer.conf
 conf/virtual-hosts.conf
 t/00-use.t
