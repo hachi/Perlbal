@@ -1,8 +1,9 @@
                            Perlbal Service parameters
 
-   Set via the command:
+   Set via commands of either forms:
 
- SET <service-name>.<param> = <value>
+ SET <service-name> <param> = <value>
+ SET <param> = <value>
 
    Note on types: 'bool' values can be set using one of 1, true, yes, on, 0,
    false, off, or no. 'size' values are in integer bytes, or an integer

@@ -13,10 +13,15 @@ while (my ($k, $tun) = each %$tunables) {
     $by_role{$tun->{check_role}}{$k} = $tun;
 }
 
-my $docs = $FindBin::Bin;
+my $docs = $FindBin::Bin . "/../doc";
 open (H, ">$docs/service-parameters.html") or die "Can't open $docs/service-parameters.html for writing";
 
-print H "<h1 align='left'>Perlbal Service parameters</h1>Set via the command:<pre>SET &lt;service-name&gt;.&lt;param&gt; = &lt;value&gt;</pre>";
+print H <<HTML;
+<h1 align='left'>Perlbal Service parameters</h1>Set via commands of either forms:
+<pre>SET &lt;service-name&gt; &lt;param&gt; = &lt;value&gt;
+SET &lt;param&gt; = &lt;value&gt;
+</pre>
+HTML
 
 print H "Note on types:  'bool' values can be set using one of 1, true, yes, on, 0, false, off, or no.  'size' values are in integer bytes, or an integer followed by 'b', 'k', or 'm' (case-insensitive) for bytes, KiB, or MiB.";
 

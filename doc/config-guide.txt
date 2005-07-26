@@ -9,10 +9,13 @@ shutdown graceful          -- closes listening sockets and stays alive until cli
 create pool <name>               -- create an empty pool
 pool <name> add    <ip[:port]>   -- add a node to a pool
 pool <name> remove <ip[:port]>   -- remove a node to a pool
-set <pool>.<param> = <value>     -- set a property on a pool (see pool-parameters.txt)
+set [<pool>] <param> = <value>   -- set a property on a pool (see pool-parameters.txt).
+                                    pool is optional when it was just created.
 
-create service <name>              -- create an empty service
-set <service>.<param> = <value>    -- set a property on a service (see service-parameters.txt)
+create service <name>              -- create a new service
+
+set [<service>] <param> = <value>  -- set a property on a service (see service-parameters.txt)
+                                      service name is optional when service was just created.
 
 enable <service>                   -- enable a service (start listening)
 disable <service>                  -- disable a service (stops listening)

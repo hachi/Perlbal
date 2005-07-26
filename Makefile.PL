@@ -51,7 +51,7 @@ sub MY::postamble {
 docs :: docs/service-parameters.txt
 
 docs/service-parameters.txt: lib/Perlbal/Service.pm
-${tab}doc/gendocs.pl service-parameters
+${tab}devtools/gendocs.pl service-parameters
 
 MAKE_FRAG
 }

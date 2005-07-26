@@ -22,7 +22,7 @@ lib/Perlbal/Plugin/Highpri.pm
 lib/Perlbal/Plugin/Vhosts.pm
 lib/Perlbal/ReproxyManager.pm
 META.yml                                 Module meta-data (added by MakeMaker)
-doc/gendocs.pl
+devtools/gendocs.pl
 doc/config-guide.txt
 doc/service-parameters.txt
 doc/reproxying.txt
