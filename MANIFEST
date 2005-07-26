@@ -27,6 +27,9 @@ doc/README.txt
 doc/Hooks.txt
 doc/Reproxying.txt
 doc/todo.txt
+doc/gendocs.pl
+doc/service-parameters.html
+doc/service-parameters.txt
 conf/nodelist.dat
 conf/perlbal.conf
 t/00-use.t
