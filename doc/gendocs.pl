@@ -44,3 +44,4 @@ foreach my $role ("*", "reverse_proxy", "web_server") {
 
 system("links -dump $docs/service-parameters.html > $docs/service-parameters.txt")
     and die "Error: links not installed";
+unlink "$docs/service-parameters.html";

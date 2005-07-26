@@ -22,15 +22,13 @@ lib/Perlbal/Plugin/Highpri.pm
 lib/Perlbal/Plugin/Vhosts.pm
 lib/Perlbal/ReproxyManager.pm
 META.yml                                 Module meta-data (added by MakeMaker)
-doc/Classes.txt
-doc/README.txt
-doc/Hooks.txt
-doc/Reproxying.txt
-doc/todo.txt
 doc/gendocs.pl
-doc/service-parameters.html
+doc/config-guide.txt
 doc/service-parameters.txt
-doc/ConfigGuide.txt
+doc/reproxying.txt
+doc/hacking/classes.txt
+doc/hacking/hooks.txt
+doc/hacking/todo.txt
 conf/nodelist.dat
 conf/perlbal.conf
 t/00-use.t
