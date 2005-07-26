@@ -9,36 +9,10 @@ shutdown graceful          -- closes listening sockets and stays alive until cli
 create pool <name>               -- create an empty pool
 pool <name> add    <ip[:port]>   -- add a node to a pool
 pool <name> remove <ip[:port]>   -- remove a node to a pool
-set <pool>.<param> = <value>     -- set a property on a pool:
-   ....
+set <pool>.<param> = <value>     -- set a property on a pool (see pool-parameters.txt)
 
 create service <name>              -- create an empty service
-set <service>.<param> = <value>    -- set a property on a service
-
-   Service params:
-   ---------------
-      role = What this service does: One of "reverse_proxy",
-             "web_server", "management", or "selector".  Required.
-
-      listen = What ip:port this service listens on, in form of
-             "a.b.c.d:port".  Necessary for pool to work, unless a
-             selector sends a client here, and the selector is
-             listening.
-
-      trusted_upstream_proxies = For'reverse_proxy mode, what netmask
-                                 (see Net::Netmask) of IPs we trust as
-                                 our own, and therefore will respect
-                                 the X-Forwarded-For headers and not
-                                 overwrite with our own.
-
-      always_trusted = For reverse_proxy mode, boolean value
-                       (1/true/on/yes), defaulting to off, to trust
-                       all clients as trusted.  See
-                       trusted_upstream_proxies.
-
-      enable_put = web_server mode.  Boolean.  defaults to off.
-      
-
+set <service>.<param> = <value>    -- set a property on a service (see service-parameters.txt)
 
 enable <service>                   -- enable a service (start listening)
 disable <service>                  -- disable a service (stops listening)

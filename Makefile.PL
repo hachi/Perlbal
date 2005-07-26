@@ -45,3 +45,12 @@ WriteMakefile(
 
 );
 
+sub MY::postamble {
+    return <<'MAKE_FRAG';
+docs :: docs/service-parameters.txt
+
+docs/service-parameters.txt: lib/Perlbal/Service.pm
+	doc/gendocs.pl service-parameters
+
+MAKE_FRAG
+}

@@ -1,0 +1,234 @@
+                           Perlbal Service parameters
+
+   Set via the command:
+
+ SET <service-name>.<param> = <value>
+
+   Note on types: 'bool' values can be set using one of 1, true, yes, on, 0,
+   false, off, or no. 'size' values are in integer bytes, or an integer
+   followed by 'b', 'k', or 'm' (case-insensitive) for bytes, KiB, or MiB.
+
+For all services:
+
+   +------------------------------------------------------------------------+
+   |     Param      | type | Default |             Description              |
+   |----------------+------+---------+--------------------------------------|
+   |                |      |         | The ip:port to listen on. For a      |
+   |                |      |         | service to work, you must either     |
+   | listen         |      |         | make it listen, or make another      |
+   |                |      |         | selector service map to a            |
+   |                |      |         | non-listening service.               |
+   |----------------+------+---------+--------------------------------------|
+   | persist_client | bool | false   | Whether to enable HTTP keep-alives   |
+   |                |      |         | to the end user.                     |
+   |----------------+------+---------+--------------------------------------|
+   |                |      |         | What type of service. One of         |
+   |                |      |         | 'reverse_proxy' for a service that   |
+   |                |      |         | load balances to a pool of backend   |
+   |                |      |         | webserver nodes, 'web_server' for a  |
+   | role           |      |         | typical webserver', 'management' for |
+   |                |      |         | a Perlbal management interface       |
+   |                |      |         | (speaks both command-line or HTTP,   |
+   |                |      |         | auto-detected), or 'selector', for a |
+   |                |      |         | virtual service that maps onto other |
+   |                |      |         | services.                            |
+   +------------------------------------------------------------------------+
+
+Only for 'reverse_proxy' services:
+
+   +------------------------------------------------------------------------+
+   |             Param             | type | Default |      Description      |
+   |-------------------------------+------+---------+-----------------------|
+   |                               |      |         | Whether to trust all  |
+   |                               |      |         | incoming requests'    |
+   |                               |      |         | X-Forwarded-For and   |
+   |                               |      |         | related headers. Set  |
+   |                               |      |         | to true only if you   |
+   | always_trusted                | bool | false   | know that all         |
+   |                               |      |         | incoming requests     |
+   |                               |      |         | from your own proxy   |
+   |                               |      |         | servers that          |
+   |                               |      |         | clean/set those       |
+   |                               |      |         | headers.              |
+   |-------------------------------+------+---------+-----------------------|
+   |                               |      |         | The number of backend |
+   |                               |      |         | connections to keep   |
+   | backend_persist_cache         | int  | 2       | alive on reserve      |
+   |                               |      |         | while there are no    |
+   |                               |      |         | clients.              |
+   |-------------------------------+------+---------+-----------------------|
+   |                               |      |         | How much content-body |
+   |                               |      |         | (POST/PUT/etc) data   |
+   | buffer_backend_connect        | size | 0       | we read from a client |
+   |                               |      |         | before we start       |
+   |                               |      |         | sending it to a       |
+   |                               |      |         | backend web node.     |
+   |-------------------------------+------+---------+-----------------------|
+   |                               |      |         | How much we'll ahead  |
+   |                               |      |         | of a client we'll get |
+   |                               |      |         | while copying from a  |
+   | buffer_size                   | size | 256k    | backend to a client.  |
+   |                               |      |         | If a client gets      |
+   |                               |      |         | behind this much, we  |
+   |                               |      |         | stop reading from the |
+   |                               |      |         | backend for a bit.    |
+   |-------------------------------+------+---------+-----------------------|
+   |                               |      |         | How much we'll get    |
+   |                               |      |         | ahead of a client     |
+   |                               |      |         | we'll get while       |
+   |                               |      |         | copying from a        |
+   |                               |      |         | reproxied URL to a    |
+   |                               |      |         | client. If a client   |
+   |                               |      |         | gets behind this      |
+   |                               |      |         | much, we stop reading |
+   |                               |      |         | from the reproxied    |
+   |                               |      |         | URL for a bit. The    |
+   |                               |      |         | default is lower than |
+   |                               |      |         | the regular           |
+   | buffer_size_reproxy_url       | size | 50k     | buffer_size (50k      |
+   |                               |      |         | instead of 256k)      |
+   |                               |      |         | because it's assumed  |
+   |                               |      |         | that you're only      |
+   |                               |      |         | reproxying to large   |
+   |                               |      |         | files on event-based  |
+   |                               |      |         | webservers, which are |
+   |                               |      |         | less sensitive to     |
+   |                               |      |         | many open             |
+   |                               |      |         | connections, whereas  |
+   |                               |      |         | the 256k buffer size  |
+   |                               |      |         | is good for keeping   |
+   |                               |      |         | heavy process-based   |
+   |                               |      |         | free of slow clients. |
+   |-------------------------------+------+---------+-----------------------|
+   |                               |      |         | How many extra        |
+   |                               |      |         | backend connections   |
+   |                               |      |         | we keep alive in      |
+   | connect_ahead                 | int  | 0       | addition to the       |
+   |                               |      |         | current ones, in      |
+   |                               |      |         | anticipation of new   |
+   |                               |      |         | client connections.   |
+   |-------------------------------+------+---------+-----------------------|
+   |                               |      |         | The cookie name to    |
+   |                               |      |         | inspect to determine  |
+   | high_priority_cookie          |      |         | if the client goes    |
+   |                               |      |         | onto the              |
+   |                               |      |         | high-priority queue.  |
+   |-------------------------------+------+---------+-----------------------|
+   |                               |      |         | A string that the     |
+   |                               |      |         | high_priority_cookie  |
+   | high_priority_cookie_contents |      |         | must contain to go    |
+   |                               |      |         | onto the              |
+   |                               |      |         | high-priority queue.  |
+   |-------------------------------+------+---------+-----------------------|
+   |                               |      |         | The max number of     |
+   |                               |      |         | requests to be made   |
+   |                               |      |         | on a single           |
+   |                               |      |         | persistent backend    |
+   |                               |      |         | connection before     |
+   |                               |      |         | releasing the         |
+   |                               |      |         | connection. The       |
+   | max_backend_uses              |      | 0       | default value of 0    |
+   |                               |      |         | means no limit, and   |
+   |                               |      |         | the connection will   |
+   |                               |      |         | only be discarded     |
+   |                               |      |         | once the backend asks |
+   |                               |      |         | it to be, or when     |
+   |                               |      |         | Perlbal is            |
+   |                               |      |         | sufficiently idle.    |
+   |-------------------------------+------+---------+-----------------------|
+   |                               |      |         | Whether to enable     |
+   |                               |      |         | HTTP keep-alives to   |
+   |                               |      |         | the backend webnodes. |
+   |                               |      |         | (Off by default, but  |
+   |                               |      |         | highly recommended if |
+   | persist_backend               | bool | false   | Perlbal will be the   |
+   |                               |      |         | only client to your   |
+   |                               |      |         | backends. If not,     |
+   |                               |      |         | beware that Perlbal   |
+   |                               |      |         | will hog the          |
+   |                               |      |         | connections, starving |
+   |                               |      |         | other clients.)       |
+   |-------------------------------+------+---------+-----------------------|
+   |                               |      |         | Name of               |
+   |                               |      |         | previously-created    |
+   |                               |      |         | pool object           |
+   | pool                          |      |         | containing the        |
+   |                               |      |         | backend nodes that    |
+   |                               |      |         | this reverse proxy    |
+   |                               |      |         | sends requests to.    |
+   |-------------------------------+------+---------+-----------------------|
+   | queue_relief_chance           |      | 0       |                       |
+   |-------------------------------+------+---------+-----------------------|
+   | queue_relief_size             | int  | 0       |                       |
+   |-------------------------------+------+---------+-----------------------|
+   |                               |      |         | A Net::Netmask filter |
+   |                               |      |         | (e.g. 10.0.0.0/24,    |
+   |                               |      |         | see Net::Netmask)     |
+   |                               |      |         | that determines       |
+   |                               |      |         | whether upstream      |
+   | trusted_upstream_proxies      |      |         | clients are trusted   |
+   |                               |      |         | or not, where trusted |
+   |                               |      |         | means their           |
+   |                               |      |         | X-Forwarded-For/etc   |
+   |                               |      |         | headers are not       |
+   |                               |      |         | munged.               |
+   |-------------------------------+------+---------+-----------------------|
+   |                               |      |         | Whether Perlbal       |
+   |                               |      |         | should send a quick   |
+   |                               |      |         | OPTIONS request to    |
+   |                               |      |         | the backends before   |
+   |                               |      |         | sending an actual     |
+   |                               |      |         | client request to     |
+   |                               |      |         | them. If your backend |
+   |                               |      |         | is Apache or some     |
+   |                               |      |         | other process-based   |
+   |                               |      |         | webserver, this is    |
+   |                               |      |         | HIGHLY recommended.   |
+   | verify_backend                | bool | false   | All too often a       |
+   |                               |      |         | loaded backend box    |
+   |                               |      |         | will reply to new TCP |
+   |                               |      |         | connections, but it's |
+   |                               |      |         | the kernel's TCP      |
+   |                               |      |         | stack Perlbal is      |
+   |                               |      |         | talking to, not an    |
+   |                               |      |         | actual Apache process |
+   |                               |      |         | yet. Using this       |
+   |                               |      |         | option reduces        |
+   |                               |      |         | end-user latency a    |
+   |                               |      |         | ton on loaded sites.  |
+   +------------------------------------------------------------------------+
+
+Only for 'web_server' services:
+
+   +------------------------------------------------------------------------+
+   |       Param       | type |  Default   |          Description           |
+   |-------------------+------+------------+--------------------------------|
+   |                   |      |            | Show directory indexes when an |
+   |                   |      |            | HTTP request is for a          |
+   | dirindexing       | bool | false      | directory. Warning: this is    |
+   |                   |      |            | not an async operation, so     |
+   |                   |      |            | will slow down Perlbal on      |
+   |                   |      |            | heavily loaded sites.          |
+   |-------------------+------+------------+--------------------------------|
+   | docroot           |      |            | Directory root for web server. |
+   |-------------------+------+------------+--------------------------------|
+   | enable_delete     | bool | false      | Enable HTTP DELETE requests.   |
+   |-------------------+------+------------+--------------------------------|
+   | enable_put        | bool | false      | Enable HTTP PUT requests.      |
+   |-------------------+------+------------+--------------------------------|
+   |                   |      |            | Comma-seperated list of        |
+   | index_files       |      | index.html | filenames to load when a user  |
+   |                   |      |            | visits a directory URL, listed |
+   |                   |      |            | in order of preference.        |
+   |-------------------+------+------------+--------------------------------|
+   |                   |      |            | The maximum content-length     |
+   |                   |      |            | that will be accepted for a    |
+   | max_put_size      | size | 0          | PUT request, if enable_put is  |
+   |                   |      |            | on. Default value of 0 means   |
+   |                   |      |            | no limit.                      |
+   |-------------------+------+------------+--------------------------------|
+   |                   |      |            | If PUT requests are enabled,   |
+   | min_put_directory | int  | 0          | require this many levels of    |
+   |                   |      |            | directories to already exist.  |
+   |                   |      |            | If not, fail.                  |
+   +------------------------------------------------------------------------+
