@@ -129,8 +129,9 @@ sub _parse_nodefile {
         s/\#.*//;
         if (/(\d+\.\d+\.\d+\.\d+)(?::(\d+))?/) {
             my ($ip, $port) = ($1, $2);
+            $port ||= 80;
             $self->{node_used}->{"$ip:$port"} ||= 0; # set to 0 if not set
-            push @{$self->{nodes}}, [ $ip, $port || 80 ];
+            push @{$self->{nodes}}, [ $ip, $port ];
         }
     }
 
