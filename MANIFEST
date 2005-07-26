@@ -30,7 +30,9 @@ doc/hacking/classes.txt
 doc/hacking/hooks.txt
 doc/hacking/todo.txt
 conf/nodelist.dat
-conf/perlbal.conf
+conf/web-server.conf
+conf/load-balancer.conf
+conf/virtual-hosts.conf
 t/00-use.t
 t/10-testharness.t
 t/12-headers.t
