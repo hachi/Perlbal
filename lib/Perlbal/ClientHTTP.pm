@@ -1,7 +1,10 @@
 ######################################################################
 # HTTP Connection from a reverse proxy client.  GET/HEAD only.
 #  most functionality is implemented in the base class.
-######################################################################
+#
+# Copyright 2004, Danga Interactice, Inc.
+# Copyright 2005, Six Apart, Ltd.
+#
 
 package Perlbal::ClientHTTP;
 use strict;

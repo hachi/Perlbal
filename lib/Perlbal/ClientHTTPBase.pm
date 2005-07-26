@@ -6,7 +6,9 @@
 #     wait_stat, wait_open, xfer_disk
 # both paths can then go into persist_wait, which means they're waiting
 # for another request from the user
-######################################################################
+#
+# Copyright 2004, Danga Interactice, Inc.
+# Copyright 2005, Six Apart, Ltd.
 
 package main;
 

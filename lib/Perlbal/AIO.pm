@@ -1,3 +1,8 @@
+# AIO abstraction layer
+#
+# Copyright 2004, Danga Interactice, Inc.
+# Copyright 2005, Six Apart, Ltd.
+
 package Perlbal::AIO;
 use POSIX qw();
 

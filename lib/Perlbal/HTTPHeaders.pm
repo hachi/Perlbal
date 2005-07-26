@@ -1,6 +1,9 @@
 ######################################################################
 # HTTP header class (both request and response)
-######################################################################
+#
+# Copyright 2004, Danga Interactice, Inc.
+# Copyright 2005, Six Apart, Ltd.
+#
 
 package Perlbal::HTTPHeaders;
 use strict;
@@ -294,7 +297,7 @@ sub content_length {
         # no content length for head requests
         return 0 if $self->{method} eq 'HEAD';
     } elsif ($self->{type} eq 'res' || $self->{type} eq 'httpres') {
-        # no content length in any of these        
+        # no content length in any of these
         if ($self->{code} == 304 || $self->{code} == 204 ||
             ($self->{code} >= 100 && $self->{code} <= 199)) {
             return 0;

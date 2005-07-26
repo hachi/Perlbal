@@ -1,7 +1,9 @@
 ######################################################################
 # HTTP Connection from a reverse proxy client
-######################################################################
-
+#
+# Copyright 2004, Danga Interactice, Inc.
+# Copyright 2005, Six Apart, Ltd.
+#
 package Perlbal::ClientProxy;
 use strict;
 use warnings;

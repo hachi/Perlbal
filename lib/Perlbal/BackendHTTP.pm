@@ -1,7 +1,9 @@
 ######################################################################
 # HTTP connection to backend node
-# possible states: connecting, bored, sending_req, wait_res, xfer_res
-######################################################################
+#
+# Copyright 2004, Danga Interactice, Inc.
+# Copyright 2005, Six Apart, Ltd.
+#
 
 package Perlbal::BackendHTTP;
 use strict;
@@ -101,7 +103,7 @@ sub new {
     $self->{read_ahead} = 0;       # bytes sitting in read_buf
     $self->{read_size} = 0;        # total bytes read from client
 
-    $self->{client}   = undef;     # Perlbal::ClientProxy object, initially empty 
+    $self->{client}   = undef;     # Perlbal::ClientProxy object, initially empty
                                    #    until we ask our service for one
 
     $self->{has_attention} = 0;

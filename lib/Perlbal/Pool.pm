@@ -1,6 +1,10 @@
 ######################################################################
 # Pool class
 ######################################################################
+#
+# Copyright 2004, Danga Interactice, Inc.
+# Copyright 2005, Six Apart, Ltd.
+#
 
 package Perlbal::Pool;
 use strict;

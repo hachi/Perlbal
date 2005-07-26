@@ -1,6 +1,7 @@
-######################################################################
 # Base class for all socket types
-######################################################################
+#
+# Copyright 2004, Danga Interactice, Inc.
+# Copyright 2005, Six Apart, Ltd.
 
 package Perlbal::Socket;
 use strict;
@@ -110,7 +111,7 @@ sub new {
 # algorithmically.  and this is definitely less work, so it's worth
 # a try.
 sub _do_cleanup {
-    my $sf = Perlbal::Socket->get_sock_ref;    
+    my $sf = Perlbal::Socket->get_sock_ref;
 
     my $now = time;
 
@@ -208,7 +209,7 @@ sub read_headers {
         print "post-header extra: $len bytes\n" if Perlbal::DEBUG >= 2;
     }
 
-    unless (($is_res ? $self->{res_headers} : $self->{req_headers}) = 
+    unless (($is_res ? $self->{res_headers} : $self->{req_headers}) =
                 Perlbal::HTTPHeaders->new(\$hstr, $is_res)) {
         # bogus headers?  close connection.
         return $self->close("parse_header_failure");

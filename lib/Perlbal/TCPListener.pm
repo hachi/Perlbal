@@ -1,6 +1,9 @@
 ######################################################################
 # TCP listener on a given port
-######################################################################
+#
+# Copyright 2004, Danga Interactice, Inc.
+# Copyright 2005, Six Apart, Ltd.
+
 
 package Perlbal::TCPListener;
 use strict;

@@ -18,13 +18,11 @@ For now, see example configuration files in conf/
 
  http://www.danga.com/perlbal/
 
-=head1 BUGS
+=head1 COPYRIGHT AND LICENSE
 
-Not enough docs.
+Copyright 2004, Danga Interactice, Inc.
+Copyright 2005, Six Apart, Ltd.
 
-=head1 LICENSE
-
-Copyright 2004.
 You can use and redistribute Perlbal under the same terms as Perl itself.
 
 =cut
