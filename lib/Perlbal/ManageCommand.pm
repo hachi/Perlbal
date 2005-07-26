@@ -85,7 +85,7 @@ sub args {
 sub parse_error {
     my $mc = shift;
     my $usage = shift;
-    $usage .= "\n" unless $usage =~ /\n$/;
+    $usage .= "\n" if $usage && $usage !~ /\n$/;
     die $usage || "Invalid syntax to '$mc->{base}' command\n"
 }
 

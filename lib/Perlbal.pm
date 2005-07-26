@@ -761,7 +761,8 @@ sub MANAGE_reproxy_state {
 }
 
 sub MANAGE_create {
-    my $mc = shift->parse(qr/^create (service|pool) (\w+)$/);
+    my $mc = shift->parse(qr/^create (service|pool) (\w+)$/,
+                          "usage: CREATE {service|pool} <name>");
     my ($what, $name) = $mc->args;
 
     if ($what eq "service") {
