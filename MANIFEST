@@ -30,6 +30,7 @@ doc/todo.txt
 doc/gendocs.pl
 doc/service-parameters.html
 doc/service-parameters.txt
+doc/ConfigGuide.txt
 conf/nodelist.dat
 conf/perlbal.conf
 t/00-use.t
