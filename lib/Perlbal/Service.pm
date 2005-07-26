@@ -9,13 +9,15 @@ use warnings;
 use Perlbal::BackendHTTP;
 
 use fields (
-            'name',
-            'enabled', # bool
-            'role',
-            'listen',
-            'pool',            # Perlbal::Pool that we're using to allocate nodes if we're in proxy mode
-            'listener',
+            'name',            # scalar: name of this service
+            'role',            # scalar: role type 'web_server', 'reverse_proxy', etc...
+            'enabled',         # scalar: bool, whether we're enabled or not (enabled = listening)
 
+            'pool',            # Perlbal::Pool that we're using to allocate nodes if we're in proxy mode
+            'listener',        # Perlbal::TCPListener object, when enabled
+
+            # end-user tunables
+            'listen',             # scalar IP:port of where we're listening for new connections
             'docroot',            # document root for webserver role
             'dirindexing',        # bool: direcotry indexing?  (for webserver role)  not async.
             'index_files',        # arrayref of filenames to try for index files
@@ -23,38 +25,37 @@ use fields (
             'max_put_size', # int: max size in bytes of a put file
             'min_put_directory', # int: number of directories required to exist at beginning of URIs in put
             'enable_delete', # bool: whether DELETE is supported
-
-            'waiting_clients',         # arrayref of clients waiting for backendhttp conns
-            'waiting_clients_highpri', # arrayref of high-priority clients waiting for backendhttp conns
-            'waiting_client_count',    # number of clients waiting for backendds
-            'waiting_client_map'  ,    # map of clientproxy fd -> 1 (if they're waiting for a conn)
-            'pending_connects',        # hashref of "ip:port" -> $time (only one pending connect to backend at a time)
-            'pending_connect_count',   # number of outstanding backend connects
-
             'high_priority_cookie',          # cookie name to check if client can 'cut in line' and get backends faster
             'high_priority_cookie_contents', # aforementioned cookie value must contain this substring
-
-            'connect_ahead',           # scalar: number of spare backends to connect to in advance all the time
             'backend_persist_cache',   # scalar: max number of persistent backends to hold onto while no clients
-            'bored_backends',          # arrayref of backends we've already connected to, but haven't got clients
             'persist_client',  # bool: persistent connections for clients
             'persist_backend', # bool: persistent connections for backends
             'verify_backend',  # bool: get attention of backend before giving it clients (using OPTIONS)
             'max_backend_uses',  # max requests to send per kept-alive backend (default 0 = unlimited)
-            'hooks',    # hashref: hookname => [ [ plugin, ref ], [ plugin, ref ], ... ]
-            'plugins',  # hashref: name => 1
-            'plugin_order', # arrayref: name, name, name...
-            'plugin_setters', # hashref: { plugin_name => { key_name => coderef } }
-            'extra_config', # hashref: extra config options; name => values
+            'connect_ahead',           # scalar: number of spare backends to connect to in advance all the time
             'buffer_size', # int: specifies how much data a ClientProxy object should buffer from a backend
             'buffer_size_reproxy_url', # int: same as above but for backends that are reproxying for us
-            'spawn_lock', # bool: if true, we're currently in spawn_backends
             'queue_relief_size', # int; number of outstanding standard priority
                                  # connections to activate pressure relief at
             'queue_relief_chance', # int:0-100; % chance to take a standard priority
                                    # request when we're in pressure relief mode
             'trusted_upstreams', # Net::Netmask object containing netmasks for trusted upstreams
             'always_trusted', # bool; if true, always trust upstreams
+
+            # Internal state:
+            'waiting_clients',         # arrayref of clients waiting for backendhttp conns
+            'waiting_clients_highpri', # arrayref of high-priority clients waiting for backendhttp conns
+            'waiting_client_count',    # number of clients waiting for backendds
+            'waiting_client_map'  ,    # map of clientproxy fd -> 1 (if they're waiting for a conn)
+            'pending_connects',        # hashref of "ip:port" -> $time (only one pending connect to backend at a time)
+            'pending_connect_count',   # number of outstanding backend connects
+            'bored_backends',          # arrayref of backends we've already connected to, but haven't got clients
+            'hooks',    # hashref: hookname => [ [ plugin, ref ], [ plugin, ref ], ... ]
+            'plugins',  # hashref: name => 1
+            'plugin_order', # arrayref: name, name, name...
+            'plugin_setters', # hashref: { plugin_name => { key_name => coderef } }
+            'extra_config', # hashref: extra config options; name => values
+            'spawn_lock', # bool: if true, we're currently in spawn_backends
             'extra_headers', # { insert => [ [ header, value ], ... ], remove => [ header, header, ... ],
                              #   set => [ [ header, value ], ... ] }; used in header management interface
             'generation', # int; generation count so we can slough off backends from old pools
@@ -67,15 +68,19 @@ our $tunables = {
 
     'role' => {
         des => "What type of service.  One of 'reverse_proxy' for a service that load balances to a pool of backend webserver nodes, 'web_server' for a typical webserver', 'management' for a Perlbal management interface (speaks both command-line or HTTP, auto-detected), or 'selector', for a virtual service that maps onto other services.",
-
-        default => "",
         required => 1,
 
         check_type => ["enum", ["reverse_proxy", "web_server", "management", "selector"]],
         check_role => '*',
+        setter => sub {
+            my ($self, $val, $set) = @_;
+            $set->();
+            $self->init;  # now that service role is set
+        },
     },
 
     'listen' => {
+        check_role => "*",
         des => "The ip:port to listen on.  For a service to work, you must either make it listen, or make another selector service map to a non-listening service.",
         check_type => ["regexp", qr/^\d+\.\d+\.\d+\.\d+:\d+$!/, "Expecting IP:port of form a.b.c.d:port."],
         setter => sub {
@@ -93,47 +98,58 @@ our $tunables = {
     },
 
     'backend_persist_cache' => {
+        des => "The number of backend connections to keep alive on reserve while there are no clients.",
         check_type => "int",
         default => 2,
         check_role => "reverse_proxy",
     },
 
     'persist_client' => {
+        des => "Whether to enable HTTP keep-alives to the end user.",
         default => 0,
         check_type => "bool",
         check_role => "*",
     },
 
     'persist_backend' => {
+        des => "Whether to enable HTTP keep-alives to the backend webnodes.  (Off by default, but highly recommended if Perlbal will be the only client to your backends.  If not, beware that Perlbal will hog the connections, starving other clients.)",
         default => 0,
         check_type => "bool",
         check_role => "reverse_proxy",
     },
 
     'verify_backend' => {
+        des => "Whether Perlbal should send a quick OPTIONS request to the backends before sending an actual client request to them.  If your backend is Apache or some other process-based webserver, this is HIGHLY recommended.  All too often a loaded backend box will reply to new TCP connections, but it's the kernel's TCP stack Perlbal is talking to, not an actual Apache process yet.  Using this option reduces end-user latency a ton on loaded sites.",
         default => 0,
         check_type => "bool",
         check_role => "reverse_proxy",
     },
 
     'max_backend_uses' => {
+        check_role => "reverse_proxy",
+        des => "The max number of requests to be made on a single persistent backend connection before releasing the connection.  The default value of 0 means no limit, and the connection will only be discarded once the backend asks it to be, or when Perlbal is sufficiently idle.",
         default => 0,
     },
 
     'max_put_size' => {
         default => 0,  # no limit
+        des => "The maximum content-length that will be accepted for a PUT request, if enable_put is on.  Default value of 0 means no limit.",
         check_type => "size",
         check_role => "web_server",
     },
 
     'buffer_size' => {
-        default => 256_000,
+        des => "How much we'll ahead of a client we'll get while copying from a backend to a client.  If a client gets behind this much, we stop reading from the backend for a bit.",
+        default => "256k",
         check_type => "size",
+        check_role => "reverse_proxy",
     },
 
     'buffer_size_reproxy_url' => {
-        default => 51_2000,
+        des => "How much we'll get ahead of a client we'll get while copying from a reproxied URL to a client.  If a client gets behind this much, we stop reading from the reproxied URL for a bit.  The default is lower than the regular buffer_size (50k instead of 256k) because it's assumed that you're only reproxying to large files on event-based webservers, which are less sensitive to many open connections, whereas the 256k buffer size is good for keeping heavy process-based free of slow clients.",
+        default => "50k",
         check_type => "size",
+        check_role => "reverse_proxy",
     },
 
     'queue_relief_size' => {
@@ -154,13 +170,15 @@ our $tunables = {
     },
 
     'buffer_backend_connect' => {
+        des => "How much content-body (POST/PUT/etc) data we read from a client before we start sending it to a backend web node.",
         default => 0,
-        check_type => "int",
+        check_type => "size",
         check_role => "reverse_proxy",
     },
 
     'docroot' => {
-        default => 0,
+        des => "Directory root for web server.",
+
         check_role => "web_server",
         val_modify => sub { my $valref = shift; $$valref =~ s!/$!!; },
         check_type => sub {
@@ -201,6 +219,7 @@ our $tunables = {
     },
 
     'connect_ahead' => {
+        des => "How many extra backend connections we keep alive in addition to the current ones, in anticipation of new client connections.",
         default => 0,
         check_type => "int",
         check_role => "reverse_proxy",
@@ -220,14 +239,18 @@ our $tunables = {
     },
 
     'high_priority_cookie' => {
+        des => "The cookie name to inspect to determine if the client goes onto the high-priority queue.",
         check_role => "reverse_proxy",
     },
 
     'high_priority_cookie_contents' => {
+        des => "A string that the high_priority_cookie must contain to go onto the high-priority queue.",
         check_role => "reverse_proxy",
     },
 
     'trusted_upstream_proxies' => {
+        des => "A Net::Netmask filter (e.g. 10.0.0.0/24, see Net::Netmask) that determines whether upstream clients are trusted or not, where trusted means their X-Forwarded-For/etc headers are not munged.",
+        check_role => "reverse_proxy",
         check_type => sub {
             my ($self, $val, $errref) = @_;
             unless (my $loaded = eval { require Net::Netmask; 1; }) {
@@ -253,6 +276,7 @@ our $tunables = {
     },
 
     'pool' => {
+        des => "Name of previously-created pool object containing the backend nodes that this reverse proxy sends requests to.",
         check_role => "reverse_proxy",
         check_type => sub {
             my ($self, $val, $errref) = @_;
@@ -265,15 +289,18 @@ our $tunables = {
             $self->{pool} = $pl;
             $self->{pool}->increment_use_count;
             $self->{generation}++;
+            return 1;
         },
         setter => sub {
             # override the default, which is to set "pool" to the
             # stringified name of the pool, but we already set it in
             # the type-checking phase.  instead, we do nothing here.
+            return 1;
         },
 
     },
 };
+sub autodoc_get_tunables { return $tunables; }
 
 sub new {
     my Perlbal::Service $self = shift;
@@ -283,20 +310,6 @@ sub new {
 
     $self->{name} = $name;
     $self->{enabled} = 0;
-
-    for my $param (qw(
-                      listen persist_client persist_backend
-                      verify_backend max_backend_uses
-                      backend_persist_cache max_put_size
-                      min_put_directory enable_put enable_delete
-                      dirindexing buffer_backend_connect
-                      buffer_size buffer_size_reproxy_url
-                      queue_relief_size queue_relief_chance
-                      always_trusted connect_ahead index_files
-                      )) {
-        $self->{$param} = $tunables->{$param}{default};
-    }
-
 
     $self->{backend_no_spawn} = {};
     $self->{generation} = 0;
@@ -315,10 +328,6 @@ sub new {
     $self->{waiting_clients_highpri} = [];
     $self->{waiting_client_count} = 0;
 
-    # index_files needs to be fixed up from its default value (which
-    # isn't an arrayref)
-    $self->{index_files} = [ split(/[\s,]+/, $self->{index_files}) ];
-
     # don't have an object for this yet
     $self->{trusted_upstreams} = undef;
 
@@ -328,11 +337,29 @@ sub new {
     return $self;
 }
 
+# called once a role has been set
+sub init {
+    my Perlbal::Service $self = shift;
+    die "init called when no role" unless $self->{role};
+
+    # set all the defaults
+    for my $param (keys %$tunables) {
+        my $tun     = $tunables->{$param};
+        next unless $tun->{check_role} eq "*" || $tun->{check_role} eq $self->{role};
+        next unless exists $tun->{default};
+        $self->set($param, $tun->{default});
+    }
+}
+
 # Service
 sub set {
     my Perlbal::Service $self = shift;
-
     my ($key, $val, $mc) = @_;
+
+    # if you don't provide an $mc, that better mean you're damn sure it
+    # won't crash.  (end-users never go this route)
+    $mc ||= Perlbal::ManageCommand->loud_crasher;
+
     my $set = sub { $self->{$key} = $val; return $mc->ok; };
 
     my $pool_set = sub {
@@ -362,7 +389,6 @@ sub set {
     return $pool_set->()
         if $key eq 'nodefile' ||
            $key eq 'balance_method';
-
 
     my $bool = sub {
         my $val = shift;
@@ -627,7 +653,7 @@ sub get_client {
     # act as pressure relief on the standard queue
     my $hp_first = 1;
     if (($self->{queue_relief_size} > 0) &&
-            (scalar(@{$self->{waiting_clients}}) >= $self->{queue_relief_size})) {
+        (scalar(@{$self->{waiting_clients}}) >= $self->{queue_relief_size})) {
         # if we're below the chance level, take a standard queue item
         $hp_first = 0
             if rand(100) < $self->{queue_relief_chance};

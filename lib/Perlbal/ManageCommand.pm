@@ -32,6 +32,13 @@ sub new {
     return $self;
 }
 
+# returns an managecommand object for functions that need one, but
+# this does nothing but explode if there any problems.
+sub loud_crasher {
+    use Carp qw(confess);
+    __PACKAGE__->new(undef, undef, sub {}, sub {}, sub { confess "MC:err: @_" }, sub {}, "", 0);
+}
+
 sub out   { my $mc = shift; return @_ ? $mc->{out}->(@_) : $mc->{out}; }
 sub ok    { my $mc = shift; return $mc->{ok}->(@_);  }
 sub err   { my $mc = shift; return $mc->{err}->(@_); }
