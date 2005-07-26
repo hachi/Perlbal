@@ -13,7 +13,7 @@ use ExtUtils::MakeMaker;
 
 WriteMakefile(
     NAME                    => 'Perlbal',
-    VERSION                 => '1.2',
+    VERSION                 => '1.3',
     AUTHOR                  => 'Brad Fitzpatrick <brad@danga.com>',
     ABSTRACT_FROM           => 'perlbal',
 
@@ -46,11 +46,12 @@ WriteMakefile(
 );
 
 sub MY::postamble {
-    return <<'MAKE_FRAG';
+    my $tab = chr(9);
+    return <<MAKE_FRAG;
 docs :: docs/service-parameters.txt
 
 docs/service-parameters.txt: lib/Perlbal/Service.pm
-	doc/gendocs.pl service-parameters
+${tab}doc/gendocs.pl service-parameters
 
 MAKE_FRAG
 }
