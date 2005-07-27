@@ -42,5 +42,6 @@ t/30-reverseproxy.t
 t/32-selector.t
 t/35-reproxy.t
 t/40-ranges.t
+t/45-buffereduploads.t
 t/50-plugins.t
 
