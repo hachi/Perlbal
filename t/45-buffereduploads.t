@@ -53,32 +53,33 @@ ok(! buffer_file_exists(), "no files in buffer, good");
 # try writing 400k of a 500k file, and set the buffer size to be "anything
 # larger than 400k"
 buffer_rules(size => 400_000);
-request(500_000,
+request("buffer_on_size", 500_000,
         400_000,
-        sub {
-            ok(buffer_file_exists(), "files in buffer, good");
-        },
+        "sleep:0.5",
+        "exists",
         "finish",
-        sub {
-            my $res = shift;
-            like(buf_reason($res), qr/^size/);
-            ok(! buffer_file_exists(), "buffer cleaned up");
-        },
-        );
+        "reason:size",
+        "empty");
 
 # write a file below the limit
-request(200_000,
-        100_000,
-        sub {
-            ok(! buffer_file_exists(), "no file");
-        },
+request("no_buffer_on_size", 350_000,
+        300_000,
+        "sleep:0.5",
+        "empty",
         "finish",
-        sub {
-            my $res = shift;
-            ok(! buf_reason($res));
-            ok(! buffer_file_exists(), "buffer still empty");
-        },
+        "no-reason",
+        "empty");
+
+# abort a file in the middle
+request("clean_on_early_close", 500_000,
+        400_000,
+        "sleep:0.5",
+        "exists",
+        "close",
+        "empty"
         );
+
+
 
 sub buf_reason {
     my $resp = shift;
@@ -121,7 +122,10 @@ sub buffer_file_exists {
 #    finish             (sends any final writes and/or reads response)
 #    close              close socket
 #    sub {}             coderef to run.  gets passed response object
+#    no-reason          response has no reason
+#    resaon:<reason>    did buffering for either "size", "rate", or "time"
 sub request {
+    my $testname = shift;
     my $len = shift || 0;
     my @cmds = @_;
 
@@ -139,8 +143,9 @@ sub request {
     foreach my $cmd (@cmds) {
         my $writelen;
 
-        if ($cmd =~ /^write:(\d+)/) {
+        if ($cmd =~ /^write:([\d_]+)/) {
             $writelen = $1;
+            $writelen =~ s/_//g;
         } elsif ($cmd eq "finish") {
             $writelen = $remain;
         }
@@ -155,6 +160,27 @@ sub request {
             next;
         }
 
+        if ($cmd eq "no-reason") {
+            ok(! buf_reason($res), "$testname: no buffer reason");
+            next;
+        }
+
+        if ($cmd =~ /^reason:(\w+)$/) {
+            my $reason = $1;
+            is(buf_reason($res), $reason, "$testname: did buffer for $reason");
+            next;
+        }
+
+        if ($cmd eq "exists") {
+            ok(buffer_file_exists(), "$testname: buffer file exists");
+            next;
+        }
+
+        if ($cmd eq "empty") {
+            ok(! buffer_file_exists(), "$testname: no file");
+            next;
+        }
+
         if ($writelen) {
             die "Too long" if $writelen > $remain;
             my $buf = "x" x $writelen;
@@ -166,11 +192,12 @@ sub request {
 
         if ($cmd eq "finish") {
             $res = resp_from_sock($sock);
+            ok($res && length($res->content) == $len, "$testname: good response");
             next;
         }
 
         if (ref $cmd eq "CODE") {
-            $cmd->($res);
+            $cmd->($res, $testname);
             next;
         }
 
