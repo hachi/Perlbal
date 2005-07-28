@@ -79,6 +79,38 @@ request("clean_on_early_close", 500_000,
         "empty"
         );
 
+# rate tests
+buffer_rules(rate => "700_000");
+request("buffer_on_rate", 500_000,
+        "sleep:0.6",
+        300_000,
+        "exists",
+        "finish",
+        "reason:rate",
+        "empty");
+
+request("no_buffer_on_rate", 500_000,
+        "finish",
+        "no-reason",
+        "empty");
+
+# time tests
+buffer_rules(time => 3);
+request("buffer_on_time", 800_000,
+        "sleep:2",
+        300_000,
+        "sleep:0.5",
+        "exists",
+        "finish",
+        "reason:time",
+        "empty");
+
+request("no_buffer_on_time", 800_000,
+        700_000,
+        "sleep:0.2",
+        "empty",
+        "finish",
+        "no-reason");
 
 
 sub buf_reason {

@@ -886,8 +886,9 @@ sub load_config {
     open (F, $file) or die "Error opening config file ($file): $!\n";
     my $ctx = Perlbal::CommandContext->new;
     $ctx->verbose(0);
-    while (<F>) {
-        return 0 unless run_manage_command($_, $writer, $ctx);
+    while (my $line = <F>) {
+        $line =~ s/\$(\w+)/$ENV{$1}/g;
+        return 0 unless run_manage_command($line, $writer, $ctx);
     }
     close(F);
     return 1;

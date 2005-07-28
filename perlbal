@@ -45,14 +45,12 @@ my $default_config = "/etc/perlbal/perlbal.conf";
 $opt_config = $default_config if ! $opt_config && -e $default_config;
 
 # load user config
-if ($opt_config) {
-    my $out = sub {
-        print STDOUT join("\n", map { ref $_ eq 'ARRAY' ? @$_ : $_ } @_) . "\n";
-    };
-    unless (Perlbal::load_config($opt_config, $out)) {
-        die "Error starting up.\n";
-    }
+if ($opt_config && ! Perlbal::load_config($opt_config, sub { print STDOUT "$_\n"; })) {
+    die "Error starting up.\n";
 }
+
+# FIXME: warn harder if web_server services are enabled
+# warn a little less about reproxying --- or, make reproxying support explicit?  yes!  security!
 
 if ($Perlbal::AIO_MODE eq "none") {
     print STDERR "WARNING:  AIO mode disabled or not available.  \n".
