@@ -68,7 +68,8 @@ sub aio_write {
     } elsif ($Perlbal::AIO_MODE eq "ioaio") {
         IO::AIO::aio_write($fh, $offset, $length, $_[3], 0, $cb);
     } else {
-        my $rv = syswrite($fh, $_[3], $length, $offset);
+        sysseek($fh, $offset, 0);
+        my $rv = syswrite($fh, $_[3], $length, 0);
         $cb->($rv);
     }
 }
@@ -83,7 +84,8 @@ sub aio_read {
     } elsif ($Perlbal::AIO_MODE eq "ioaio") {
         IO::AIO::aio_read($fh, $offset, $length, $_[3], 0, $cb);
     } else {
-        my $rv = sysread($fh, $_[3], $length, $offset);
+        sysseek($fh, $offset, 0);
+        my $rv = sysread($fh, $_[3], $length, 0);
         $cb->($rv);
     }
 }
