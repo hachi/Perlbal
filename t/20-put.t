@@ -90,13 +90,14 @@ foreach_aio {
 ok(manage("SET test.min_put_directory = 0"));
 
 # let Perlbal autocreate a dir tree
-{
-    my $path = "a/b/c/d/foo.txt";
+foreach_aio {
+    my $mode = shift;
+    my $path = "tree-$mode/a/b/c/d/foo.txt";
     $url = "http://127.0.0.1:$port/$path";
     $disk_file = "$dir/$path";
-    ok(put_file(), "made deep file");
-    ok(-f $disk_file, "deep file exists");
-}
+    ok(put_file(), "$mode: made deep file");
+    ok(-f $disk_file, "$mode: deep file exists");
+};
 
 # permissions
 ok(put_file());
