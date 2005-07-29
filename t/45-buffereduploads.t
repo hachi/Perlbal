@@ -28,8 +28,11 @@ SET connect_ahead = 0
 SET listen = 127.0.0.1:$port
 SET persist_client = 1
 SET buffer_uploads_path = $dir
+SET buffer_uploads = 1
 ENABLE test
 };
+
+$ENV{PERLBAL_DEBUG_BUFFERED_UPLOADS} = 1;
 
 my $msock = start_server($conf);
 ok($msock, 'perlbal started');
@@ -44,11 +47,10 @@ my $req;
 
 # disable all of it
 buffer_rules();
-
-# post our data, should not create buffer file
-my $resp = quick_request(100_000);
-ok(pid_of_resp($resp), "posting works");
-ok(! buffer_file_exists(), "no files in buffer, good");
+request("buffer_off", 500_000,
+        "finish",
+        "no-reason",
+        "empty");
 
 # try writing 400k of a 500k file, and set the buffer size to be "anything
 # larger than 400k"
@@ -76,12 +78,14 @@ request("clean_on_early_close", 500_000,
         "sleep:0.5",
         "exists",
         "close",
-        "empty"
+        "sleep:0.5", # have to let the pb get scheduled to do cleanup
+        "empty",
         );
 
 # rate tests
-buffer_rules(rate => "700_000");
+buffer_rules(rate => 700_000);
 request("buffer_on_rate", 500_000,
+        50_000,
         "sleep:0.6",
         300_000,
         "exists",
@@ -111,7 +115,6 @@ request("no_buffer_on_time", 800_000,
         "empty",
         "finish",
         "no-reason");
-
 
 sub buf_reason {
     my $resp = shift;
@@ -155,7 +158,9 @@ sub buffer_file_exists {
 #    close              close socket
 #    sub {}             coderef to run.  gets passed response object
 #    no-reason          response has no reason
-#    resaon:<reason>    did buffering for either "size", "rate", or "time"
+#    reason:<reason>    did buffering for either "size", "rate", or "time"
+#    empty              No files in temp buffer location
+#    exists             Yes, a temporary file exists
 sub request {
     my $testname = shift;
     my $len = shift || 0;
@@ -178,6 +183,8 @@ sub request {
         if ($cmd =~ /^write:([\d_]+)/) {
             $writelen = $1;
             $writelen =~ s/_//g;
+        } elsif ($cmd =~ /^(\d+)/) {
+            $writelen = $1;
         } elsif ($cmd eq "finish") {
             $writelen = $remain;
         }
@@ -216,7 +223,7 @@ sub request {
         if ($writelen) {
             die "Too long" if $writelen > $remain;
             my $buf = "x" x $writelen;
-            my $rv = syswrite($sock, $hdr);
+            my $rv = syswrite($sock, $buf);
             die "wrote $rv ($!), not $len" unless $rv == $writelen;
             $remain -= $rv;
             next unless $cmd eq "finish";
@@ -224,7 +231,8 @@ sub request {
 
         if ($cmd eq "finish") {
             $res = resp_from_sock($sock);
-            ok($res && length($res->content) == $len, "$testname: good response");
+            my $clen = $res ? $res->header('Content-Length') : 0;
+            ok($res && length($res->content) == $clen, "$testname: good response");
             next;
         }
 
