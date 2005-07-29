@@ -29,6 +29,8 @@ use constant TRACK_STATES => $ENV{PERLBAL_TRACK_STATES} || 0; # if on, track sta
 
 use strict;
 use warnings;
+no  warnings qw(deprecated);
+
 use IO::Socket;
 use IO::Handle;
 use IO::File;

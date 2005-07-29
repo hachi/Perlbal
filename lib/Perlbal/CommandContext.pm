@@ -7,6 +7,8 @@
 package Perlbal::CommandContext;
 use strict;
 use warnings;
+no  warnings qw(deprecated);
+
 use fields (
             'last_created', # the name of the last pool or service created
             'verbose',      # scalar bool:  verbosity ("OK" on success)

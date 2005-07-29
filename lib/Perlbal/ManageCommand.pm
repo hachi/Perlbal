@@ -7,6 +7,8 @@
 package Perlbal::ManageCommand;
 use strict;
 use warnings;
+no  warnings qw(deprecated);
+
 use fields (
             'base', # the base command name (like "proc")
             'cmd',

@@ -8,6 +8,8 @@ package Perlbal::ClientProxy;
 use strict;
 use warnings;
 use base "Perlbal::ClientHTTPBase";
+no  warnings qw(deprecated);
+
 use fields (
             'backend',             # Perlbal::BackendHTTP object (or undef if disconnected)
             'backend_requested',   # true if we've requested a backend for this request

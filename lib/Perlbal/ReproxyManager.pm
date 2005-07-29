@@ -7,6 +7,7 @@
 package Perlbal::ReproxyManager;
 use strict;
 use warnings;
+no  warnings qw(deprecated);
 
 # class storage to store 'host:ip' => $service objects, for making
 # reproxies use a service that you can then track
