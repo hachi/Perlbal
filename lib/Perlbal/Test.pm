@@ -38,7 +38,7 @@ sub dump_res {
     }
     my $status = $res->status_line;
     $status =~ s/[\r\n]//g;
-    return $ret . "status=[$status] content=${len}[$ct]\n";
+    return $ret . "status=[$status] content=$len" . "[$ct]\n";
 }
 
 sub tempdir {
