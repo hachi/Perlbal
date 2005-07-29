@@ -19,6 +19,8 @@ eval { require 'syscall.ph'; 1 } || eval { require 'sys/syscall.ph'; 1 };
 package Perlbal::ClientHTTPBase;
 use strict;
 use warnings;
+no  warnings qw(deprecated);
+
 use base "Perlbal::Socket";
 use HTTP::Date ();
 use fields ('service',             # Perlbal::Service object
@@ -42,7 +44,7 @@ use fields ('service',             # Perlbal::Service object
 use Errno qw( EPIPE ECONNRESET );
 use POSIX ();
 
-our $SYS_sendfile = &::SYS_sendfile;
+our $SYS_sendfile = $ENV{NR_SENDFILE} || &::SYS_sendfile;
 
 # ghetto hard-coding.  should let siteadmin define or something.
 # maybe console/config command:  AddMime <ext> <mime-type>  (apache-style?)
