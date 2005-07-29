@@ -6,6 +6,8 @@ package Perlbal::Plugin::Stats;
 
 use strict;
 use warnings;
+no  warnings qw(deprecated);
+
 use Time::HiRes qw(gettimeofday tv_interval);
 
 # setup our package variables
@@ -31,7 +33,7 @@ sub register {
         start_file_reproxy      files_reproxied
         start_web_request       web_requests
     );
-    
+
     # create hooks for %simple things
     while (my ($hook, $stat) = each %simple) {
         eval "\$svc->register_hook('Stats', '$hook', sub { \$sobj->{'$stat'}++; return 0; });";
@@ -105,7 +107,7 @@ sub load {
     # recent requests and how long they took
     Perlbal::register_global_hook("manage_command.recent", sub {
         my @res;
-        foreach my $svc (keys %statobjs) {        
+        foreach my $svc (keys %statobjs) {
             my $sobj = $statobjs{$svc}->[1];
             push @res, "$svc $_"
                 foreach @{$sobj->{recent}};
@@ -153,11 +155,11 @@ sub new {
 
     # 0 initialize everything here
     $self->{$_} = 0 foreach @Perlbal::Plugin::Stats::statkeys;
-    
+
     # other setup
     $self->{pending} = {};
     $self->{recent} = [];
-    
+
     return $self;
 }
 

@@ -6,6 +6,7 @@ package Perlbal::Plugin::Palimg;
 
 use strict;
 use warnings;
+no  warnings qw(deprecated);
 
 # called when we're being added to a service
 sub register {
@@ -25,13 +26,13 @@ sub register {
         return 0 unless $extra;
         my ($palspec) = $extra =~ m!^/p(.+)$!;
         return 0 unless $fn && $palspec;
-        
+
         # must be ok, setup for it
         $$uriref = "/palimg/$fn.$ext";
         $obj->{scratch}->{palimg} = [ $ext, $palspec ];
         return 0;
     });
-    
+
     # actually serve a palimg
     $svc->register_hook('Palimg', 'start_send_file', sub {
         my Perlbal::ClientHTTPBase $obj = $_[0];
@@ -63,7 +64,7 @@ sub register {
             $obj->write($data);
             $obj->watch_write(1);
         });
-        
+
         return 1;
     });
 
@@ -96,7 +97,7 @@ sub parse_hex_color
 sub modify_file
 {
     my ($data, $type, $palspec) = @_;
-    
+
     # palette altering
     my %pal_colors;
     if (my $pals = $palspec) {
@@ -109,12 +110,12 @@ sub modify_file
             my $fcolor = parse_hex_color($2);
             my $tcolor = parse_hex_color($4);
             if ($to < $from) {
-                ($from, $to, $fcolor, $tcolor) = 
+                ($from, $to, $fcolor, $tcolor) =
                     ($to, $from, $tcolor, $fcolor);
             }
             for (my $i=$from; $i<=$to; $i++) {
                 $pal_colors{$i} = [ map {
-                    int($fcolor->[$_] + 
+                    int($fcolor->[$_] +
                         ($tcolor->[$_] - $fcolor->[$_]) *
                         ($i-$from) / ($to-$from))
                     } (0..2)  ];
@@ -207,7 +208,7 @@ sub new_gif_palette
 
     # final sanity check for size so the substr below doesn't die
     return unless length $header >= 13 + 3 * $gct;
-    
+
     substr($header, 13, 3*$gct) = common_alter($palref, substr($header, 13, 3*$gct));
     $$data = $header;
     return 1;
@@ -226,7 +227,7 @@ sub new_png_palette
         $curidx += $_[1];
         return length ${$_[0]};
     };
-    
+
     # without this module, we can't proceed.
     return 0 unless $PaletteModify::HAVE_CRC;
 
@@ -262,15 +263,15 @@ sub new_png_palette
             $read->(\$palettedata, $length);
             $palettedata = common_alter($palref, $palettedata);
             $imgdata .= $palettedata;
-            
+
             # Skip old CRC
             my $skip;
             $read->(\$skip, 4);
-            
+
             # Generate new CRC
             my $crc = String::CRC32::crc32($type . $palettedata);
             $crc = pack("N", $crc);
-            
+
             $imgdata .= $crc;
             $$data = $imgdata;
             return 1;
@@ -278,11 +279,11 @@ sub new_png_palette
             my $skip;
             # Skip rest of chunk and add to imgdata
             # Number of bytes is +4 becauses of CRC
-            # 
+            #
             for (my $count=0; $count < $length + 4; $count++) {
                 $read->(\$skip, 1);
                 $imgdata .= $skip;
-            }		    
+            }
         }
     }
 

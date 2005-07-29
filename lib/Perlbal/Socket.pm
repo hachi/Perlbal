@@ -6,6 +6,8 @@
 package Perlbal::Socket;
 use strict;
 use warnings;
+no  warnings qw(deprecated);
+
 use Perlbal::HTTPHeaders;
 
 use Danga::Socket '1.25';

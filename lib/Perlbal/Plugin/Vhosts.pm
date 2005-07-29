@@ -12,6 +12,7 @@ package Perlbal::Plugin::Vhosts;
 
 use strict;
 use warnings;
+no  warnings qw(deprecated);
 
 our %Services;  # service_name => $svc
 

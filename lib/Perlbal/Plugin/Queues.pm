@@ -6,6 +6,7 @@ package Perlbal::Plugin::Queues;
 
 use strict;
 use warnings;
+no  warnings qw(deprecated);
 
 # called when we're being added to a service
 sub register {
@@ -17,7 +18,7 @@ sub register {
         my Perlbal::HTTPHeaders $hds = $obj->{req_headers};
         my Perlbal::Service $svc = $obj->{service};
         return 0 unless defined $hds && defined $svc;
-        
+
         # determine age of oldest (first in line)
         my $now = time;
         my Perlbal::ClientProxy $cp = $svc->{waiting_clients}->[0];
@@ -26,7 +27,7 @@ sub register {
         # now do the age of the high priority queue
         $cp = $svc->{waiting_clients_highpri}->[0];
         my $hpage = defined $cp ? ($now - $cp->{last_request_time}) : 0;
-        
+
         # setup the queue length headers
         $hds->header('X-Queue-Count', scalar(@{$svc->{waiting_clients}}));
         $hds->header('X-Queue-Age', $age);
