@@ -4,6 +4,7 @@ package Perlbal::Test::WebClient;
 
 use strict;
 use IO::Socket::INET;
+use Perlbal::Test;
 use HTTP::Response;
 use Socket qw(MSG_NOSIGNAL IPPROTO_TCP TCP_NODELAY SOL_SOCKET);
 
@@ -129,30 +130,7 @@ sub request {
     }
 
     my $parse_it = sub {
-        my $res = '';
-        my $firstline = undef;
-        while (<$sock>) {
-            $res .= $_;
-            $firstline = $_ unless defined $firstline;
-            last if ! $_ || /^\r?\n/;
-        }
-
-        unless ($firstline) {
-            print STDERR "Didn't get a firstline in HTTP response.\n";
-            return undef;
-        }
-
-        my $resp = HTTP::Response->parse($res);
-        return undef unless $resp;
-
-        my $cl = $resp->header('Content-Length');
-        if (defined $cl && $cl > 0) {
-            my $content = '';
-            while (($cl -= read($sock, $content, $cl)) > 0) {
-                # don't do anything, the loop is it
-            }
-            $resp->content($content);
-        }
+        my ($resp, $firstline) = resp_from_sock($sock);
 
         my $conhdr = $resp->header("Connection") || "";
         if (($firstline =~ m!\bHTTP/1\.1\b! && $conhdr !~ m!\bclose\b!i) ||

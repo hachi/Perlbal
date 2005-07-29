@@ -173,7 +173,8 @@ sub serve_client {
 
             if ($cmd eq "status") {
                 my $len = $clen || 0;
-                $to_send = $response->(content => "pid = $$\nreqnum = $req_num\nmethod = $method\nlength = $len");
+                my $bu = $msg->header('X-PERLBAL-BUFFERED-UPLOAD-REASON') || '';
+                $to_send = $response->(content => "pid = $$\nreqnum = $req_num\nmethod = $method\nlength = $len\nbuffered = $bu");
             }
 
             if ($cmd eq "reqdecr") {

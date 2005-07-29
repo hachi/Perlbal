@@ -2,12 +2,13 @@ package Perlbal::Test;
 use strict;
 use POSIX qw( :sys_wait_h );
 use IO::Socket::INET;
+use HTTP::Response;
 
 require Exporter;
 use vars qw(@ISA @EXPORT);
 @ISA = qw(Exporter);
 @EXPORT = qw(ua start_server foreach_aio manage filecontent tempdir new_port
-             mgmt_port wait_on_child dump_res);
+             mgmt_port wait_on_child dump_res resp_from_sock);
 
 our $i_am_parent = 0;
 our $msock;  # management sock of child
@@ -149,6 +150,38 @@ sub wait_on_child {
         }
         die "Timeout waiting for port $port to startup" if time > $start + 5;
     }
+}
+
+sub resp_from_sock {
+    my $sock = shift;
+
+    my $res = "";
+    my $firstline = undef;
+
+    while (<$sock>) {
+        $res .= $_;
+        $firstline ||= $_;
+        last if ! $_ || /^\r?\n/;
+    }
+
+    unless ($firstline) {
+        print STDERR "Didn't get a firstline in HTTP response.\n";
+        return undef;
+    }
+
+    my $resp = HTTP::Response->parse($res);
+    return undef unless $resp;
+
+    my $cl = $resp->header('Content-Length');
+    if (defined $cl && $cl > 0) {
+        my $content = '';
+        while (($cl -= read($sock, $content, $cl)) > 0) {
+            # don't do anything, the loop is it
+        }
+        $resp->content($content);
+    }
+
+    return wantarray ? ($resp, $firstline) : $resp;
 }
 
 1;
