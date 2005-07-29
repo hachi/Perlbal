@@ -95,7 +95,7 @@ foreach my $meth (qw(http rp_file rp_url)) {
     foreach my $aio (@aios) {
         my $setaio = $aio eq "-" ? 1 : manage("SERVER aio_mode = $aio");
       SKIP: {
-          skip "can't do AIO mode $aio", 7 unless $setaio;
+          skip "can't do AIO mode $aio", 6 unless $setaio;
 
           $send->("bytes=0-6");
           ok($resp && $resp->content eq "foo bar", "$meth/$aio: range $range");
