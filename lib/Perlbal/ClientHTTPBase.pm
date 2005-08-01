@@ -10,17 +10,12 @@
 # Copyright 2004, Danga Interactice, Inc.
 # Copyright 2005, Six Apart, Ltd.
 
-package main;
-
-# loading syscall.ph into package main in case some other module wants
-# to use it (like Danga::Socket, or whoever else)
-eval { require 'syscall.ph'; 1 } || eval { require 'sys/syscall.ph'; 1 };
-
 package Perlbal::ClientHTTPBase;
 use strict;
 use warnings;
 no  warnings qw(deprecated);
 
+use Sys::Syscall;
 use base "Perlbal::Socket";
 use HTTP::Date ();
 use fields ('service',             # Perlbal::Service object
@@ -43,8 +38,6 @@ use fields ('service',             # Perlbal::Service object
 
 use Errno qw( EPIPE ECONNRESET );
 use POSIX ();
-
-our $SYS_sendfile = $ENV{NR_SENDFILE} || &::SYS_sendfile;
 
 # ghetto hard-coding.  should let siteadmin define or something.
 # maybe console/config command:  AddMime <ext> <mime-type>  (apache-style?)
@@ -233,11 +226,10 @@ sub event_write {
     if ($self->{reproxy_fh}) {
         my $to_send = $self->{reproxy_file_size} - $self->{reproxy_file_offset};
         $self->tcp_cork(1) if $self->{reproxy_file_offset} == 0;
-        my $sent = syscall($SYS_sendfile,
-                           $self->{fd},
-                           fileno($self->{reproxy_fh}),
-                           0, # NULL offset means kernel moves offset
-                           $to_send);
+        my $sent = Sys::Syscall::sendfile(
+                                          $self->{fd},
+                                          fileno($self->{reproxy_fh}),
+                                          $to_send);
         print "REPROXY Sent: $sent\n" if Perlbal::DEBUG >= 2;
         if ($sent < 0) {
             return $self->close("epipe") if $! == EPIPE;

@@ -25,9 +25,10 @@ WriteMakefile(
 
     PREREQ_PM               => {
         'Danga::Socket' => '1.43',
+        'Sys::Syscall'  => 0,
         'BSD::Resource' => 0,
-        'Test::More' => 0,
-        'File::Find' => 0,
+        'Test::More'    => 0,
+        'File::Find'    => 0,
     },
     dist                    => {
         CI                      => "cvs commit",
