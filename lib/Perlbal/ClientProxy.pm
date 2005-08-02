@@ -621,7 +621,7 @@ sub send_buffered_upload {
     # notify that we want the backend so we get the ball rolling
     $self->state('wait_backend');
     $self->{service}->request_backend_connection($self);
-    $self->tcp_cork(1);  # cork writes to self 
+    $self->tcp_cork(1);  # cork writes to self
 }
 
 # overridden for buffered upload handling; note that this is called by
@@ -654,11 +654,7 @@ sub continue_buffered_upload {
 
     # now send the data
     my $clen = $self->{req_headers}->content_length;
-    my $sent = syscall($Perlbal::ClientHTTPBase::SYS_sendfile,
-                       $be->{fd},
-                       fileno($self->{bufh}),
-                       0, # kernel move fh offset
-                       $clen - $self->{buoutpos});
+    my $sent = Perlbal::Socket::sendfile($be->{fd}, fileno($self->{bufh}), $clen - $self->{buoutpos});
     if ($sent < 0) {
         return $self->close("epipe") if $! == EPIPE;
         return $self->close("connreset") if $! == ECONNRESET;
