@@ -10,6 +10,9 @@ no  warnings qw(deprecated);
 
 use Perlbal::HTTPHeaders;
 
+use Sys::Syscall;
+use POSIX ();
+
 use Danga::Socket '1.25';
 use base 'Danga::Socket';
 
@@ -274,6 +277,31 @@ sub DESTROY {
     my Perlbal::Socket $self = shift;
     delete $state_changes{"$self"} if Perlbal::TRACK_STATES;
     Perlbal::objdtor($self);
+}
+
+# package function (not a method).  returns bytes sent, or -1 on error.
+our $sf_defined = Sys::Syscall::sendfile_defined;
+our $max_sf_readwrite = 128 * 1024;
+sub sendfile {
+    my ($sfd, $fd, $bytes) = @_;
+    return Sys::Syscall::sendfile($sfd, $fd, $bytes) if $sf_defined;
+
+    # no support for sendfile.  ghetto version:  read and write.
+    my $buf;
+    $bytes = $max_sf_readwrite if $bytes > $max_sf_readwrite;
+
+    my $rv = POSIX::read($fd, $buf, $bytes);
+    return -1 unless defined $rv;
+    return -1 unless $rv == $bytes;
+
+    my $wv = POSIX::write($sfd, $buf, $rv);
+    return -1 unless defined $wv;
+
+    if (my $over_read = $rv - $wv) {
+        POSIX::lseek($fd, -$over_read, &POSIX::SEEK_CUR);
+    }
+
+    return $wv;
 }
 
 1;

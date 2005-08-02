@@ -226,10 +226,9 @@ sub event_write {
     if ($self->{reproxy_fh}) {
         my $to_send = $self->{reproxy_file_size} - $self->{reproxy_file_offset};
         $self->tcp_cork(1) if $self->{reproxy_file_offset} == 0;
-        my $sent = Sys::Syscall::sendfile(
-                                          $self->{fd},
-                                          fileno($self->{reproxy_fh}),
-                                          $to_send);
+        my $sent = Perlbal::Socket::sendfile($self->{fd},
+                                             fileno($self->{reproxy_fh}),
+                                             $to_send);
         print "REPROXY Sent: $sent\n" if Perlbal::DEBUG >= 2;
         if ($sent < 0) {
             return $self->close("epipe") if $! == EPIPE;
