@@ -34,7 +34,7 @@ sub start_webserver {
         print $sock "GET /reqdecr,status HTTP/1.0\r\n\r\n";
         my $line = <$sock>;
         die "Didn't get 200 OK: $line"
-            unless $line =~ /200 OK/;
+            unless $line && $line =~ /200 OK/;
         return $port;
     }
 
