@@ -37,6 +37,7 @@ use fields ('client',  # Perlbal::ClientProxy connection, or undef
 
             'use_count',  # number of requests this backend's been used for
             'generation', # int; counts what generation we were spawned in
+            'buffered_upload_mode', # bool; if on, we're doing a buffered upload transmit
             );
 use Socket qw(PF_INET IPPROTO_TCP SOCK_STREAM);
 
@@ -111,6 +112,7 @@ sub new {
     $self->{has_attention} = 0;
     $self->{use_count}     = 0;
     $self->{generation}    = $opts->{generation};
+    $self->{buffered_upload_mode} = 0;
 
     bless $self, ref $class || $class;
     $self->watch_write(1);
@@ -250,6 +252,13 @@ sub event_write {
             $self->state("bored");
             $self->{reportto}->register_boredom($self);
         }
+        return;
+    }
+
+    # if we have a client, and we're currently doing a buffered upload
+    # sendfile, then tell the client to continue sending us data
+    if ($self->{client} && $self->{buffered_upload_mode}) {
+        $self->{client}->continue_buffered_upload($self);
         return;
     }
 
@@ -492,6 +501,7 @@ sub next_request {
     $self->{read_size} = 0;
     $self->{content_length_remain} = undef;
     $self->{content_length} = undef;
+    $self->{buffered_upload_mode} = 0;
 
     $self->{reportto}->register_boredom($self);
     return;

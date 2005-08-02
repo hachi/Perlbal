@@ -67,6 +67,11 @@ use fields (
             'backend_no_spawn', # { "ip:port" => 1 }; if on, spawn_backends will ignore this ip:port combo
             'buffer_backend_connect', # 0 for of, else, number of bytes to buffer before we ask for a backend
             'selector',    # CODE ref, or undef, for role 'selector' services
+            'buffer_uploads', # bool; enable/disable the buffered uploads to disk system
+            'buffer_uploads_path', # string; path to store buffered upload files
+            'buffer_upload_threshold_time', # int; buffer uploads estimated to take longer than this
+            'buffer_upload_threshold_size', # int; buffer uploads greater than this size (in bytes)
+            'buffer_upload_threshold_rate', # int; buffer uploads uploading at less than this rate (in bytes/sec)
             );
 
 our $tunables = {
@@ -176,8 +181,8 @@ our $tunables = {
     },
 
     'buffer_backend_connect' => {
-        des => "How much content-body (POST/PUT/etc) data we read from a client before we start sending it to a backend web node.",
-        default => 0,
+        des => "How much content-body (POST/PUT/etc) data we read from a client before we start sending it to a backend web node.  If 'buffer_uploads' is enabled, this value is used to determine how many bytes are read before Perlbal makes a determination on whether or not to spool the upload to disk.",
+        default => '100k',
         check_type => "size",
         check_role => "reverse_proxy",
     },
@@ -305,8 +310,50 @@ our $tunables = {
             # the type-checking phase.  instead, we do nothing here.
             return $mc->ok;
         },
-
     },
+
+    'buffer_uploads_path' => {
+        des => "Directory root for storing files used to buffer uploads.",
+
+        check_role => "reverse_proxy",
+        val_modify => sub { my $valref = shift; $$valref =~ s!/$!!; },
+        check_type => sub {
+            my ($self, $val, $errref) = @_;
+            #FIXME: require absolute paths?
+            return 1 if $val && -d $val;
+            $$errref = "Directory not found for service $self->{name} (buffer_uploads_path)";
+            return 0;
+        },
+    },
+
+    'buffer_uploads' => {
+        des => "Used to enable or disable the buffer uploads to disk system.  If enabled, 'buffer_backend_connect' bytes worth of the upload will be stored in memory.  At that point, the buffer upload thresholds will be checked to see if we should just send this upload to the backend, or if we should spool it to disk.",
+        default => 0,
+        check_role => "reverse_proxy",
+        check_type => "bool",
+    },
+
+    'buffer_upload_threshold_time' => {
+        des => "If an upload is estimated to take more than this number of seconds, it will be buffered to disk.  Set to 0 to not check estimated time.",
+        default => 5,
+        check_role => "reverse_proxy",
+        check_type => "int",
+    },
+
+    'buffer_upload_threshold_size' => {
+        des => "If an upload is larger than this size in bytes, it will be buffered to disk.  Set to 0 to not check size.",
+        default => '250k',
+        check_role => "reverse_proxy",
+        check_type => "size",
+    },
+
+    'buffer_upload_threshold_rate' => {
+        des => "If an upload is coming in at a rate less than this value in bytes per second, it will be buffered to disk.  Set to 0 to not check rate.",
+        default => 0,
+        check_role => "reverse_proxy",
+        check_type => "int",
+    },
+
 };
 sub autodoc_get_tunables { return $tunables; }
 
@@ -335,6 +382,9 @@ sub new {
     $self->{waiting_clients} = [];
     $self->{waiting_clients_highpri} = [];
     $self->{waiting_client_count} = 0;
+
+    # buffered upload setup
+    $self->{buffer_uploads_path} = undef;
 
     # don't have an object for this yet
     $self->{trusted_upstreams} = undef;
@@ -1098,6 +1148,17 @@ sub stats_info
 # simple passthroughs to the run_hook mechanism.  part of the reportto interface.
 sub backend_response_received {
     return $_[0]->run_hook('backend_response_received', $_[1]);
+}
+
+# just a getter for our name
+sub name {
+    my Perlbal::Service $self = $_[0];
+    return $self->{name};
+}
+
+sub listenaddr {
+    my Perlbal::Service $self = $_[0];
+    return $self->{listen};
 }
 
 sub _durl

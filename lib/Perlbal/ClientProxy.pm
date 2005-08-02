@@ -25,12 +25,20 @@ use fields (
                                  # and the headers we get back aren't necessarily
                                  # the ones we want.  instead, get most headers
                                  # from the provided res headers object here.
+            'is_buffering',        # bool; if we're buffering an upload
+            'is_writing',          # bool; if on, we currently have an aio_write out
+            'start_time',          # hi-res time when we started getting data to upload
+            'bufh',                # buffered upload filehandle object
+            'bufilename',          # string; buffered upload filename
+            'bureason',            # string; if defined, the reason we're buffering to disk
+            'buoutpos',            # int; buffered output position
             );
 
 use constant READ_SIZE         => 4096;    # 4k, arbitrary
 use constant READ_AHEAD_SIZE   => 8192;    # 8k, arbitrary
-use Errno qw( EPIPE );
-use POSIX ();
+use Errno qw( EPIPE ENOENT ECONNRESET EAGAIN );
+use POSIX qw( O_CREAT O_TRUNC O_RDWR O_RDONLY );
+use Time::HiRes qw( gettimeofday tv_interval );
 
 # ClientProxy
 sub new {
@@ -68,6 +76,14 @@ sub init {
     $self->{responded} = 0;
     $self->{content_length_remain} = undef;
     $self->{backend_requested} = 0;
+
+    $self->{is_buffering} = 0;
+    $self->{is_writing} = 0;
+    $self->{start_time} = undef;
+    $self->{bufh} = undef;
+    $self->{bufilename} = undef;
+    $self->{buoutpos} = 0;
+    $self->{bureason} = undef;
 
     $self->{reproxy_uris} = undef;
     $self->{reproxy_expected_size} = undef;
@@ -355,6 +371,13 @@ sub http_response_sent {
     $self->{content_length_remain} = undef;
     $self->{primary_res_hdrs} = undef;
     $self->{responded} = 0;
+    $self->{is_buffering} = 0;
+    $self->{is_writing} = 0;
+    $self->{start_time} = undef;
+    $self->{bufh} = undef;
+    $self->{bufilename} = undef;
+    $self->{buoutpos} = 0;
+    $self->{bureason} = undef;
     return 1;
 }
 
@@ -405,7 +428,9 @@ sub event_write {
 sub event_read {
     my Perlbal::ClientProxy $self = shift;
 
-    my $base_headers = shift;  # not from Danga::Socket:  if new_from_base calls us, it gives us the headers to assume we just read
+    # not from Danga::Socket: if new_from_base calls us, it gives us the
+    # headers to assume we just read
+    my $base_headers = shift;
 
     # mark alive so we don't get killed for being idle
     $self->{alive_time} = time;
@@ -420,19 +445,22 @@ sub event_read {
         $self->tcp_cork(1);  # cork writes to self
     };
 
+    # if we have no headers, the only thing we can do is try to get some
     if (! $self->{req_headers} || $base_headers) {
-
+        # see if we have enough data in queue to get a set of headers
         if (my $hd = ($base_headers || $self->read_request_headers)) {
             print "Got headers!  Firing off new backend connection.\n"
                 if Perlbal::DEBUG >= 2;
 
+            # give plugins a chance to force us to bail
             return if $self->{service}->run_hook('start_proxy_request', $self);
             return if $self->{service}->run_hook('start_http_request',  $self);
 
             # if defined we're waiting on some amount of data.  also, we have to
             # subtract out read_size, which is the amount of data that was
             # extra in the packet with the header that's part of the body.
-            $self->{content_length_remain} = $hd->content_length;
+            my $clen = $hd->content_length;
+            $self->{content_length_remain} = $clen;
             $self->{content_length_remain} -= $self->{read_size}
                 if defined $self->{content_length_remain};
 
@@ -440,29 +468,67 @@ sub event_read {
             $self->{requests}++;
             $self->{last_request_time} = $self->{alive_time};
 
-            # request a backend, or start buffering
-            if ($self->{service}->{buffer_backend_connect} && $self->{content_length_remain}) {
-                # buffer logic; note we don't do anything here except set our state and move on
+            # instead of just getting a backend, see if we should start buffering data
+            if ($self->{content_length_remain} && $self->{service}->{buffer_backend_connect}) {
+                $self->{is_buffering} = 1;
+
+                # shortcut: if we know that we're buffering by size, and the size
+                # of this upload is bigger than that value, we can just turn on spool
+                # to disk right now...
+                if ($self->{service}->{buffer_uploads} && $self->{service}->{buffer_upload_threshold_size}) {
+                    if ($clen >= $self->{service}->{buffer_upload_threshold_size}) {
+                        $self->{bureason} = 'size';
+                        if ($ENV{PERLBAL_DEBUG_BUFFERED_UPLOADS}) {
+                            $self->{req_headers}->header('X-PERLBAL-BUFFERED-UPLOAD-REASON', 'size');
+                        }
+                        $self->state('buffering_upload');
+                        $self->buffered_upload_update;
+                        return;
+                    }
+                }
+
+                # well, we're buffering, but we're not going to disk just yet (but still might)
                 $self->state('buffering_request');
+
+                # only need time if we are using the buffer to disk functionality
+                $self->{start_time} = [ gettimeofday() ]
+                    if $self->{service}->{buffer_uploads};
             } else {
-                # dispatch to backend
+                # get the backend request process moving, since we aren't buffering
+                $self->{is_buffering} = 0;
                 $request_backend->();
             }
         }
         return;
     }
 
-    # read data and send to backend (or buffer for later sending)
-    if ($self->{read_ahead} < ($self->{service}->{buffer_backend_connect} || READ_AHEAD_SIZE)) {
+    # read more data if we're still buffering or if our current read buffer
+    # is not full to the max READ_AHEAD_SIZE which is how much data we will
+    # buffer in from the user before passing on to the backend
+    if ($self->{is_buffering} || ($self->{read_ahead} < READ_AHEAD_SIZE)) {
+        # read up to a read sized chunk
         my $bref = $self->read(READ_SIZE);
+
+        # if the read returned undef, that means the connection was closed
+        # (see: Danga::Socket::read) and we need to turn off watching for
+        # further reads and purge the existing upload if any. also, we
+        # should just return and do nothing else.
+        if (! defined($bref)) {
+            $self->watch_read(0);
+            $self->purge_buffered_upload if $self->{bureason};
+            return $self->close('user_disconnected');
+        }
+
+        # calling drain_read_buf_to will send anything we've already got
+        # to the backend if we have one. it dumps everything in the read
+        # buffer. after this, there should be no read buffer left, which
+        # means $bref is the only outstanding data that hasn't been sent to
+        # any backend we have.
         my $backend = $self->backend;
         $self->drain_read_buf_to($backend) if $backend;
 
-        if (! defined($bref)) {
-            $self->watch_read(0);
-            return;
-        }
-
+        # now that we know we have a defined value, determine how long it is, and do
+        # housekeeping to keep our tracking numbers up to date.
         my $len = length($$bref);
         $self->{read_size} += $len;
         $self->{content_length_remain} -= $len
@@ -487,24 +553,271 @@ sub event_read {
             return;
         }
 
+        # now, if we have a backend, then we should be writing it to the backend
+        # and not doing anything else
         if ($backend) {
             $backend->write($bref);
-        } else {
-            push @{$self->{read_buf}}, $bref;
-            $self->{read_ahead} += $len;
+            return;
+        }
 
-            # this is when we have read all their data
-            $request_backend->()
-                if defined $self->{content_length_remain} &&
-                           $self->{content_length_remain} <= 0;
+        # now, we know we don't have a backend, so we have to push this data onto our
+        # read buffer... it's not going anywhere yet
+        push @{$self->{read_buf}}, $bref;
+        $self->{read_ahead} += $len;
+
+        # if we know we've already started spooling a file to disk, then continue
+        # to do that.
+        if ($self->{bureason}) {
+            $self->buffered_upload_update;
+            return;
+        }
+
+        # if we have no data left to read, then we should request a backend and bail
+        if (defined $self->{content_length_remain} && $self->{content_length_remain} <= 0) {
+            return $request_backend->();
+        }
+
+        # if we are under our buffer size, just continue buffering here and
+        # don't fall through to the backend request call below
+        if ($self->{read_ahead} < $self->{service}->{buffer_backend_connect}) {
+            return;
+        }
+
+        # over the buffer size, see if we should start spooling to disk
+        if ($self->{service}->{buffer_uploads}) {
+            if ($self->do_buffer_to_disk) {
+                # yes, enable spooling to disk
+                $self->buffered_upload_update;
+                return;
+            }
         }
 
     } else {
         # our buffer is full, so turn off reads for now
         $self->watch_read(0);
 
-        # we've exceeded our buffer_backend_connect, start getting a backend for us
-        $request_backend->();
+    }
+
+    # if we fall through to here, we need to ensure that a backend is on the
+    # way, because no specialized handling took over above
+    return $request_backend->();
+}
+
+# take ourselves and send along our buffered data to the backend
+sub send_buffered_upload {
+    my Perlbal::ClientProxy $self = shift;
+
+    # make sure our buoutpos is the same as the content length...
+    my $clen = $self->{req_headers}->content_length;
+    if ($clen != $self->{buoutpos}) {
+        Perlbal::log('critical', "Content length ($clen) read, only $self->{buoutpos} bytes written");
+        return $self->_simple_response(500);
+    }
+
+    # reset our position so we start reading from the right spot
+    $self->{buoutpos} = 0;
+    sysseek($self->{bufh}, 0, 0);
+
+    # notify that we want the backend so we get the ball rolling
+    $self->state('wait_backend');
+    $self->{service}->request_backend_connection($self);
+    $self->tcp_cork(1);  # cork writes to self 
+}
+
+# overridden for buffered upload handling; note that this is called by
+# the backend at the very beginning before it starts us reading again,
+# because it wants us to dump our existing read buf.  however, since we
+# know we may be doing a buffered upload, we check for that, and if we
+# are, then we tell the backend to treat us as a buffered upload in the
+# future!  nifty.
+sub drain_read_buf_to {
+    my Perlbal::ClientProxy $self = shift;
+    return $self->SUPER::drain_read_buf_to(@_)
+        unless $self->{bureason};
+
+    # so, we're buffering an upload, we need to go ahead and start the
+    # buffered upload retransmission to backend process. we have to turn
+    # watching for writes on, since that's what is doing the triggering,
+    # NOT the normal client proxy watch for read
+    my Perlbal::BackendHTTP $be = shift;
+    $be->{buffered_upload_mode} = 1;
+    $be->watch_write(1);
+
+    # now start the first batch sending
+    $self->continue_buffered_upload($be);
+}
+
+sub continue_buffered_upload {
+    my Perlbal::ClientProxy $self = shift;
+    my Perlbal::BackendHTTP $be = shift;
+    return unless $self && $be;
+
+    # now send the data
+    my $clen = $self->{req_headers}->content_length;
+    my $sent = syscall($Perlbal::ClientHTTPBase::SYS_sendfile,
+                       $be->{fd},
+                       fileno($self->{bufh}),
+                       0, # kernel move fh offset
+                       $clen - $self->{buoutpos});
+    if ($sent < 0) {
+        return $self->close("epipe") if $! == EPIPE;
+        return $self->close("connreset") if $! == ECONNRESET;
+        print STDERR "Error w/ sendfile: $!\n";
+        return $self->close('sendfile_error');
+    }
+    $self->{buoutpos} += $sent;
+
+    # if we're done, purge the file and move on
+    if ($self->{buoutpos} >= $clen) {
+        $be->{buffered_upload_mode} = 0;
+        $self->purge_buffered_upload;
+        return;
+    }
+
+    # we will be called again by the backend since buffered_upload_mode is on
+}
+
+# destroy any files we've created
+sub purge_buffered_upload {
+    my Perlbal::ClientProxy $self = shift;
+
+    # first close our filehandle... not async
+    CORE::close($self->{bufh});
+    $self->{bufh} = undef;
+
+    # now asyncronously unlink the file
+    Perlbal::AIO::aio_unlink($self->{bufilename}, sub {
+        if ($!) {
+            # note an error, but whatever, we'll either overwrite the file later (O_TRUNC | O_CREAT)
+            # or a cleaner will come through and do it for us someday (if the user runs one)
+            Perlbal::log('warning', "Unable to link $self->{bufilename}: $!");
+        }
+    });
+}
+
+# write data to disk
+sub buffered_upload_update {
+    my Perlbal::ClientProxy $self = shift;
+    return if $self->{is_writing};
+    return unless $self->{is_buffering} && $self->{read_ahead};
+
+    # so we're not writing now and we have data to write...
+    unless ($self->{bufilename}) {
+        # create a filename and see if it exists or not
+        $self->{is_writing} = 1;
+        my $fn = join('-', $self->{service}->name, $self->{service}->listenaddr, "client", $self->{fd}, int(rand(0xffffffff)));
+        $fn = $self->{service}->{buffer_uploads_path} . '/' . $fn;
+
+        # good, now we need to create the file
+        Perlbal::AIO::aio_open($fn, O_CREAT | O_TRUNC | O_RDWR, 0644, sub {
+            $self->{is_writing} = 0;
+            $self->{bufh} = shift;
+
+            # throw errors back to the user
+            if (! $self->{bufh}) {
+                Perlbal::log('critical', "Failure to open $fn for buffered upload output");
+                return $self->_simple_response(500);
+            }
+
+            # save state and info and bounce it back to write data
+            $self->{bufilename} = $fn;
+            $self->buffered_upload_update;
+        });
+
+        return;
+    }
+
+    # at this point, we want to do some writing
+    my $bref = shift(@{$self->{read_buf}});
+    my $len = length $$bref;
+    $self->{read_ahead} -= $len;
+
+    # so at this point we have a valid filename and file handle and should write out
+    # the buffer that we have
+    $self->{is_writing} = 1;
+    Perlbal::AIO::aio_write($self->{bufh}, $self->{buoutpos}, $len, $$bref, sub {
+        my $bytes = shift;
+        $self->{is_writing} = 0;
+
+        # check for error
+        unless ($bytes) {
+            Perlbal::log('critical', "Error writing buffered upload: $!");
+            return $self->_simple_response(500);
+        }
+
+        # update our count of data written
+        $self->{buoutpos} += $bytes;
+
+        # now check if we wrote less than we had in this chunk of buffer.  if that's
+        # the case then we need to reenqueue the part of the chunk that wasn't
+        # written out and update as appropriate.
+        if ($bytes < $len) {
+            my $diff = $len - $bytes;
+            unshift @{$self->{read_buf}}, substr($$bref, $bytes, $diff);
+            $self->{read_ahead} += $diff;
+        }
+
+        # if we're done (no clr and no read ahead!) then send it
+        if ($self->{read_ahead} <= 0 && $self->{content_length_remain} <= 0) {
+            $self->send_buffered_upload;
+            return;
+        }
+
+        # spawn another writer!
+        $self->buffered_upload_update;
+    });
+}
+
+# looks at our states and decides if we should start writing to disk
+# or should just go ahead and blast this to the backend
+sub do_buffer_to_disk {
+    my Perlbal::ClientProxy $self = shift;
+    return unless $self->{is_buffering};
+    return $self->{bureason}
+        if defined $self->{bureason};
+
+    # this is called when we have enough data to determine whether or not to
+    # start buffering to disk
+    my $dur = tv_interval($self->{start_time}) || 1;
+    my $rate = $self->{read_ahead} / $dur;
+    my $etime = $self->{content_length_remain} / $rate;
+
+    # see if we have enough data to make the determination
+    my $to_disk = undef;
+
+    # see if we blow the rate away
+    if ($self->{service}->{buffer_upload_threshold_rate} > 0 &&
+            $rate < $self->{service}->{buffer_upload_threshold_rate}) {
+        # they are slower than the minimum rate
+        $to_disk = 'rate';
+    }
+
+    # and finally check estimated time exceeding
+    if ($self->{service}->{buffer_upload_threshold_time} > 0 &&
+            $etime > $self->{service}->{buffer_upload_threshold_time}) {
+        # exceeds
+        $to_disk = 'time';
+    }
+
+    # now one of two things happens...
+    if ($to_disk) {
+        # start saving it to disk
+        $self->state('buffering_upload');
+        $self->buffered_upload_update;
+        $self->{bureason} = $to_disk;
+
+        if ($ENV{PERLBAL_DEBUG_BUFFERED_UPLOADS}) {
+            $self->{req_headers}->header('X-PERLBAL-BUFFERED-UPLOAD-REASON', $to_disk);
+        }
+
+    } else {
+        # do not buffer the file.  start sending what we have.
+        $self->{is_buffering} = 0;
+
+        # now set our state, cork, get a backend and go
+        $self->state('wait_backend');
+        $self->{service}->request_backend_connection($self);
+        $self->tcp_cork(1);
     }
 }
 

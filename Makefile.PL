@@ -29,6 +29,7 @@ WriteMakefile(
         'BSD::Resource' => 0,
         'Test::More'    => 0,
         'File::Find'    => 0,
+        'Time::HiRes'   => 0,
     },
     dist                    => {
         CI                      => "cvs commit",
