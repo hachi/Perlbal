@@ -13,6 +13,7 @@ use vars qw(@ISA @EXPORT $FLAG_NOSIGNAL);
 @ISA = qw(Exporter);
 @EXPORT = qw(new);
 
+$FLAG_NOSIGNAL = 0;
 eval { $FLAG_NOSIGNAL = MSG_NOSIGNAL; };
 
 # create a blank object
@@ -121,7 +122,7 @@ sub request {
                 PeerAddr => $self->{server},
                 Timeout => 3,
             ) or return undef;
-        setsockopt($sock, IPPROTO_TCP, TCP_NODELAY, pack("l", 1)) or die;
+        setsockopt($sock, IPPROTO_TCP, TCP_NODELAY, pack("l", 1)) or die "failed to set sockopt: $!\n";
 
         $rv = send($sock, $send, $FLAG_NOSIGNAL);
         if ($! || $rv != $len) {
