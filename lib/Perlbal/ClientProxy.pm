@@ -32,6 +32,7 @@ use fields (
             'bufilename',          # string; buffered upload filename
             'bureason',            # string; if defined, the reason we're buffering to disk
             'buoutpos',            # int; buffered output position
+            'backend_stalled',   # boolean:  if backend has shut off its reads because we're too slow.
             );
 
 use constant READ_SIZE         => 4096;    # 4k, arbitrary
@@ -144,6 +145,27 @@ sub try_next_uri {
     $self->{currently_reproxying} = undef;
     $self->start_reproxy_uri();
 }
+
+# returns true if this ClientProxy is too many bytes behind the backend
+sub too_far_behind_backend {
+    my Perlbal::ClientProxy $self    = $_[0];
+    my Perlbal::BackendHTTP $backend = $self->{backend}   or return 0;
+
+    # if a backend doesn't have a service, it's a
+    # ReproxyManager-created backend, and thus it should use the
+    # 'buffer_size_reproxy_url' parameter for acceptable buffer
+    # widths, and not the regular 'buffer_size'.  this lets people
+    # tune buffers depending on the types of webservers.  (assumption
+    # being that reproxied-to webservers are event-based and it's okay
+    # to tie the up longer in favor of using less buffer memory in
+    # perlbal)
+    my $max_buffer = defined $backend->{service} ?
+        $self->{service}->{buffer_size} :
+        $self->{service}->{buffer_size_reproxy_url};
+
+    return $self->{write_buf_size} > $max_buffer;
+}
+
 
 # this is a callback for when a backend has been created and is
 # ready for us to do something with it
@@ -417,10 +439,9 @@ sub event_write {
     $self->{responded} = 1;
 
     # trigger our backend to keep reading, if it's still connected
-    if (my $backend = $self->{backend}) {
-        # figure out which maximum buffer size to use
-        my $buf_size = defined $backend->{service} ? $self->{service}->{buffer_size} : $self->{service}->{buffer_size_reproxy_url};
-        $backend->watch_read(1) if $self->{write_buf_size} < $buf_size;
+    if ($self->{backend_stalled} && (my $backend = $self->{backend})) {
+        $self->{backend_stalled} = 0;
+        $backend->watch_read(1);
     }
 }
 

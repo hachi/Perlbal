@@ -1,3 +1,11 @@
+    -- reorganize/cleanup code related to stalling the backend due to
+       client's buffer size exceeding one of the two limits.
+       introduce "backend_stalled"
+
+    -- buffer uploads to disk
+
+1.3: (2005-06-26)
+
     -- introduce CommandContext, so management commands can be less
        verbose when in config files (service/pool names can be left off
        when you just created them a couple lines before)

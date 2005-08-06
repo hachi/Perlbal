@@ -405,9 +405,9 @@ sub event_read {
     }
 
     # if our client's behind more than the max limit, stop buffering
-    my $buf_size = defined $self->{service} ? $client->{service}->{buffer_size} : $client->{service}->{buffer_size_reproxy_url};
-    if ($client->{write_buf_size} > $buf_size) {
+    if ($client->too_far_behind_backend) {
         $self->watch_read(0);
+        $client->{backend_stalled} = 1;
         return;
     }
 
