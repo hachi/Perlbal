@@ -4,7 +4,8 @@
 # Copyright 2005, Six Apart, Ltd.
 
 package Perlbal::AIO;
-use POSIX qw();
+
+use Fcntl qw(SEEK_CUR SEEK_SET SEEK_END);
 
 sub aio_stat {
     my ($file, $cb) = @_;
@@ -68,8 +69,10 @@ sub aio_write {
     } elsif ($Perlbal::AIO_MODE eq "ioaio") {
         IO::AIO::aio_write($fh, $offset, $length, $_[3], 0, $cb);
     } else {
+        my $old_off = sysseek($fh, 0, SEEK_CUR);
         sysseek($fh, $offset, 0);
         my $rv = syswrite($fh, $_[3], $length, 0);
+        sysseek($fh, $old_off, SEEK_SET);
         $cb->($rv);
     }
 }
@@ -84,8 +87,10 @@ sub aio_read {
     } elsif ($Perlbal::AIO_MODE eq "ioaio") {
         IO::AIO::aio_read($fh, $offset, $length, $_[3], 0, $cb);
     } else {
+        my $old_off = sysseek($fh, 0, SEEK_CUR);
         sysseek($fh, $offset, 0);
         my $rv = sysread($fh, $_[3], $length, 0);
+        sysseek($fh, $old_off, SEEK_SET);
         $cb->($rv);
     }
 }
