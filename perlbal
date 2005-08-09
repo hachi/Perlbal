@@ -45,7 +45,7 @@ my $default_config = "/etc/perlbal/perlbal.conf";
 $opt_config = $default_config if ! $opt_config && -e $default_config;
 
 # load user config
-if ($opt_config && ! Perlbal::load_config($opt_config, sub { print STDOUT "$_\n"; })) {
+if ($opt_config && ! Perlbal::load_config($opt_config, sub { print STDOUT "$_[0]\n"; })) {
     die "Error starting up.\n";
 }
 
