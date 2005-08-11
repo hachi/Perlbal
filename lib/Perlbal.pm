@@ -887,9 +887,9 @@ sub MANAGE_load {
     my $load = sub {
         my $name = shift;
         $last_case = $name;
-        return eval "use Perlbal::Plugin::$name; Perlbal::Plugin::$name->load; 1;";
-        # TODO: return $mc->err immediately if $@ is a syntax
-        # error (or something not regarding missing files)?
+        my $rv = eval "use Perlbal::Plugin::$name; Perlbal::Plugin::$name->load; 1;";
+        return $mc->err($@) if ! $rv && $@ !~ /^Can\'t locate/;
+        return $rv;
     };
 
     my $rv = $load->($fn) || $load->(lc $fn) || $load->(ucfirst lc $fn);
