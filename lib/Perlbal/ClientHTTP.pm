@@ -224,24 +224,27 @@ sub event_read_put {
     my Perlbal::ClientHTTP $self = shift;
 
     # read in data and shove it on the read buffer
-    if (defined (my $dataref = $self->read($self->{content_length_remain}))) {
-        # got some data
-        $self->{read_buf} .= $$dataref;
-        my $clen = length($$dataref);
-        $self->{read_size} += $clen;
-        $self->{content_length_remain} -= $clen;
+    my $dataref = $self->read($self->{content_length_remain});
 
-        # handle put if we should
-        $self->put_writeout if $self->{read_size} >= 8192; # arbitrary
-
-        # now, if we've filled the content of this put, we're done
-        unless ($self->{content_length_remain}) {
-            $self->watch_read(0);
-            $self->put_writeout;
-        }
-    } else {
-        # undefined read, user closed on us
+    # unless they disconnected prematurely
+    unless (defined $dataref) {
         $self->close('remote_closure');
+        return;
+    }
+
+    # got some data
+    $self->{read_buf} .= $$dataref;
+    my $clen = length($$dataref);
+    $self->{read_size} += $clen;
+    $self->{content_length_remain} -= $clen;
+
+    # handle put if we should
+    $self->put_writeout if $self->{read_size} >= 8192; # arbitrary
+
+    # now, if we've filled the content of this put, we're done
+    unless ($self->{content_length_remain}) {
+        $self->watch_read(0);
+        $self->put_writeout;
     }
 }
 
@@ -332,18 +335,18 @@ sub put_writeout {
         # now recursively call ourselves?
         if ($self->{read_size}) {
             $self->put_writeout;
+            return;
+        }
+
+        return if $self->{content_length_remain};
+
+        # we're done putting this file, so close it.
+        # FIXME this should be done through AIO
+        if ($self->{put_fh} && CORE::close($self->{put_fh})) {
+            $self->{put_fh} = undef;
+            return $self->send_response(200);
         } else {
-            # we done putting this file?
-            unless ($self->{content_length_remain}) {
-                # close it
-                # FIXME this should be done through AIO
-                if ($self->{put_fh} && CORE::close($self->{put_fh})) {
-                    $self->{put_fh} = undef;
-                    return $self->send_response(200);
-                } else {
-                    return $self->system_error("Error saving file", "error in close: $!");
-                }
-            }
+            return $self->system_error("Error saving file", "error in close: $!");
         }
     });
 }
