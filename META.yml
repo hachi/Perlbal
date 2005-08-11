@@ -8,7 +8,9 @@ requires:
     BSD::Resource:                 0
     Danga::Socket:                 1.43
     File::Find:                    0
+    Sys::Syscall:                  0
     Test::More:                    0
+    Time::HiRes:                   0
 
 distribution_type: module
 generated_by: ExtUtils::MakeMaker version 6.17

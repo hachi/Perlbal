@@ -469,6 +469,28 @@ sub _simple_response {
     return 1;
 }
 
+
+sub send_response {
+    my Perlbal::ClientHTTPBase $self = shift;
+
+    $self->watch_read(0);
+    $self->watch_write(1);
+    return $self->_simple_response(@_);
+}
+
+# method that sends a 500 to the user but logs it and any extra information
+# we have about the error in question
+sub system_error {
+    my Perlbal::ClientHTTPBase $self = shift;
+    my ($msg, $info) = @_;
+
+    # log to syslog
+    Perlbal::log('warning', "system error: $msg ($info)");
+
+    # and return a 500
+    return $self->send_response(500, $msg);
+}
+
 # FIXME: let this be configurable?
 sub max_idle_time { 30; }
 

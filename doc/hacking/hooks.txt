@@ -96,17 +96,6 @@ HANDLER     backend_response_received   Perlbal::BackendHTTP
 Called as soon as response headers are read from the backend.  If you
 return a true value, will stop all handling at that point.
 
-HANDLER     handle_put                  Perlbal::ClientHTTP
-Called whenever we have data to write to a file being PUT.  Return a true
-value to cause Perlbal to not actually save the file or do anything with
-it.
-
-HANDLER     setup_put                   Perlbal::ClientHTTP
-Called as soon as we've gotten headers requesting a PUT.  Cancels the
-default work if you return a true value.  Careful: this function sets up
-a file descriptor for use in writes in handle_put, so if you're going to
-override setup_put you will probably want to override handle_put.
-
 HANDLER     make_high_priority          Perlbal::ClientProxy
 Called when a request is received and right before we're about to determine
 if this request is high priority or not.  Return a true value to make the
