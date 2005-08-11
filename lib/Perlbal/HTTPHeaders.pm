@@ -323,7 +323,7 @@ sub content_length {
 # whether or not the response from the proxy (us) should do keep-alive.
 sub req_keep_alive {
     my Perlbal::HTTPHeaders $self = $_[0];
-    my Perlbal::HTTPHeaders $res = $_[1] or return 0;
+    my Perlbal::HTTPHeaders $res = $_[1] or Carp::confess("ASSERT: No response headers given");
 
     # get the connection header now (saves warnings later)
     my $conn = lc ($self->header('Connection') || '');
@@ -352,7 +352,7 @@ sub req_keep_alive {
 # of the request we sent to it and the response they sent...
 sub res_keep_alive {
     my Perlbal::HTTPHeaders $self = $_[0];
-    my Perlbal::HTTPHeaders $req = $_[1] or return 0;
+    my Perlbal::HTTPHeaders $req = $_[1] or Carp::confess("ASSERT: No request headers given");
 
     # get the connection header now (saves warnings later)
     my $conn = lc ($self->header('Connection') || '');

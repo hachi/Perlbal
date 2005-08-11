@@ -133,7 +133,7 @@ sub http_response_sent {
     # close if we're supposed to
     if (
         ! defined $self->{res_headers} ||
-        ! $self->{res_headers}->res_keep_alive ||
+        ! $self->{res_headers}->res_keep_alive($self->{req_headers}) ||
         $self->{do_die}
         )
     {
