@@ -160,26 +160,35 @@ sub handle_put {
         if $uri =~ /\.\./;
 
     # now we want to get the URI
-    if ($uri =~ m!^((?:/[\w\-\.]+)*)/([\w\-\.]+)$!) {
-        # sanitize uri into path and file into a disk path and filename
-        my ($path, $filename) = ($1 || '', $2);
+    return $self->send_response(400, 'Invalid filename')
+        unless $uri =~ m!^
+            ((?:/[\w\-\.]+)*)      # $1: zero+ path components of /FOO where foo is
+                                     #   one+ conservative characters
+                  /                  # path separator
+            ([\w\-\.]+)            # $2: and the filename, one+ conservative characters
+            $!x;
 
-        # verify minput if necessary
-        if ($self->{service}->{min_put_directory}) {
-            my @elems = grep { defined $_ && length $_ } split '/', $path;
-            return $self->send_response(400, 'Does not meet minimum directory requirement')
-                unless scalar(@elems) >= $self->{service}->{min_put_directory};
-            my $minput = '/' . join('/', splice(@elems, 0, $self->{service}->{min_put_directory}));
-            my $path = '/' . join('/', @elems);
-            return unless $self->verify_put($minput, $path, $filename);
-        }
+    # sanitize uri into path and file into a disk path and filename
+    my ($path, $filename) = ($1 || '', $2);
 
-        # now we want to open this directory
-        my $lpath = $self->{service}->{docroot} . '/' . $path;
-        return $self->attempt_open($lpath, $filename);
+    # the final action we'll be taking, eventually, is to start an async
+    # file open of the requested disk path.  but we might need to verify
+    # the min_put_directory first.
+    my $start_open = sub {
+        my $disk_path = $self->{service}->{docroot} . '/' . $path;
+        $self->start_put_open($disk_path, $filename);
+    };
+
+    # verify minput if necessary
+    if ($self->{service}->{min_put_directory}) {
+        my @elems = grep { defined $_ && length $_ } split '/', $path;
+        return $self->send_response(400, 'Does not meet minimum directory requirement')
+            unless scalar(@elems) >= $self->{service}->{min_put_directory};
+        my $req_path   = '/' . join('/', splice(@elems, 0, $self->{service}->{min_put_directory}));
+        my $extra_path = '/' . join('/', @elems);
+        $self->validate_min_put_directory($req_path, $extra_path, $filename, $start_open);
     } else {
-        # bad URI, don't accept the put
-        return $self->send_response(400, 'Invalid filename');
+        $start_open->();
     }
 
     return;
@@ -248,18 +257,18 @@ sub event_read_put {
     }
 }
 
-# verify that a minimum put directory exists
-# return value: 1 means the directory is okay, continue
-#               0 means we must verify the directory, stop processing
-sub verify_put {
+# verify that a minimum put directory exists.  if/when it's verified,
+# perhaps cached, the provided callback will be run.
+sub validate_min_put_directory {
     my Perlbal::ClientHTTP $self = shift;
-    my ($minput, $extrapath, $filename) = @_;
+    my ($req_path, $extra_path, $filename, $callback) = @_;
 
-    my $mindir = $self->{service}->{docroot} . '/' . $minput;
-    return 1 if $VerifiedDirs{$mindir};
+    my $disk_dir = $self->{service}->{docroot} . '/' . $req_path;
+    return $callback->() if $VerifiedDirs{$disk_dir};
+
     $self->{put_in_progress} = 1;
 
-    Perlbal::AIO::aio_open($mindir, O_RDONLY, 0755, sub {
+    Perlbal::AIO::aio_open($disk_dir, O_RDONLY, 0755, sub {
         my $fh = shift;
         $self->{put_in_progress} = 0;
 
@@ -268,14 +277,13 @@ sub verify_put {
         CORE::close($fh);
 
         # mindir existed, mark it as so and start the open for the rest of the path
-        $VerifiedDirs{$mindir} = 1;
-        return $self->attempt_open($mindir . $extrapath, $filename);
+        $VerifiedDirs{$disk_dir} = 1;
+        $callback->();
     });
-    return 0;
 }
 
-# attempt to open a file
-sub attempt_open {
+# attempt to open a file being PUT for writing to disk
+sub start_put_open {
     my Perlbal::ClientHTTP $self = shift;
     my ($path, $file) = @_;
 
@@ -295,7 +303,7 @@ sub attempt_open {
                 return $self->system_error("Unable to create directory", "path = $path, file = $file") if $@;
 
                 # should be created, call self recursively to try
-                return $self->attempt_open($path, $file);
+                return $self->start_put_open($path, $file);
             } else {
                 return $self->system_error("Internal error", "error = $!, path = $path, file = $file");
             }
