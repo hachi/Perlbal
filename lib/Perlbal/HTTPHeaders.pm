@@ -348,11 +348,20 @@ sub req_keep_alive {
     return 0;
 }
 
-# answers the question: is the backend expected to stay open.  this is a combination
-# of the request we sent to it and the response they sent...
+# if an options response from a backend looks like it can do keep-alive.
+sub res_keep_alive_options {
+    my Perlbal::HTTPHeaders $self = $_[0];
+    return $self->res_keep_alive(undef, 1);
+}
+
+# answers the question: "is the backend expected to stay open?"  this
+# is a combination of the request we sent to it and the response they
+# sent...
 sub res_keep_alive {
     my Perlbal::HTTPHeaders $self = $_[0];
-    my Perlbal::HTTPHeaders $req = $_[1] or Carp::confess("ASSERT: No request headers given");
+    my Perlbal::HTTPHeaders $req = $_[1];
+    my $is_options = $_[2];
+    Carp::confess("ASSERT: No request headers given") unless $req || $is_options;
 
     # get the connection header now (saves warnings later)
     my $conn = lc ($self->header('Connection') || '');
@@ -366,7 +375,8 @@ sub res_keep_alive {
         # the request must be a head request
         return 1 if
             $conn =~ /\bkeep-alive\b/i &&
-            (defined $self->header('Content-length') ||
+            ($is_options ||
+             defined $self->header('Content-length') ||
              $req->request_method eq 'HEAD');
         return 0;
     }

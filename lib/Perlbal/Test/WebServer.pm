@@ -52,6 +52,7 @@ sub start_webserver {
 sub serve_client {
     my $csock = shift;
     my $req_num = 0;
+    my $did_options = 0;
     my @reqs;
 
   REQ:
@@ -69,7 +70,7 @@ sub serve_client {
         my @cmds;
         my $httpver = 0; # 0 = 1.0, 1 = 1.1, undef = neither
         my $method;
-        if ($req =~ m!^([A-Z]+) /(\S+) HTTP/(1\.\d+)\r?\n?!) {
+        if ($req =~ m!^([A-Z]+) /?(\S+) HTTP/(1\.\d+)\r?\n?!) {
             $method = $1;
             my $cmds = durl($2);
             @cmds = split(/\s*,\s*/, $cmds);
@@ -148,6 +149,12 @@ sub serve_client {
             next REQ;
         }
 
+        if ($method eq "OPTIONS") {
+            $did_options = 1;
+            $send->($response->(code => 200));
+            next REQ;
+        }
+
         # prepare a simple 200 to send; undef this if you want to control
         # your own output below
         my $to_send;
@@ -174,7 +181,9 @@ sub serve_client {
             if ($cmd eq "status") {
                 my $len = $clen || 0;
                 my $bu = $msg->header('X-PERLBAL-BUFFERED-UPLOAD-REASON') || '';
-                $to_send = $response->(content => "pid = $$\nreqnum = $req_num\nmethod = $method\nlength = $len\nbuffered = $bu");
+                $to_send = $response->(content =>
+                                       "pid = $$\nreqnum = $req_num\nmethod = $method\n".
+                                       "length = $len\nbuffered = $bu\noptions = $did_options\n");
             }
 
             if ($cmd eq "reqdecr") {

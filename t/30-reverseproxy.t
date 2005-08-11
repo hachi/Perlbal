@@ -4,7 +4,7 @@ use strict;
 use Perlbal::Test;
 use Perlbal::Test::WebServer;
 use Perlbal::Test::WebClient;
-use Test::More 'no_plan';
+use Test::More tests => 20;
 
 # option setup
 my $start_servers = 3; # web servers to start
@@ -93,6 +93,23 @@ $resp = $wc->request('keepalive:0', 'status');
 ok(pid_of_resp($resp) != $pid, "discarding keep-alive?");
 
 
+######
+###### verify_backend requests
+######
+
+# let's flush existing connections
+manage("SET test.persist_backend = 0") or die;
+$resp = $wc->request('status');  # dummy to flush (see above)
+is(options($resp), 0, "got a backend that didn't do options");
+
+manage("SET test.persist_backend = 1") or die;
+ok(manage("SET test.verify_backend = 1"), "enabled verify");
+
+$resp = $wc->request('status');
+is(options($resp), 1, "got a backend that did an options");
+
+
+
 sub add_all {
     foreach (@web_ports) {
         manage("POOL a ADD 127.0.0.1:$_") or die;
@@ -126,6 +143,12 @@ sub subpid_of_resp {
 sub reqnum {
     my $resp = shift;
     return 0 unless $resp && $resp->content =~ /^reqnum = (\d+)$/m;
+    return $1;
+}
+
+sub options {
+    my $resp = shift;
+    return undef unless $resp && $resp->content =~ /^options = (\d+)$/m;
     return $1;
 }
 

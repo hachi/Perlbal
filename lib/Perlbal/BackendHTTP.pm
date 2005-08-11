@@ -289,7 +289,7 @@ sub event_read {
             $self->{content_length_remain} -= length($$bref);
         } elsif (my $hd = $self->read_response_headers) {
             # see if we have keep alive support
-            return $self->verify_failure unless $hd->res_keep_alive($self->{req_headers});
+            return $self->verify_failure unless $hd->res_keep_alive_options;
             $self->{content_length_remain} = $hd->header("Content-Length");
         }
 
@@ -458,9 +458,10 @@ sub next_request {
 
     my $hd = $self->{res_headers};  # response headers
 
-    # verify that we have keep-alive support
+    # verify that we have keep-alive support.  by passing $initial to res_keep_alive,
+    # we signal that req_headers may be undef (if we just did an options request)
     return $self->close('next_request_no_persist')
-        unless $hd->res_keep_alive($self->{req_headers});
+        unless $hd->res_keep_alive($self->{req_headers}, $initial);
 
     # and now see if we should closed based on the pool we're from
     return $self->close('pool_requested_closure')
