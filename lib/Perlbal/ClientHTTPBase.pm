@@ -268,7 +268,7 @@ sub _serve_request {
         return $self->_simple_response(403, "Unimplemented method");
     }
 
-    my $uri = _durl($self->{replacement_uri} || $hd->request_uri);
+    my $uri = Perlbal::Util::durl($self->{replacement_uri} || $hd->request_uri);
 
     # don't allow directory traversal
     if ($uri =~ /\.\./ || $uri !~ m!^/!) {
@@ -514,13 +514,6 @@ sub as_string {
     }
 
     return $ret;
-}
-
-sub _durl {
-    my ($a) = @_;
-    $a =~ tr/+/ /;
-    $a =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
-    return $a;
 }
 
 1;

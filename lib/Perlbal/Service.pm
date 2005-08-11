@@ -847,7 +847,7 @@ sub request_backend_connection {
         my %cookie;
         foreach (split(/;\s+/, $hd->header("Cookie") || '')) {
             next unless ($_ =~ /(.*)=(.*)/);
-            $cookie{_durl($1)} = _durl($2);
+            $cookie{Perlbal::Util::durl($1)} = Perlbal::Util::durl($2);
         }
         my $hicookie = $cookie{$cname} || "";
         $hi_pri = index($hicookie, $self->{high_priority_cookie_contents}) != -1;
@@ -1048,6 +1048,8 @@ sub adopt_base_client {
     }
 }
 
+# turn a ClientProxy or ClientHTTP back into a generic base client
+# (for a service-selector role)
 sub return_to_base {
     my Perlbal::Service $self = shift;
     my Perlbal::ClientHTTPBase $cb = shift;  # actually a subclass of Perlbal::ClientHTTPBase
@@ -1160,15 +1162,6 @@ sub listenaddr {
     my Perlbal::Service $self = $_[0];
     return $self->{listen};
 }
-
-sub _durl
-{
-    my ($a) = @_;
-    $a =~ tr/+/ /;
-    $a =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
-    return $a;
-}
-
 
 1;
 

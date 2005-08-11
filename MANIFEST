@@ -13,6 +13,7 @@ lib/Perlbal/HTTPHeaders.pm
 lib/Perlbal/Service.pm
 lib/Perlbal/Socket.pm
 lib/Perlbal/TCPListener.pm
+lib/Perlbal/Util.pm
 lib/Perlbal/Test.pm
 lib/Perlbal/Test/WebServer.pm
 lib/Perlbal/Test/WebClient.pm

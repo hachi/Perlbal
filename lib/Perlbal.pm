@@ -67,6 +67,7 @@ use Perlbal::ReproxyManager;
 use Perlbal::Pool;
 use Perlbal::ManageCommand;
 use Perlbal::CommandContext;
+use Perlbal::Util;
 
 END {
     Linux::AIO::max_parallel(0)
