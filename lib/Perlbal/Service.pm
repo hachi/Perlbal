@@ -513,8 +513,8 @@ sub set {
         foreach my $plugin (split /[\s,]+/, $val) {
             next if $plugin eq 'none';
 
-            # since we lowercase our input, uppercase the first character here
-            my $fn = uc($1) . lc($2) if $plugin =~ /^(.)(.*)$/;
+            my $fn = Perlbal::plugin_case($plugin);
+
             next if $self->{plugins}->{$fn};
             unless ($Perlbal::plugins{$fn}) {
                 $mc->err("Plugin $fn not loaded; not registered for $self->{name}.");

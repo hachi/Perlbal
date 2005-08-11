@@ -1,3 +1,7 @@
+    -- load plugins by either the exact case specified, all lowercase,
+       or all lowercase with first letter uppercase.  then remember
+       the case for unloading (which was never implemented?)
+
     -- reorganize/cleanup code related to stalling the backend due to
        client's buffer size exceeding one of the two limits.
        introduce "backend_stalled"
