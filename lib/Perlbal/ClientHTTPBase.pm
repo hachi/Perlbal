@@ -174,8 +174,6 @@ sub http_response_sent {
     return 1;
 }
 
-use Carp qw(cluck);
-
 sub reproxy_fh {
     my Perlbal::ClientHTTPBase $self = shift;
 
@@ -215,6 +213,37 @@ sub event_read {
     $selector->($self);
 }
 
+# client is ready for more of its file.  so sendfile some more to it.
+# (called by event_write when we're actually in this mode)
+sub event_write_reproxy_fh {
+    my Perlbal::ClientHTTPBase $self = shift;
+
+    my $to_send = $self->{reproxy_file_size} - $self->{reproxy_file_offset};
+    $self->tcp_cork(1) if $self->{reproxy_file_offset} == 0;
+
+    my $sent = Perlbal::Socket::sendfile($self->{fd},
+                                         fileno($self->{reproxy_fh}),
+                                         $to_send);
+    print "REPROXY Sent: $sent\n" if Perlbal::DEBUG >= 2;
+
+    if ($sent < 0) {
+        return $self->close("epipe")     if $! == EPIPE;
+        return $self->close("connreset") if $! == ECONNRESET;
+        print STDERR "Error w/ sendfile: $!\n";
+        $self->close('sendfile_error');
+        return;
+    }
+    $self->{reproxy_file_offset} += $sent;
+
+    if ($sent >= $to_send) {
+        # close the sendfile fd
+        CORE::close($self->{reproxy_fh});
+
+        $self->{reproxy_fh} = undef;
+        $self->http_response_sent;
+    }
+}
+
 sub event_write {
     my Perlbal::ClientHTTPBase $self = shift;
 
@@ -223,37 +252,17 @@ sub event_write {
     # subclasses can decide what's appropriate for timeout.
     $self->{alive_time} = time;
 
+    # if we're sending a filehandle, go do some more sendfile:
     if ($self->{reproxy_fh}) {
-        my $to_send = $self->{reproxy_file_size} - $self->{reproxy_file_offset};
-        $self->tcp_cork(1) if $self->{reproxy_file_offset} == 0;
-        my $sent = Perlbal::Socket::sendfile($self->{fd},
-                                             fileno($self->{reproxy_fh}),
-                                             $to_send);
-        print "REPROXY Sent: $sent\n" if Perlbal::DEBUG >= 2;
-        if ($sent < 0) {
-            return $self->close("epipe") if $! == EPIPE;
-            return $self->close("connreset") if $! == ECONNRESET;
-            print STDERR "Error w/ sendfile: $!\n";
-            $self->close('sendfile_error');
-            return;
-        }
-        $self->{reproxy_file_offset} += $sent;
-
-        if ($sent >= $to_send) {
-            # close the sendfile fd
-            CORE::close($self->{reproxy_fh});
-
-            $self->{reproxy_fh} = undef;
-            $self->http_response_sent;
-        }
+        $self->event_write_reproxy_fh;
         return;
     }
 
+    # otherwise just kick-start our write buffer.
     if ($self->write(undef)) {
+        # we've written all data in the queue, so stop waiting for
+        # write notifications:
         print "All writing done to $self\n" if Perlbal::DEBUG >= 2;
-
-        # we've written all data in the queue, so stop waiting for write
-        # notifications:
         $self->watch_write(0);
     }
 }
