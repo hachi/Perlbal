@@ -27,9 +27,9 @@ use fields (
             'state',           # general purpose state; used by descendants.
             'do_die',          # if on, die and do no further requests
 
-            'read_buf',
-            'read_ahead',
-            'read_size',
+            'read_buf',        # arrayref of scalarref read from client
+            'read_ahead',      # bytes sitting in read_buf
+            'read_size',       # total bytes read from client, ever
             );
 
 use constant MAX_HTTP_HEADER_LENGTH => 102400;  # 100k, arbitrary
@@ -72,7 +72,7 @@ sub new {
     $self->{state} = undef;
     $self->{do_die} = 0;
 
-    $self->{read_buf} = [];        # scalar refs of bufs read from client
+    $self->{read_buf} = [];        # arrayref of scalar refs of bufs read from client
     $self->{read_ahead} = 0;       # bytes sitting in read_buf
     $self->{read_size} = 0;        # total bytes read from client
 

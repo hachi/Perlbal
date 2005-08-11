@@ -1,3 +1,8 @@
+    -- fix potential crashing bugs in the PUT path.  luckily ones we
+       never hit.
+
+    -- lots and lots of code cleanup
+
     -- load plugins by either the exact case specified, all lowercase,
        or all lowercase with first letter uppercase.  then remember
        the case for unloading (which was never implemented?)

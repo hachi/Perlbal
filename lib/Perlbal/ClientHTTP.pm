@@ -126,7 +126,10 @@ sub handle_put {
     return $self->send_response(403) unless $self->{service}->{enable_put};
 
     # they want to put something, so let's setup and wait for more reads
-    my $clen = $hd->header('Content-length') + 0;
+    my $clen =
+        $self->{content_length} =
+        $self->{content_length_remain} =
+        $hd->header('Content-length') + 0;
 
     # return a 400 (bad request) if we got no content length or if it's
     # bigger than any specified max put size
@@ -135,20 +138,9 @@ sub handle_put {
         ($self->{service}->{max_put_size} &&
          $clen > $self->{service}->{max_put_size});
 
-    # if we have some data already from a header over-read, handle it by
-    # flattening it down to a single string as opposed to an array of stuff
-    if (defined $self->{read_size} && $self->{read_size} > 0) {
-        my $data = '';
-        foreach my $rdata (@{$self->{read_buf}}) {
-            $data .= ref $rdata ? $$rdata : $rdata;
-        }
-        $self->{read_buf} = $data;
-        $self->{content_length} = $clen;
-        $self->{content_length_remain} = $clen - $self->{read_size};
-    } else {
-        # setup to read the file
-        $self->{read_buf} = '';
-        $self->{content_length} = $self->{content_length_remain} = $clen;
+    # if we have some data already from a header over-read, note it
+    if (defined $self->{read_ahead} && $self->{read_ahead} > 0) {
+        $self->{content_length_remain} -= $self->{read_ahead};
     }
 
     # setup the directory asynchronously
@@ -242,13 +234,14 @@ sub event_read_put {
     }
 
     # got some data
-    $self->{read_buf} .= $$dataref;
+    push @{$self->{read_buf}}, $dataref;
     my $clen = length($$dataref);
-    $self->{read_size} += $clen;
+    $self->{read_size}  += $clen;
+    $self->{read_ahead} += $clen;
     $self->{content_length_remain} -= $clen;
 
     # handle put if we should
-    $self->put_writeout if $self->{read_size} >= 8192; # arbitrary
+    $self->put_writeout if $self->{read_ahead} >= 8192; # arbitrary
 
     # now, if we've filled the content of this put, we're done
     unless ($self->{content_length_remain}) {
@@ -322,11 +315,14 @@ sub put_writeout {
     return if $self->{service}->run_hook('put_writeout', $self);
     return if $self->{put_in_progress};
     return unless $self->{put_fh};
-    return unless $self->{read_size};
+    return unless $self->{read_ahead};
 
-    # dig out data to write
-    my ($data, $count) = ($self->{read_buf}, $self->{read_size});
-    ($self->{read_buf}, $self->{read_size}) = ('', 0);
+    my $data = join("", map { $$_ } @{$self->{read_buf}});
+    my $count = length $data;
+
+    # reset our input buffer
+    $self->{read_buf}   = [];
+    $self->{read_ahead} = 0;
 
     # okay, file is open, write some data
     $self->{put_in_progress} = 1;
@@ -341,7 +337,7 @@ sub put_writeout {
         $self->{put_in_progress} = 0;
 
         # now recursively call ourselves?
-        if ($self->{read_size}) {
+        if ($self->{read_ahead}) {
             $self->put_writeout;
             return;
         }
