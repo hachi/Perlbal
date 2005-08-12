@@ -143,8 +143,7 @@ sub handle_put {
         $self->{content_length_remain} -= $self->{read_ahead};
     }
 
-    # setup the directory asynchronously
-    return if $self->{put_fh};
+    return if $self->{service}->run_hook('handle_put', $self);
 
     # error in filename?  (any .. is an error)
     my $uri = $self->{req_headers}->request_uri;
