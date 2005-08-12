@@ -209,8 +209,7 @@ sub read_headers {
 
     my $extra = substr($self->{headers_string}, $idx+4);
     if (my $len = length($extra)) {
-        push @{$self->{read_buf}}, \$extra;
-        $self->{read_size} = $self->{read_ahead} = $len;
+        $self->push_back_read(\$extra);
         print "post-header extra: $len bytes\n" if Perlbal::DEBUG >= 2;
     }
 
