@@ -62,6 +62,7 @@ sub new_from_base {
     my Perlbal::ClientHTTPBase $cb = shift;
     bless $cb, $class;
     $cb->init;
+    $cb->watch_read(1);
     $cb->event_read($cb->{req_headers});  # see comments in event_read: we're jumping into the middle of the process
     return $cb;
 }

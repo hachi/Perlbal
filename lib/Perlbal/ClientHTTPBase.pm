@@ -204,6 +204,13 @@ sub event_read {
     my $hd = $self->read_request_headers;
     return unless $hd;
 
+    # we must stop watching for events now, otherwise if there's
+    # PUT/POST overflow, it'll be sent to ClientHTTPBase, which can't
+    # handle it yet.  must wait for the selector (which has as much
+    # time as it wants) to route as to our subclass, which can then
+    # renable reads.
+    $self->watch_read(0);
+
     # now that we have headers, it's time to tell the selector
     # plugin that it's time for it to select which real service to
     # use
@@ -529,7 +536,6 @@ sub as_string {
 }
 
 1;
-
 
 # Local Variables:
 # mode: perl

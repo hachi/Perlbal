@@ -43,10 +43,12 @@ sub new {
 # "full-fledged" ClientHTTP.
 sub new_from_base {
     my $class = shift;
-    my Perlbal::ClientHTTPBase $cb = shift;
+    my Perlbal::ClientHTTPBase $cb = shift;    # base object
     bless $cb, $class;
     $cb->init;
-    $cb->handle_request;
+
+    $cb->watch_read(1);   # enable our reads, so we can get PUT/POST data
+    $cb->handle_request;  # this will disable reads, if GET/HEAD/etc
     return $cb;
 }
 
@@ -239,11 +241,10 @@ sub event_read_put {
     $self->{read_ahead} += $clen;
     $self->{content_length_remain} -= $clen;
 
-    # handle put if we should
-    $self->put_writeout if $self->{read_ahead} >= 8192; # arbitrary
-
-    # now, if we've filled the content of this put, we're done
-    unless ($self->{content_length_remain}) {
+    if ($self->{content_length_remain}) {
+        $self->put_writeout if $self->{read_ahead} >= 8192; # arbitrary
+    } else {
+        # now, if we've filled the content of this put, we're done
         $self->watch_read(0);
         $self->put_writeout;
     }
@@ -310,6 +311,7 @@ sub start_put_open {
 # called when we've got some put data to write out
 sub put_writeout {
     my Perlbal::ClientHTTP $self = shift;
+    Carp::confess("wrong class for $self") unless ref $self eq "Perlbal::ClientHTTP";
 
     return if $self->{service}->run_hook('put_writeout', $self);
     return if $self->{put_in_progress};
