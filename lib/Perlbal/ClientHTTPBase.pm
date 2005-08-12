@@ -289,6 +289,9 @@ sub _serve_request {
     # start_serve_request hook
     return 1 if $self->{service}->run_hook('start_serve_request', $self, \$uri);
 
+    return $self->_simple_response(500, "Docroot unconfigured")
+        unless $svc->{docroot};
+
     my $file = $svc->{docroot} . $uri;
 
     # update state, since we're now waiting on stat
