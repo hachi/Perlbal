@@ -25,7 +25,7 @@ use fields (
                                  # and the headers we get back aren't necessarily
                                  # the ones we want.  instead, get most headers
                                  # from the provided res headers object here.
-            'is_buffering',        # bool; if we're buffering an upload
+            'is_buffering',        # bool; if we're buffering some/all of a request to memory/disk
             'is_writing',          # bool; if on, we currently have an aio_write out
             'start_time',          # hi-res time when we started getting data to upload
             'bufh',                # buffered upload filehandle object
@@ -33,6 +33,7 @@ use fields (
             'bureason',            # string; if defined, the reason we're buffering to disk
             'buoutpos',            # int; buffered output position
             'backend_stalled',   # boolean:  if backend has shut off its reads because we're too slow.
+            'unread_data_waiting',  # boolean:  if we shut off reads while we know data is yet to be read from client
             );
 
 use constant READ_SIZE         => 4096;    # 4k, arbitrary
@@ -76,6 +77,7 @@ sub init {
     $self->{high_priority} = 0;
 
     $self->{responded} = 0;
+    $self->{unread_data_waiting} = 0;
     $self->{content_length_remain} = undef;
     $self->{backend_requested} = 0;
 
@@ -166,7 +168,6 @@ sub too_far_behind_backend {
 
     return $self->{write_buf_size} > $max_buffer;
 }
-
 
 # this is a callback for when a backend has been created and is
 # ready for us to do something with it
@@ -353,6 +354,28 @@ sub backend {
     return $self->{backend} = $backend;
 }
 
+# invoked by backend when it wants us to start watching for reads again
+# and feeding it data (if we have any)
+sub backend_ready {
+    my Perlbal::ClientProxy $self = $_[0];
+    my Perlbal::BackendHTTP $be = $_[1];
+
+    # if we'd turned ourselves off while we waited for a backend, turn
+    # ourselves back on, because the backend is ready for data now.
+    if ($self->{unread_data_waiting}) {
+        $self->watch_read(1);
+    }
+
+    # normal, not-buffered-to-disk case:
+    return $self->drain_read_buf_to($be) unless $self->{bureason};
+
+    # buffered-to-disk case.
+
+    # tell the backend it has to go into buffered_upload_mode,
+    # which makes it inform us of its writable availability
+    $be->invoke_buffered_upload_mode;
+}
+
 # our backend enqueues a call to this method in our write buffer, so this is called
 # right after we've finished sending all of the results to the user.  at this point,
 # if we were doing keep-alive, we don't close and setup for the next request.
@@ -366,15 +389,12 @@ sub backend_finished {
     # our backend is done with us, so we disconnect ourselves from it
     $self->{backend} = undef;
 
-    # now, two cases; undefined clr, or defined and zero, or defined and non-zero
-    if (defined $self->{content_length_remain}) {
-        # defined, so a POST, close if it's 0 or less
-        return $self->http_response_sent
-            if $self->{content_length_remain} <= 0;
-    } else {
-        # not defined, so we're ready for another connection?
-        return $self->http_response_sent;
-    }
+    # backend is done sending data to us, so we can recycle this clientproxy
+    # if we don't have any data yet to read
+    return $self->http_response_sent unless $self->{unread_data_waiting};
+
+    # FIXME: else what happens?  we slurp it up in event_read?  should
+    # we 500 here?
 }
 
 # called when we've sent a response to a user fully and we need to reset state
@@ -402,6 +422,17 @@ sub http_response_sent {
     $self->{buoutpos} = 0;
     $self->{bureason} = undef;
     return 1;
+}
+
+
+sub request_backend {
+    my Perlbal::ClientProxy $self = shift;
+    return if $self->{backend_requested};
+    $self->{backend_requested} = 1;
+
+    $self->state('wait_backend');
+    $self->{service}->request_backend_connection($self);
+    $self->tcp_cork(1);  # cork writes to self
 }
 
 # Client (overrides and calls super)
@@ -446,16 +477,6 @@ sub event_write {
     }
 }
 
-sub request_backend {
-    my Perlbal::ClientProxy $self = shift;
-    return if $self->{backend_requested};
-    $self->{backend_requested} = 1;
-
-    $self->state('wait_backend');
-    $self->{service}->request_backend_connection($self);
-    $self->tcp_cork(1);  # cork writes to self
-}
-
 # ClientProxy
 sub event_read {
     my Perlbal::ClientProxy $self = shift;
@@ -473,7 +494,6 @@ sub event_read {
     # otherwise shut off read notifications
     unless ($self->{is_buffering} || $self->{read_ahead} < READ_AHEAD_SIZE) {
         # our buffer is full, so turn off reads for now
-        print "DISABLING READS.\n";
         $self->watch_read(0);
         return;
     }
@@ -484,7 +504,9 @@ sub event_read {
 
     # read the MIN(READ_SIZE, content_length_remain)
     my $read_size = READ_SIZE;
-    $read_size = $self->{content_length_remain} if $self->{content_length_remain} < $read_size;
+    my $remain = $self->{content_length_remain};
+
+    $read_size = $remain if $remain && $remain < $read_size;
     my $bref = $self->read($read_size);
 
     # if the read returned undef, that means the connection was closed
@@ -497,14 +519,6 @@ sub event_read {
         return $self->close('user_disconnected');
     }
 
-    # calling drain_read_buf_to will send anything we've already got
-    # to the backend if we have one. it dumps everything in the read
-    # buffer. after this, there should be no read buffer left, which
-    # means $bref is the only outstanding data that hasn't been sent to
-    # any backend we have.
-    my $backend = $self->backend;
-    $self->drain_read_buf_to($backend) if $backend;
-
     # now that we know we have a defined value, determine how long it is, and do
     # housekeeping to keep our tracking numbers up to date.
     my $len = length($$bref);
@@ -512,6 +526,8 @@ sub event_read {
     $self->{read_size} += $len;
     $self->{content_length_remain} -= $len
         if defined $self->{content_length_remain};
+
+    my $backend = $self->backend;
 
     # just dump the read into the nether if we're dangling. that is
     # the case when we send the headers to the backend and it responds
@@ -544,34 +560,30 @@ sub event_read {
     push @{$self->{read_buf}}, $bref;
     $self->{read_ahead} += $len;
 
-    # if we know we've already started spooling a file to disk, then continue
-    # to do that.
-    if ($self->{bureason}) {
-        $self->buffered_upload_update;
-        return;
-    }
-
-    # if we have no data left to read, then we should request a backend and bail
-    if (defined $self->{content_length_remain} && $self->{content_length_remain} <= 0) {
+    # if we have no data left to read, stop reading.  all that can
+    # come later is an extra \r\n which we handle later when parsing
+    # new request headers.  and if it's something else, we'll bail on
+    # the next request, not this one.
+    my $done_reading = defined $self->{content_length_remain} && $self->{content_length_remain} <= 0;
+    if ($done_reading) {
         Carp::confess("content_length_remain less than zero: self->{content_length_remain}")
             if $self->{content_length_remain} < 0;
-        return $self->request_backend;
+        $self->{unread_data_waiting} = 0;
+        $self->watch_read(0);
     }
 
-    # if we are under our buffer size, just continue buffering here and
+    # if we know we've already started spooling a file to disk, then continue
+    # to do that.
+    return $self->buffered_upload_update if $self->{bureason};
+
+    # if we are under our buffer-to-memory size, just continue buffering here and
     # don't fall through to the backend request call below
-    if ($self->{read_ahead} < $self->{service}->{buffer_backend_connect}) {
-        return;
-    }
+    return if
+        ! $done_reading &&
+        $self->{read_ahead} < $self->{service}->{buffer_backend_connect};
 
-    # over the buffer size, see if we should start spooling to disk
-    if ($self->{service}->{buffer_uploads}) {
-        if ($self->do_buffer_to_disk) {
-            # yes, enable spooling to disk
-            $self->buffered_upload_update;
-            return;
-        }
-    }
+    # over the buffer-to-memory size, see if we should start spooling to disk.
+    return if $self->{service}->{buffer_uploads} && $self->decide_to_buffer_to_disk;
 
     # if we fall through to here, we need to ensure that a backend is on the
     # way, because no specialized handling took over above
@@ -590,22 +602,27 @@ sub handle_request {
     # subtract out read_size, which is the amount of data that was
     # extra in the packet with the header that's part of the body.
     $self->{content_length_remain} = $req_hd->content_length;
+    $self->{unread_data_waiting} = 1 if $self->{content_length_remain};
 
     # note that we've gotten a request
     $self->{requests}++;
     $self->{last_request_time} = $self->{alive_time};
 
-    # common case:  we're not buffering, or it's just a GET/HEAD request (no body)
-    unless ($self->{content_length_remain} && $self->{service}->{buffer_backend_connect}) {
+    # either start buffering some of the request to memory, or
+    # immediately request a backend connection.
+    if ($self->{content_length_remain} && $self->{service}->{buffer_backend_connect}) {
+        # the deeper path
+        $self->start_buffering_request;
+    } else {
         # get the backend request process moving, since we aren't buffering
         $self->{is_buffering} = 0;
         $self->request_backend;
-    } else {
-        # the deeper path
-        $self->start_buffering_request;
     }
 }
 
+# continuation of handle_request, in the case where we need to start buffering
+# a bit of the request body to memory, either hoping that's all of it, or to
+# make a determination of whether or not we should save it all to disk first
 sub start_buffering_request {
     my Perlbal::ClientProxy $self = shift;
 
@@ -636,6 +653,54 @@ sub start_buffering_request {
         if $self->{service}->{buffer_uploads};
 }
 
+# looks at our states and decides if we should start writing to disk
+# or should just go ahead and blast this to the backend.  returns 1
+# if the decision was made to buffer to disk
+sub decide_to_buffer_to_disk {
+    my Perlbal::ClientProxy $self = shift;
+    return unless $self->{is_buffering};
+    return $self->{bureason} if defined $self->{bureason};
+
+    # this is called when we have enough data to determine whether or not to
+    # start buffering to disk
+    my $dur = tv_interval($self->{start_time}) || 1;
+    my $rate = $self->{read_ahead} / $dur;
+    my $etime = $self->{content_length_remain} / $rate;
+
+    # see if we have enough data to make the determination
+    my $reason = undef;
+
+    # see if we blow the rate away
+    if ($self->{service}->{buffer_upload_threshold_rate} > 0 &&
+            $rate < $self->{service}->{buffer_upload_threshold_rate}) {
+        # they are slower than the minimum rate
+        $reason = 'rate';
+    }
+
+    # and finally check estimated time exceeding
+    if ($self->{service}->{buffer_upload_threshold_time} > 0 &&
+            $etime > $self->{service}->{buffer_upload_threshold_time}) {
+        # exceeds
+        $reason = 'time';
+    }
+
+    unless ($reason) {
+        $self->{is_buffering} = 0;
+        return 0;
+    }
+
+    # start saving it to disk
+    $self->state('buffering_upload');
+    $self->buffered_upload_update;
+    $self->{bureason} = $reason;
+
+    if ($ENV{PERLBAL_DEBUG_BUFFERED_UPLOADS}) {
+        $self->{req_headers}->header('X-PERLBAL-BUFFERED-UPLOAD-REASON', $reason);
+    }
+
+    return 1;
+}
+
 # take ourselves and send along our buffered data to the backend
 sub send_buffered_upload {
     my Perlbal::ClientProxy $self = shift;
@@ -643,7 +708,7 @@ sub send_buffered_upload {
     # make sure our buoutpos is the same as the content length...
     my $clen = $self->{req_headers}->content_length;
     if ($clen != $self->{buoutpos}) {
-        Perlbal::log('critical', "Content length ($clen) read, only $self->{buoutpos} bytes written");
+        Perlbal::log('critical', "Content length of $clen declared but $self->{buoutpos} bytes written to disk");
         return $self->_simple_response(500);
     }
 
@@ -652,32 +717,7 @@ sub send_buffered_upload {
     sysseek($self->{bufh}, 0, 0);
 
     # notify that we want the backend so we get the ball rolling
-    $self->state('wait_backend');
-    $self->{service}->request_backend_connection($self);
-    $self->tcp_cork(1);  # cork writes to self
-}
-
-# overridden for buffered upload handling; note that this is called by
-# the backend at the very beginning before it starts us reading again,
-# because it wants us to dump our existing read buf.  however, since we
-# know we may be doing a buffered upload, we check for that, and if we
-# are, then we tell the backend to treat us as a buffered upload in the
-# future!  nifty.
-sub drain_read_buf_to {
-    my Perlbal::ClientProxy $self = shift;
-    return $self->SUPER::drain_read_buf_to(@_)
-        unless $self->{bureason};
-
-    # so, we're buffering an upload, we need to go ahead and start the
-    # buffered upload retransmission to backend process. we have to turn
-    # watching for writes on, since that's what is doing the triggering,
-    # NOT the normal client proxy watch for read
-    my Perlbal::BackendHTTP $be = shift;
-    $be->{buffered_upload_mode} = 1;
-    $be->watch_write(1);
-
-    # now start the first batch sending
-    $self->continue_buffered_upload($be);
+    $self->request_backend;
 }
 
 sub continue_buffered_upload {
@@ -704,24 +744,6 @@ sub continue_buffered_upload {
     }
 
     # we will be called again by the backend since buffered_upload_mode is on
-}
-
-# destroy any files we've created
-sub purge_buffered_upload {
-    my Perlbal::ClientProxy $self = shift;
-
-    # first close our filehandle... not async
-    CORE::close($self->{bufh});
-    $self->{bufh} = undef;
-
-    # now asyncronously unlink the file
-    Perlbal::AIO::aio_unlink($self->{bufilename}, sub {
-        if ($!) {
-            # note an error, but whatever, we'll either overwrite the file later (O_TRUNC | O_CREAT)
-            # or a cleaner will come through and do it for us someday (if the user runs one)
-            Perlbal::log('warning', "Unable to link $self->{bufilename}: $!");
-        }
-    });
 }
 
 # write data to disk
@@ -797,58 +819,24 @@ sub buffered_upload_update {
     });
 }
 
-# looks at our states and decides if we should start writing to disk
-# or should just go ahead and blast this to the backend
-sub do_buffer_to_disk {
+# destroy any files we've created
+sub purge_buffered_upload {
     my Perlbal::ClientProxy $self = shift;
-    return unless $self->{is_buffering};
-    return $self->{bureason}
-        if defined $self->{bureason};
 
-    # this is called when we have enough data to determine whether or not to
-    # start buffering to disk
-    my $dur = tv_interval($self->{start_time}) || 1;
-    my $rate = $self->{read_ahead} / $dur;
-    my $etime = $self->{content_length_remain} / $rate;
+    # first close our filehandle... not async
+    CORE::close($self->{bufh});
+    $self->{bufh} = undef;
 
-    # see if we have enough data to make the determination
-    my $to_disk = undef;
-
-    # see if we blow the rate away
-    if ($self->{service}->{buffer_upload_threshold_rate} > 0 &&
-            $rate < $self->{service}->{buffer_upload_threshold_rate}) {
-        # they are slower than the minimum rate
-        $to_disk = 'rate';
-    }
-
-    # and finally check estimated time exceeding
-    if ($self->{service}->{buffer_upload_threshold_time} > 0 &&
-            $etime > $self->{service}->{buffer_upload_threshold_time}) {
-        # exceeds
-        $to_disk = 'time';
-    }
-
-    # now one of two things happens...
-    if ($to_disk) {
-        # start saving it to disk
-        $self->state('buffering_upload');
-        $self->buffered_upload_update;
-        $self->{bureason} = $to_disk;
-
-        if ($ENV{PERLBAL_DEBUG_BUFFERED_UPLOADS}) {
-            $self->{req_headers}->header('X-PERLBAL-BUFFERED-UPLOAD-REASON', $to_disk);
+    # now asyncronously unlink the file
+    Perlbal::AIO::aio_unlink($self->{bufilename}, sub {
+        if ($!) {
+            # note an error, but whatever, we'll either overwrite the file later (O_TRUNC | O_CREAT)
+            # or a cleaner will come through and do it for us someday (if the user runs one)
+            Perlbal::log('warning', "Unable to link $self->{bufilename}: $!");
         }
-
-    } else {
-        # do not buffer the file.  start sending what we have.
-        $self->{is_buffering} = 0;
-
-        # now set our state, cork, get a backend and go
-        $self->state('wait_backend');
-        $self->{service}->request_backend_connection($self);
-        $self->tcp_cork(1);
-    }
+    });
 }
+
 
 sub as_string {
     my Perlbal::ClientProxy $self = shift;

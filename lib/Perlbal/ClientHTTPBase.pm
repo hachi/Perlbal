@@ -194,6 +194,11 @@ sub reproxy_fh {
     return $self->{reproxy_fh};
 }
 
+sub read_request_headers {
+    my Perlbal::ClientHTTPBase $self = shift;
+    return $self->SUPER::read_request_headers($self->{requests} > 0);
+}
+
 sub event_read {
     my Perlbal::ClientHTTPBase $self = shift;
 

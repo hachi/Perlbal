@@ -69,6 +69,14 @@ sub request {
     return undef unless $self->{server};
 
     my $opts = ref $_[0] eq "HASH" ? shift : {};
+    my $opt_headers           = delete $opts->{'headers'};
+    my $opt_host              = delete $opts->{'host'};
+    my $opt_method            = delete $opts->{'method'};
+    my $opt_content           = delete $opts->{'content'};
+    my $opt_extra_rn          = delete $opts->{'extra_rn'};
+    my $opt_return_reader     = delete $opts->{'return_reader'};
+    my $opt_post_header_pause = delete $opts->{'post_header_pause'};
+    die "Bogus options: " . join(", ", keys %$opts) if %$opts;
 
     my $cmds = join(',', map { eurl($_) } @_);
     return undef unless $cmds;
@@ -81,22 +89,31 @@ sub request {
         $headers .= "Connection: close\r\n";
     }
 
-    if ($opts->{'headers'}) {
-        $headers .= $opts->{'headers'};
+    if ($opt_headers) {
+        $headers .= $opt_headers;
     }
 
-    if (my $hostname = $opts->{host} || $self->{host}) {
+    if (my $hostname = $opt_host || $self->{host}) {
         $headers .= "Host: $hostname\r\n";
     }
-    my $method = $opts->{method} || "GET";
+    my $method = $opt_method || "GET";
     my $body = "";
 
-    if ($opts->{content}) {
-        $headers .= "Content-Length: " . length($opts->{'content'}) . "\r\n";
-        $body = $opts->{content};
+    if ($opt_content) {
+        $headers .= "Content-Length: " . length($opt_content) . "\r\n";
+        $body = $opt_content;
     }
 
-    my $send = "$method /$cmds HTTP/$self->{http_version}\r\n$headers\r\n$body";
+    if ($opt_extra_rn) {
+        $body .= "\r\n";  # some browsers on POST send an extra \r\n that's not part of content-length
+    }
+
+    my $send = "$method /$cmds HTTP/$self->{http_version}\r\n$headers\r\n";
+
+    unless ($opt_post_header_pause) {
+        $send .= $body;
+    }
+
     my $len = length $send;
 
     # send setup
@@ -130,6 +147,19 @@ sub request {
         }
     }
 
+    if ($opt_post_header_pause) {
+        select undef, undef, undef, $opt_post_header_pause;
+        my $len = length $body;
+        if ($len) {
+            my $rv = send($sock, $body, $FLAG_NOSIGNAL);
+            if ($! || ! defined $rv) {
+                undef $self->{_sock};
+            } elsif ($rv != $len) {
+                return undef;
+            }
+        }
+    }
+
     my $parse_it = sub {
         my ($resp, $firstline) = resp_from_sock($sock);
 
@@ -145,7 +175,7 @@ sub request {
         return $resp;
     };
 
-    if ($opts->{return_reader}) {
+    if ($opt_return_reader) {
         return $parse_it;
     } else {
         return $parse_it->();

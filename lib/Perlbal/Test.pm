@@ -81,6 +81,15 @@ sub start_server {
     my $conf = shift;
     $mgmt_port = new_port();
 
+    if ($ENV{'TEST_PERLBAL_FOREGROUND'}) {
+        _start_perbal_server($conf, $mgmt_port);
+    }
+
+    if ($ENV{'TEST_PERLBAL_USE_EXISTING'}) {
+        my $msock = wait_on_child(0, $mgmt_port);
+        return $msock;
+    }
+
     my $child = fork;
     if ($child) {
         $i_am_parent = 1;
@@ -104,6 +113,11 @@ sub start_server {
     }
 
     # child process...
+    _start_perbal_server($conf, $mgmt_port);
+}
+
+sub _start_perbal_server {
+    my ($conf, $mgmt_port) = @_;
 
     require Perlbal;
 
@@ -145,7 +159,7 @@ sub wait_on_child {
         $msock = IO::Socket::INET->new(PeerAddr => "127.0.0.1:$port");
         return $msock if $msock;
         select undef, undef, undef, 0.25;
-        if (waitpid($pid, WNOHANG) > 0) {
+        if ($pid && waitpid($pid, WNOHANG) > 0) {
             die "Child process (webserver) died.\n";
         }
         die "Timeout waiting for port $port to startup" if time > $start + 5;

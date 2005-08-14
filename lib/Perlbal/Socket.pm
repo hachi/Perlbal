@@ -180,10 +180,13 @@ sub run_callbacks {
 # can override.
 sub max_idle_time { 0; }
 
-# Socket: specific to HTTP socket types
+# Socket: specific to HTTP socket types (only here and not in
+# ClientHTTPBase because ClientManage wants it too)
+sub read_request_headers  { read_headers($_[0], 0, $_[1]); }
+sub read_response_headers { read_headers($_[0], 1); }
 sub read_headers {
     my Perlbal::Socket $self = shift;
-    my $is_res = shift;
+    my ($is_res, $accept_leading_rn) = @_;
 
     $Perlbal::reqs++ unless $is_res;
 
@@ -212,6 +215,12 @@ sub read_headers {
         $self->push_back_read(\$extra);
         print "post-header extra: $len bytes\n" if Perlbal::DEBUG >= 2;
     }
+
+    # some browsers send an extra \r\n after their POST bodies that isn't
+    # in their content-length.  a base class can tell us when they're
+    # on their 2nd+ request after a POST and tell us to be ready for that
+    # condition, and we'll clean it up
+    $hstr =~ s/^\r\n// if $accept_leading_rn;
 
     unless (($is_res ? $self->{res_headers} : $self->{req_headers}) =
                 Perlbal::HTTPHeaders->new(\$hstr, $is_res)) {
@@ -263,9 +272,6 @@ sub state {
     push @{$state_changes{"$self"} ||= []}, $_[0] if Perlbal::TRACK_STATES;
     return $self->{state} = $_[0];
 }
-
-sub read_request_headers  { read_headers(@_, 0); }
-sub read_response_headers { read_headers(@_, 1); }
 
 sub as_string_html {
     my Perlbal::Socket $self = shift;

@@ -1057,8 +1057,7 @@ sub return_to_base {
     $cb->{service} = $self;
     bless $cb, "Perlbal::ClientHTTPBase";
 
-    $cb->watch_write(0);
-    $cb->watch_read(1);
+    # the read/watch events are reset by ClientHTTPBase's http_response_sent (our caller)
 }
 
 # Service

@@ -211,15 +211,24 @@ sub assign_client {
             $self->watch_read(1);
             $self->state("wait_res");
             $client->state('wait_res');
-            # make the client push its overflow reads (request body)
-            # to the backend
-            $client->drain_read_buf_to($self);
-            # and start watching for more reads
-            $client->watch_read(1);
+            $client->backend_ready($self);
         }
     });
 
     return 1;
+}
+
+# called by ClientProxy after we tell it our backend is ready and
+# it has an upload ready on disk
+sub invoke_buffered_upload_mode {
+    my Perlbal::BackendHTTP $self = shift;
+
+    # so, we're receiving a buffered upload, we need to go ahead and
+    # start the buffered upload retransmission to backend process. we
+    # have to turn watching for writes on, since that's what is doing
+    # the triggering, NOT the normal client proxy watch for read
+    $self->{buffered_upload_mode} = 1;
+    $self->watch_write(1);
 }
 
 # Backend
