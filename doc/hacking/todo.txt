@@ -38,3 +38,15 @@
 * let rules map to pools (selectors), or set things like idempotent
 
 * disabling services that have no listen configured anyway --- can they still be selected to?
+
+* SSL proxying (IO::Socket::SSL drop-in replacement already exists)
+
+* Proxying non-HTTP services
+  -- hard bit:  SMTP/etc needs original client IP.  ignore that and document that deficiency?
+
+* configurable backend monitors
+  -- "every 15 seconds telnet to this port number and say 'are you okay'?  they must reply "YES" or "NO""
+     -- mysql specific inetd plugins to check replication/etc?
+
+* more global & per node/service/pool bytes in/out
+

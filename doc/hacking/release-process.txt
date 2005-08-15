@@ -1,0 +1,30 @@
+* check all dependencies/version
+  -- right Danga::Socket distro
+
+* check MANIFEST file
+
+* make sure version number is updated.
+
+* run "make docs" to update auto-generate config docs
+
+* make dist, but don't distribute.  test on:
+
+* passes test suite on:
+  -- Linux x86 (Debian)
+  -- Linux x86_64
+     -- Debian and Fedora Core
+  -- Linux Itanium
+  -- Linux PowerPPC
+  -- FreeBSD (will still warn about lack of good sendfile?)
+
+* passes test suite with XS headers
+  -- PERLBAL_XS_HTTPHEADERS=1 (?) set in environment during make test
+
+* test on 1 perlbal node on LiveJournal.com
+  -- watch for CPU usage
+  -- watch/listen for user reports in weird/broken browsers
+     -- if so, write more test cases
+  -- watch for fd leaks
+  -- watch for memory leaks
+
+
