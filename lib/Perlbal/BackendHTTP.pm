@@ -102,8 +102,6 @@ sub new {
     $self->{req_headers} = undef;
     $self->{res_headers} = undef;  # defined w/ headers object once all headers in
     $self->{headers_string} = "";  # blank to start
-    $self->{read_buf} = [];        # scalar refs of bufs read from client
-    $self->{read_ahead} = 0;       # bytes sitting in read_buf
     $self->{read_size} = 0;        # total bytes read from client
 
     $self->{client}   = undef;     # Perlbal::ClientProxy object, initially empty
@@ -283,36 +281,133 @@ sub verify_failure {
     return;
 }
 
+sub event_read_waiting_options { # : void
+    my Perlbal::BackendHTTP $self = shift;
+    if ($self->{content_length_remain}) {
+        # the HTTP/1.1 spec says OPTIONS responses can have content-lengths,
+        # but the meaning of the response is reserved for a future spec.
+        # this just gobbles it up for.
+        my $bref = $self->read(BACKEND_READ_SIZE);
+        return $self->verify_failure unless defined $bref;
+        $self->{content_length_remain} -= length($$bref);
+    } elsif (my $hd = $self->read_response_headers) {
+        # see if we have keep alive support
+        return $self->verify_failure unless $hd->res_keep_alive_options;
+        $self->{content_length_remain} = $hd->header("Content-Length");
+    }
+
+    # if we've got the option response and read any response data
+    # if present:
+    if ($self->{res_headers} && ! $self->{content_length_remain}) {
+        # other setup to mark being done with options checking
+        $self->{waiting_options} = 0;
+        $self->{has_attention} = 1;
+        $NodeStats{$self->{ipport}}->{verifies}++;
+        $self->next_request(1); # initial
+    }
+    return;
+}
+
+sub handle_response { # : void
+    my Perlbal::BackendHTTP $self = shift;
+    my Perlbal::HTTPHeaders $hd = $self->{res_headers};
+    my Perlbal::ClientProxy $client = $self->{client};
+
+    print "BackendHTTP: handle_response\n" if Perlbal::DEBUG >= 2;
+
+    # note we got this response code
+    my $ref = ($NodeStats{$self->{ipport}}->{responsecodes} ||= []);
+    push @$ref, $hd->response_code;
+    if (scalar(@$ref) > 500) {
+        shift @$ref;
+    }
+
+    # call service response received function
+    return if $self->{reportto}->backend_response_received($self);
+
+    # standard handling
+    $self->state("xfer_res");
+    $client->state("xfer_res");
+    $self->{has_attention} = 1;
+
+    # RFC 2616, Sec 4.4: Messages MUST NOT include both a
+    # Content-Length header field and a non-identity
+    # transfer-coding. If the message does include a non-
+    # identity transfer-coding, the Content-Length MUST be
+    # ignored.
+    my $te = $hd->header("Transfer-Encoding");
+    if ($te && $te !~ /\bidentity\b/i) {
+        $hd->header("Content-Length", undef);
+    }
+
+    my Perlbal::HTTPHeaders $rqhd = $self->{req_headers};
+
+    # setup our content length so we know how much data to expect, in general
+    # we want the content-length from the response, but if this was a head request
+    # we know it's a 0 length message the client wants
+    if ($rqhd->request_method eq 'HEAD') {
+        $self->{content_length} = 0;
+    } else {
+        $self->{content_length} = $hd->content_length;
+    }
+    $self->{content_length_remain} = $self->{content_length} || 0;
+
+    if (my $rep = $hd->header('X-REPROXY-FILE')) {
+        # make the client begin the async IO while we move on
+        $client->start_reproxy_file($rep, $hd);
+        $self->next_request;
+        return;
+    } elsif (my $urls = $hd->header('X-REPROXY-URL')) {
+        $client->start_reproxy_uri($self->{res_headers}, $urls);
+        $self->next_request;
+        return;
+    } else {
+        my $res_source = $client->{primary_res_hdrs} || $hd;
+        my $thd = $client->{res_headers} = $res_source->clone;
+
+        # setup_keepalive will set Connection: and Keep-Alive: headers for us
+        # as well as setup our HTTP version appropriately
+        $client->setup_keepalive($thd);
+
+        # if we had an alternate primary response header, make sure
+        # we send the real content-length (from the reproxied URL)
+        # and not the one the first server gave us
+        if ($client->{primary_res_hdrs}) {
+            $thd->header('Content-Length', $hd->header('Content-Length'));
+            $thd->header('X-REPROXY-FILE', undef);
+            $thd->header('X-REPROXY-URL', undef);
+            $thd->header('X-REPROXY-EXPECTED-SIZE', undef);
+
+            # also update the response code, in case of 206 partial content
+            my $rescode = $hd->response_code;
+            $thd->code($rescode) if $rescode == 206 || $rescode == 416;
+        }
+
+        print "  writing response headers to client\n" if Perlbal::DEBUG >= 3;
+        $client->write($thd->to_string_ref);
+
+        print("  content_length=", (defined $self->{content_length} ? $self->{content_length} : "(undef)"),
+              "  remain=",         (defined $self->{content_length_remain} ? $self->{content_length_remain} : "(undef)"), "\n")
+            if Perlbal::DEBUG >= 3;
+
+        if (defined $self->{content_length} && ! $self->{content_length_remain}) {
+            print "  done.  detaching.\n" if Perlbal::DEBUG >= 3;
+            # order important:  next_request detaches us from client, so
+            # $client->close can't kill us
+            $self->next_request;
+            $client->write(sub {
+                $client->backend_finished;
+            });
+        }
+    }
+}
+
 # Backend
 sub event_read {
     my Perlbal::BackendHTTP $self = shift;
     print "Backend $self is readable!\n" if Perlbal::DEBUG >= 2;
 
-    if ($self->{waiting_options}) {
-        if ($self->{content_length_remain}) {
-            # the HTTP/1.1 spec says OPTIONS responses can have content-lengths,
-            # but the meaning of the response is reserved for a future spec.
-            # this just gobbles it up for.
-            my $bref = $self->read(BACKEND_READ_SIZE);
-            return $self->verify_failure unless defined $bref;
-            $self->{content_length_remain} -= length($$bref);
-        } elsif (my $hd = $self->read_response_headers) {
-            # see if we have keep alive support
-            return $self->verify_failure unless $hd->res_keep_alive_options;
-            $self->{content_length_remain} = $hd->header("Content-Length");
-        }
-
-        # if we've got the option response and read any response data
-        # if present:
-        if ($self->{res_headers} && ! $self->{content_length_remain}) {
-            # other setup to mark being done with options checking
-            $self->{waiting_options} = 0;
-            $self->{has_attention} = 1;
-            $NodeStats{$self->{ipport}}->{verifies}++;
-            $self->next_request(1); # initial
-        }
-        return;
-    }
+    return $self->event_read_waiting_options if $self->{waiting_options};
 
     my Perlbal::ClientProxy $client = $self->{client};
 
@@ -324,93 +419,8 @@ sub event_read {
     return $self->close('read_with_no_client') unless $client;
 
     unless ($self->{res_headers}) {
-        if (my $hd = $self->read_response_headers) {
-            # note we got this response code
-            my $ref = ($NodeStats{$self->{ipport}}->{responsecodes} ||= []);
-            push @$ref, $hd->response_code;
-            if (scalar(@$ref) > 500) {
-                shift @$ref;
-            }
-
-            # call service response received function
-            return if $self->{reportto}->backend_response_received($self);
-
-            # standard handling
-            $self->state("xfer_res");
-            $client->state("xfer_res");
-            $self->{has_attention} = 1;
-
-            # RFC 2616, Sec 4.4: Messages MUST NOT include both a
-            # Content-Length header field and a non-identity
-            # transfer-coding. If the message does include a non-
-            # identity transfer-coding, the Content-Length MUST be
-            # ignored.
-            my $te = $hd->header("Transfer-Encoding");
-            if ($te && $te !~ /\bidentity\b/i) {
-                $hd->header("Content-Length", undef);
-            }
-
-            my Perlbal::HTTPHeaders $rqhd = $self->{req_headers};
-
-            # setup our content length so we know how much data to expect, in general
-            # we want the content-length from the response, but if this was a head request
-            # we know it's a 0 length message the client wants
-            if ($rqhd->request_method eq 'HEAD') {
-                $self->{content_length} = 0;
-            } else {
-                $self->{content_length} = $hd->content_length;
-            }
-            $self->{content_length_remain} = $self->{content_length} || 0;
-
-            if (my $rep = $hd->header('X-REPROXY-FILE')) {
-                # make the client begin the async IO while we move on
-                $client->start_reproxy_file($rep, $hd);
-                $self->next_request;
-                return;
-            } elsif (my $urls = $hd->header('X-REPROXY-URL')) {
-                $client->start_reproxy_uri($self->{res_headers}, $urls);
-                $self->next_request;
-                return;
-            } else {
-                my $res_source = $client->{primary_res_hdrs} || $hd;
-                my $thd = $client->{res_headers} = $res_source->clone;
-
-                # setup_keepalive will set Connection: and Keep-Alive: headers for us
-                # as well as setup our HTTP version appropriately
-                $client->setup_keepalive($thd);
-
-                # if we had an alternate primary response header, make sure
-                # we send the real content-length (from the reproxied URL)
-                # and not the one the first server gave us
-                if ($client->{primary_res_hdrs}) {
-                    $thd->header('Content-Length', $hd->header('Content-Length'));
-                    $thd->header('X-REPROXY-FILE', undef);
-                    $thd->header('X-REPROXY-URL', undef);
-                    $thd->header('X-REPROXY-EXPECTED-SIZE', undef);
-
-                    # also update the response code, in case of 206 partial content
-                    my $rescode = $hd->response_code;
-                    $thd->code($rescode) if $rescode == 206 || $rescode == 416;
-                }
-
-                $client->write($thd->to_string_ref);
-
-                # if we over-read anything from backend (most likely)
-                # then decrement it from our count of bytes we need to read
-                if (defined $self->{content_length}) {
-                    $self->{content_length_remain} -= $self->{read_ahead};
-                }
-                $self->drain_read_buf_to($client);
-
-                if (defined $self->{content_length} && ! $self->{content_length_remain}) {
-                    # order important:  next_request detaches us from client, so
-                    # $client->close can't kill us
-                    $self->next_request;
-                    $client->write(sub { $client->backend_finished; });
-                }
-            }
-        }
-        return;
+        return unless $self->read_response_headers;
+        return $self->handle_response;
     }
 
     # if our client's behind more than the max limit, stop buffering
