@@ -4,7 +4,7 @@ use strict;
 use Perlbal::Test;
 use Perlbal::Test::WebServer;
 use Perlbal::Test::WebClient;
-use Test::More tests => 20;
+use Test::More tests => 26;
 
 # option setup
 my $start_servers = 3; # web servers to start
@@ -49,6 +49,9 @@ my $pid = pid_of_resp($resp);
 ok($pid, 'web server functioning');
 is($wc->reqdone, 0, "didn't persist to perlbal");
 
+# verify 1 count
+is(req_count(), 1, 'stats show 1 request');
+
 # persisent is on, so let's do some more and see if they're counting up
 $wc->keepalive(1);
 $resp = $wc->request('status');
@@ -57,6 +60,9 @@ is($wc->reqdone, 1, "persist to perlbal");
 $resp = $wc->request('status');
 is(reqnum($resp), 3, "third request");
 is($wc->reqdone, 2, "persist to perlbal again");
+
+# verify 3 count
+is(req_count(), 3, 'stats show 3 requests');
 
 # turn persisent off and see that they're not going up
 ok(manage("SET test.persist_backend = 0"), "persist backend off");
@@ -68,6 +74,9 @@ $resp = $wc->request('status');  # dummy request
 $resp = $wc->request('status');
 is(reqnum($resp), 1, "first request");
 
+# verify 5 count
+is(req_count(), 5, 'stats show 5 requests');
+
 # make a second webclient now to test multiple requests at once, and
 # perlbal making multiple backend connections
 ok(manage("SET test.persist_backend = 1"), "persist backend back on");
@@ -77,6 +86,9 @@ $resp = $wc->request('status');
 $pid = pid_of_resp($resp);
 $resp = $wc->request('status');
 ok($pid == pid_of_resp($resp), "used same backend");
+
+# verify 7 count
+is(req_count(), 7, 'stats show 7 requests');
 
 # multiple parallel backends in operation
 $resp = $wc->request("subreq:$pb_port");
@@ -92,6 +104,8 @@ $pid = pid_of_resp($resp);
 $resp = $wc->request('keepalive:0', 'status');
 ok(pid_of_resp($resp) != $pid, "discarding keep-alive?");
 
+# verify 11 count
+is(req_count(), 11, 'stats show 11 requests');
 
 ######
 ###### verify_backend requests
@@ -108,6 +122,8 @@ ok(manage("SET test.verify_backend = 1"), "enabled verify");
 $resp = $wc->request('status');
 is(options($resp), 1, "got a backend that did an options");
 
+# verify 13 count
+is(req_count(), 13, 'stats show 13 requests');
 
 
 sub add_all {
@@ -150,6 +166,18 @@ sub options {
     my $resp = shift;
     return undef unless $resp && $resp->content =~ /^options = (\d+)$/m;
     return $1;
+}
+
+sub req_count {
+    my $msock = msock();
+    print $msock "nodes\r\n";
+    my $ct = 0;
+    while (<$msock>) {
+        last if /^\./;
+        next unless /\srequests\s(\d+)/;
+        $ct += $1;
+    }
+    return $ct;
 }
 
 1;
