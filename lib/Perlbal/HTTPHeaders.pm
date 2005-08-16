@@ -342,7 +342,9 @@ sub req_keep_alive {
     # well enough to do keep-alive.  FIXME: support chunked encoding in the
     # future, which means this check changes.
     return 1 if defined $res->header('Content-length') ||
-                $self->request_method eq 'HEAD';
+        $res->response_code == 304 || # not modified
+        $res->response_code == 204 || # no content
+        $self->request_method eq 'HEAD';
 
     # fail-safe, no keep-alive
     return 0;

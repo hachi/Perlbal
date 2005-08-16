@@ -99,6 +99,7 @@ sub close {
 # information back to the client
 sub setup_keepalive {
     my Perlbal::ClientHTTPBase $self = $_[0];
+    print "ClientHTTPBase::setup_keepalive($self)\n" if Perlbal::DEBUG >= 2;
 
     # now get the headers we're using
     my Perlbal::HTTPHeaders $reshd = $_[1];
@@ -110,15 +111,22 @@ sub setup_keepalive {
     # if we came in via a selector service, that's whose settings
     # we respect for persist_client
     my $svc = $self->{selector_svc} || $self->{service};
+    my $persist_client = $svc->{persist_client} || 0;
+    print "  service's persist_client = $persist_client\n" if Perlbal::DEBUG >= 3;
 
     # do keep alive if they sent content-length or it's a head request
-    my $do_keepalive = $svc->{persist_client} &&
-                       $rqhd->req_keep_alive($reshd);
+    my $do_keepalive = $persist_client && $rqhd->req_keep_alive($reshd);
     if ($do_keepalive) {
+        print "  doing keep-alive to client\n" if Perlbal::DEBUG >= 3;
         my $timeout = $self->max_idle_time;
         $reshd->header('Connection', 'keep-alive');
         $reshd->header('Keep-Alive', $timeout ? "timeout=$timeout, max=100" : undef);
     } else {
+        print "  doing connection: close\n" if Perlbal::DEBUG >= 3;
+        # FIXME: we don't necessarily want to set connection to close,
+        # but really set a space-separated list of tokens which are
+        # specific to the connection.  "close" and "keep-alive" are
+        # just special.
         $reshd->header('Connection', 'close');
         $reshd->header('Keep-Alive', undef);
     }
@@ -140,6 +148,14 @@ sub http_response_sent {
         # close if we have no response headers or they say to close
         $self->close("no_keep_alive");
         return 0;
+    }
+
+    # if they just did a POST, set the flag that says we might expect
+    # an unadvertised \r\n coming from some browsers.  Old Netscape
+    # 4.x did this on all POSTs, and Firefox/Safari do it on
+    # XmlHttpRequest POSTs.
+    if ($self->{req_headers}->request_method eq "POST") {
+        $self->{ditch_leading_rn} = 1;
     }
 
     # now since we're doing persistence, uncork so the last packet goes.
@@ -192,11 +208,6 @@ sub reproxy_fh {
     }
 
     return $self->{reproxy_fh};
-}
-
-sub read_request_headers {
-    my Perlbal::ClientHTTPBase $self = shift;
-    return $self->SUPER::read_request_headers($self->{requests} > 0);
 }
 
 sub event_read {

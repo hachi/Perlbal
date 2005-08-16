@@ -30,6 +30,8 @@ use fields (
             'read_buf',        # arrayref of scalarref read from client
             'read_ahead',      # bytes sitting in read_buf
             'read_size',       # total bytes read from client, ever
+
+            'ditch_leading_rn', # if true, the next header parsing will ignore a leading \r\n
             );
 
 use constant MAX_HTTP_HEADER_LENGTH => 102400;  # 100k, arbitrary
@@ -198,51 +200,73 @@ sub max_idle_time { 0; }
 
 # Socket: specific to HTTP socket types (only here and not in
 # ClientHTTPBase because ClientManage wants it too)
-sub read_request_headers  { read_headers($_[0], 0, $_[1]); }
+sub read_request_headers  { read_headers($_[0], 0); }
 sub read_response_headers { read_headers($_[0], 1); }
 sub read_headers {
     my Perlbal::Socket $self = shift;
-    my ($is_res, $accept_leading_rn) = @_;
-
-    $Perlbal::reqs++ unless $is_res;
+    my $is_res = shift;
+    print "Perlbal::Socket::read_headers($self) is_res=$is_res\n" if Perlbal::DEBUG >= 2;
 
     my $sock = $self->{sock};
 
     my $to_read = MAX_HTTP_HEADER_LENGTH - length($self->{headers_string});
 
     my $bref = $self->read($to_read);
-    return $self->close('remote_closure') if ! defined $bref;  # client disconnected
+    unless (defined $bref) {
+        # client disconnected
+        print "  client disconnected\n" if Perlbal::DEBUG >= 3;
+        return $self->close('remote_closure');
+    }
 
     $self->{headers_string} .= $$bref;
     my $idx = index($self->{headers_string}, "\r\n\r\n");
 
     # can't find the header delimiter?
     if ($idx == -1) {
+
+        # usually we get the headers all in one packet (one event), so
+        # if we get in here, that means it's more than likely the
+        # extra \r\n and if we clean it now (throw it away), then we
+        # can avoid a regexp later on.
+        if ($self->{ditch_leading_rn} && $self->{headers_string} eq "\r\n") {
+            print "  throwing away leading \\r\\n\n" if Perlbal::DEBUG >= 3;
+            $self->{ditch_leading_rn} = 0;
+            $self->{headers_string}   = "";
+            return 0;
+        }
+
+        print "  can't find end of headers\n" if Perlbal::DEBUG >= 3;
         $self->close('long_headers')
             if length($self->{headers_string}) >= MAX_HTTP_HEADER_LENGTH;
         return 0;
     }
 
     my $hstr = substr($self->{headers_string}, 0, $idx);
-    print "HEADERS: [$hstr]\n" if Perlbal::DEBUG >= 2;
+    print "  pre-parsed headers: [$hstr]\n" if Perlbal::DEBUG >= 3;
 
     my $extra = substr($self->{headers_string}, $idx+4);
     if (my $len = length($extra)) {
+        print "  pushing back $len bytes after header\n" if Perlbal::DEBUG >= 3;
         $self->push_back_read(\$extra);
-        print "post-header extra: $len bytes\n" if Perlbal::DEBUG >= 2;
     }
 
     # some browsers send an extra \r\n after their POST bodies that isn't
     # in their content-length.  a base class can tell us when they're
     # on their 2nd+ request after a POST and tell us to be ready for that
     # condition, and we'll clean it up
-    $hstr =~ s/^\r\n// if $accept_leading_rn;
+    $hstr =~ s/^\r\n// if $self->{ditch_leading_rn};
 
     unless (($is_res ? $self->{res_headers} : $self->{req_headers}) =
                 Perlbal::HTTPHeaders->new(\$hstr, $is_res)) {
         # bogus headers?  close connection.
+        print "  bogus headers\n" if Perlbal::DEBUG >= 3;
         return $self->close("parse_header_failure");
     }
+
+    print "  got valid headers\n" if Perlbal::DEBUG >= 3;
+
+    $Perlbal::reqs++ unless $is_res;
+    $self->{ditch_leading_rn} = 0;
 
     return $is_res ? $self->{res_headers} : $self->{req_headers};
 }

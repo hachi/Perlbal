@@ -464,6 +464,14 @@ sub close {
     $self->SUPER::close($reason);
 }
 
+sub client_disconnected { # : void
+    my Perlbal::ClientProxy $self = shift;
+    print "ClientProxy::client_disconnected\n" if Perlbal::DEBUG >= 2;
+    $self->watch_read(0);
+    $self->purge_buffered_upload if $self->{bureason};
+    return $self->close('user_disconnected');
+}
+
 # Client
 sub event_write {
     my Perlbal::ClientProxy $self = shift;
@@ -530,12 +538,7 @@ sub event_read {
     # (see: Danga::Socket::read) and we need to turn off watching for
     # further reads and purge the existing upload if any. also, we
     # should just return and do nothing else.
-    if (! defined $bref) {
-        print "  null read.\n" if Perlbal::DEBUG >= 3;
-        $self->watch_read(0);
-        $self->purge_buffered_upload if $self->{bureason};
-        return $self->close('user_disconnected');
-    }
+    return $self->client_disconnected unless defined $bref;
 
     # now that we know we have a defined value, determine how long it is, and do
     # housekeeping to keep our tracking numbers up to date.
