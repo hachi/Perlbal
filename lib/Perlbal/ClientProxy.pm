@@ -480,13 +480,16 @@ sub event_write {
 # ClientProxy
 sub event_read {
     my Perlbal::ClientProxy $self = shift;
+    print "ClientProxy::event_read\n" if Perlbal::DEBUG >= 3;
 
     # mark alive so we don't get killed for being idle
     $self->{alive_time} = time;
 
     # if we have no headers, the only thing we can do is try to get some
     if (! $self->{req_headers}) {
+        print "  no headers.  reading.\n" if Perlbal::DEBUG >= 3;
         $self->handle_request if $self->read_request_headers;
+        print "  nope, still no headers.\n" if Perlbal::DEBUG >= 3;
         return;
     }
 
@@ -494,6 +497,7 @@ sub event_read {
     # otherwise shut off read notifications
     unless ($self->{is_buffering} || $self->{read_ahead} < READ_AHEAD_SIZE) {
         # our buffer is full, so turn off reads for now
+        print "  disabling reads.\n" if Perlbal::DEBUG >= 3;
         $self->watch_read(0);
         return;
     }
@@ -507,6 +511,7 @@ sub event_read {
     my $remain = $self->{content_length_remain};
 
     $read_size = $remain if $remain && $remain < $read_size;
+    print "  reading $read_size bytes (", (defined $remain ? $remain : "(undef)"), " bytes remain)\n" if Perlbal::DEBUG >= 3;
     my $bref = $self->read($read_size);
 
     # if the read returned undef, that means the connection was closed
@@ -514,6 +519,7 @@ sub event_read {
     # further reads and purge the existing upload if any. also, we
     # should just return and do nothing else.
     if (! defined $bref) {
+        print "  null read.\n" if Perlbal::DEBUG >= 3;
         $self->watch_read(0);
         $self->purge_buffered_upload if $self->{bureason};
         return $self->close('user_disconnected');
@@ -522,6 +528,7 @@ sub event_read {
     # now that we know we have a defined value, determine how long it is, and do
     # housekeeping to keep our tracking numbers up to date.
     my $len = length($$bref);
+    print "  read $len bytes.\n" if Perlbal::DEBUG >= 3;
 
     $self->{read_size} += $len;
     $self->{content_length_remain} -= $len
@@ -536,12 +543,14 @@ sub event_read {
     # RFC2616 section 8.2.3 says: "the server SHOULD NOT close the
     # transport connection until it has read the entire request"
     if ($self->{responded}) {
+        print "  already responded.\n" if Perlbal::DEBUG >= 3;
         # in addition, if we're now out of data (clr == 0), then we should
         # either close ourselves or get ready for another request
         return $self->http_response_sent
             if defined $self->{content_length_remain} &&
             ($self->{content_length_remain} <= 0);
 
+        print "  already responded [2].\n" if Perlbal::DEBUG >= 3;
         # at this point, if the backend has responded then we just return
         # as we don't want to send it on to them or buffer it up, which is
         # what the code below does
@@ -551,7 +560,9 @@ sub event_read {
     # now, if we have a backend, then we should be writing it to the backend
     # and not doing anything else
     if ($backend) {
+        print "  got a backend.  sending write to it.\n" if Perlbal::DEBUG >= 3;
         $backend->write($bref);
+        # TODO: monitor the backend's write buffer depth?
         return;
     }
 
@@ -559,12 +570,14 @@ sub event_read {
     # read buffer... it's not going anywhere yet
     push @{$self->{read_buf}}, $bref;
     $self->{read_ahead} += $len;
+    print "  no backend.  read_ahead = $self->{read_ahead}.\n" if Perlbal::DEBUG >= 3;
 
     # if we have no data left to read, stop reading.  all that can
     # come later is an extra \r\n which we handle later when parsing
     # new request headers.  and if it's something else, we'll bail on
     # the next request, not this one.
     my $done_reading = defined $self->{content_length_remain} && $self->{content_length_remain} <= 0;
+    print "  done_reading = $done_reading\n" if Perlbal::DEBUG >= 3;
     if ($done_reading) {
         Carp::confess("content_length_remain less than zero: self->{content_length_remain}")
             if $self->{content_length_remain} < 0;
@@ -574,6 +587,7 @@ sub event_read {
 
     # if we know we've already started spooling a file to disk, then continue
     # to do that.
+    print "  bureason = $self->{bureason}\n" if Perlbal::DEBUG >= 3 && $self->{bureason};
     return $self->buffered_upload_update if $self->{bureason};
 
     # if we are under our buffer-to-memory size, just continue buffering here and
@@ -587,6 +601,7 @@ sub event_read {
 
     # if we fall through to here, we need to ensure that a backend is on the
     # way, because no specialized handling took over above
+    print "  finally requesting a backend\n" if Perlbal::DEBUG >= 3;
     return $self->request_backend;
 }
 

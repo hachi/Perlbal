@@ -18,6 +18,8 @@ ok(scalar(@web_ports) == $start_servers, 'web servers started');
 
 # setup a simple perlbal that uses the above server
 my $pb_port = new_port();
+my $pb_ss_port = new_port();
+
 my $conf = qq{
 CREATE POOL a
 
@@ -34,6 +36,15 @@ SET buffer_uploads = off
 SET buffer_upload_threshold_size = 1
 
 ENABLE test
+LOAD vhosts
+
+CREATE SERVICE ss
+   SET role = selector
+   SET listen = 127.0.0.1:$pb_ss_port
+   SET persist_client = on
+   SET plugins = vhosts
+   VHOST * = test
+ENABLE ss
 
 };
 
@@ -61,28 +72,34 @@ my $ct = 0;
 # persisent is on, so let's do some more and see if they're counting up
 $wc->keepalive(1);
 
-for my $type (qw(plain buffer_to_memory buffer_to_disk)) {
+for my $dport ("regular", "selector") {
+    $wc->server("127.0.0.1:" . ($dport eq "regular" ? $pb_port : $pb_ss_port));
 
-    if ($type eq "buffer_to_memory") {
-        ok(manage("SET test.buffer_backend_connect = 250000"), "turned on buffering to memory");
-    } elsif ($type eq "buffer_to_disk") {
-        ok(manage("SET test.buffer_uploads = on"), "turned on buffering to disk");
-    }
+    for my $type (qw(plain buffer_to_memory buffer_to_disk)) {
 
-    # now some extra \r\n POST
-    for my $n (1..2) {
-        $ct++;
-        $resp = $wc->request({ extra_rn => 1, method => "POST", content => "foo=bar" }, 'status');
-        is(reqnum($resp), $ct+1, "number $n/$type: did a POST with extra \r\n");
-        is($wc->reqdone, $ct, "persist to perlbal");
-    }
+        if ($type eq "plain") {
+            manage("SET test.buffer_backend_connect = 0") or die;
+            manage("SET test.buffer_uploads = off") or die;
+        } elsif ($type eq "buffer_to_memory") {
+            manage("SET test.buffer_uploads = off") or die;
+            ok(manage("SET test.buffer_backend_connect = 250000"), "turned on buffering to memory");
+        } elsif ($type eq "buffer_to_disk") {
+            ok(manage("SET test.buffer_uploads = on"), "turned on buffering to disk");
+        }
 
-    # now with pauses between headers and body
-    for my $n (1..2) {
-        $ct++;
-        $resp = $wc->request({ extra_rn => 1, method => "POST", content => "foo=bar", post_header_pause => 0.75 }, 'status');
-        is(reqnum($resp), $ct+1, "number $n/$type+pause");
-        is($wc->reqdone, $ct, "persist to perlbal");
+        for my $extra_rn (0, 1) {
+            for my $post_header_pause (0, 0.75) {
+                for my $n (1..2) {
+                    $ct++;
+                    $resp = $wc->request({ extra_rn => $extra_rn,
+                                           method   => "POST",
+                                           content  => "foo=bar",
+                                           post_header_pause => $post_header_pause }, 'status');
+                    is(reqnum($resp), $ct+1, "$dport: type=$type, extra_rn=$extra_rn, pause=$post_header_pause, n=$n: good POST");
+                    is($wc->reqdone, $ct, "persisted to perlbal");
+                }
+            }
+        }
     }
 }
 
