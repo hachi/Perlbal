@@ -24,7 +24,7 @@ WriteMakefile(
     ),
 
     PREREQ_PM               => {
-        'Danga::Socket' => '1.43',
+        'Danga::Socket' => '1.44',
         'Sys::Syscall'  => 0,
         'BSD::Resource' => 0,
         'Test::More'    => 0,
