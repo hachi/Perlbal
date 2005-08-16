@@ -36,8 +36,8 @@ use fields (
             'unread_data_waiting',  # boolean:  if we shut off reads while we know data is yet to be read from client
             );
 
-use constant READ_SIZE         => 4096;    # 4k, arbitrary
-use constant READ_AHEAD_SIZE   => 8192;    # 8k, arbitrary
+use constant READ_SIZE         => 131072;    # 128k, ~common TCP window size?
+use constant READ_AHEAD_SIZE   =>  32768;    # kinda arbitrary.  sum of these two is max stored per connection while waiting for backend.
 use Errno qw( EPIPE ENOENT ECONNRESET EAGAIN );
 use POSIX qw( O_CREAT O_TRUNC O_RDWR O_RDONLY );
 use Time::HiRes qw( gettimeofday tv_interval );
@@ -381,6 +381,7 @@ sub backend_ready {
 # if we were doing keep-alive, we don't close and setup for the next request.
 sub backend_finished {
     my Perlbal::ClientProxy $self = shift;
+    print "ClientProxy::backend_finished\n" if Perlbal::DEBUG >= 3;
 
     # mark ourselves as having responded (presumeably if we're here,
     # the backend has responded already)
@@ -393,8 +394,9 @@ sub backend_finished {
     # if we don't have any data yet to read
     return $self->http_response_sent unless $self->{unread_data_waiting};
 
-    # FIXME: else what happens?  we slurp it up in event_read?  should
-    # we 500 here?
+    # FIXME: else what happens?  we slurp it up in event_read?  guess we'll
+    # die for now to be safe and see if this ever happens in practice.
+    Carp::confess("Backend finished and we have unread data waiting.");
 }
 
 # called when we've sent a response to a user fully and we need to reset state
@@ -403,6 +405,8 @@ sub http_response_sent {
 
     # persistence logic is in ClientHTTPBase
     return 0 unless $self->SUPER::http_response_sent;
+
+    print "ClientProxy::http_response_sent -- resetting state\n" if Perlbal::DEBUG >= 3;
 
     # if we get here we're being persistent, reset our state
     $self->{backend_requested} = 0;
@@ -463,6 +467,7 @@ sub close {
 # Client
 sub event_write {
     my Perlbal::ClientProxy $self = shift;
+    print "ClientProxy::event_write\n" if Perlbal::DEBUG >= 3;
 
     $self->SUPER::event_write;
 
@@ -472,6 +477,8 @@ sub event_write {
 
     # trigger our backend to keep reading, if it's still connected
     if ($self->{backend_stalled} && (my $backend = $self->{backend})) {
+        print "  unstalling backend\n" if Perlbal::DEBUG >= 3;
+
         $self->{backend_stalled} = 0;
         $backend->watch_read(1);
     }
@@ -489,7 +496,6 @@ sub event_read {
     if (! $self->{req_headers}) {
         print "  no headers.  reading.\n" if Perlbal::DEBUG >= 3;
         $self->handle_request if $self->read_request_headers;
-        print "  nope, still no headers.\n" if Perlbal::DEBUG >= 3;
         return;
     }
 
@@ -512,7 +518,13 @@ sub event_read {
 
     $read_size = $remain if $remain && $remain < $read_size;
     print "  reading $read_size bytes (", (defined $remain ? $remain : "(undef)"), " bytes remain)\n" if Perlbal::DEBUG >= 3;
+
     my $bref = $self->read($read_size);
+
+    if (defined $remain && ! $remain) {
+        my $blen = $bref ? length($$bref) : "<undef>";
+        Carp::confess("event_read called when we're expecting no more bytes.  len=$blen\n");
+    }
 
     # if the read returned undef, that means the connection was closed
     # (see: Danga::Socket::read) and we need to turn off watching for
@@ -528,12 +540,12 @@ sub event_read {
     # now that we know we have a defined value, determine how long it is, and do
     # housekeeping to keep our tracking numbers up to date.
     my $len = length($$bref);
-    print "  read $len bytes.\n" if Perlbal::DEBUG >= 3;
+    print "  read $len bytes\n" if Perlbal::DEBUG >= 3;
 
     $self->{read_size} += $len;
-    $self->{content_length_remain} -= $len
-        if defined $self->{content_length_remain};
+    $self->{content_length_remain} -= $len if $remain;
 
+    my $done_reading = defined $self->{content_length_remain} && $self->{content_length_remain} <= 0;
     my $backend = $self->backend;
 
     # just dump the read into the nether if we're dangling. that is
@@ -546,15 +558,25 @@ sub event_read {
         print "  already responded.\n" if Perlbal::DEBUG >= 3;
         # in addition, if we're now out of data (clr == 0), then we should
         # either close ourselves or get ready for another request
-        return $self->http_response_sent
-            if defined $self->{content_length_remain} &&
-            ($self->{content_length_remain} <= 0);
+        return $self->http_response_sent if $done_reading;
 
         print "  already responded [2].\n" if Perlbal::DEBUG >= 3;
         # at this point, if the backend has responded then we just return
         # as we don't want to send it on to them or buffer it up, which is
         # what the code below does
         return;
+    }
+
+    # if we have no data left to read, stop reading.  all that can
+    # come later is an extra \r\n which we handle later when parsing
+    # new request headers.  and if it's something else, we'll bail on
+    # the next request, not this one.
+    print "  done_reading = $done_reading\n" if Perlbal::DEBUG >= 3;
+    if ($done_reading) {
+        Carp::confess("content_length_remain less than zero: self->{content_length_remain}")
+            if $self->{content_length_remain} < 0;
+        $self->{unread_data_waiting} = 0;
+        $self->watch_read(0);
     }
 
     # now, if we have a backend, then we should be writing it to the backend
@@ -571,19 +593,6 @@ sub event_read {
     push @{$self->{read_buf}}, $bref;
     $self->{read_ahead} += $len;
     print "  no backend.  read_ahead = $self->{read_ahead}.\n" if Perlbal::DEBUG >= 3;
-
-    # if we have no data left to read, stop reading.  all that can
-    # come later is an extra \r\n which we handle later when parsing
-    # new request headers.  and if it's something else, we'll bail on
-    # the next request, not this one.
-    my $done_reading = defined $self->{content_length_remain} && $self->{content_length_remain} <= 0;
-    print "  done_reading = $done_reading\n" if Perlbal::DEBUG >= 3;
-    if ($done_reading) {
-        Carp::confess("content_length_remain less than zero: self->{content_length_remain}")
-            if $self->{content_length_remain} < 0;
-        $self->{unread_data_waiting} = 0;
-        $self->watch_read(0);
-    }
 
     # if we know we've already started spooling a file to disk, then continue
     # to do that.
