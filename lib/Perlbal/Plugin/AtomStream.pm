@@ -10,6 +10,8 @@ use warnings;
 
 our @subs;  # subscribers
 
+use constant MAX_LAG => 262144;
+
 sub InjectFeed {
     my $class = shift;
     my $atomref = shift;
@@ -20,7 +22,18 @@ sub InjectFeed {
             $need_clean = 1;
             next;
         }
-        $s->write($atomref);
+
+        my $lag = $s->{write_buf_size};
+
+        if ($lag > MAX_LAG) {
+            $s->{scratch}{skipped_atom}++;
+        } else {
+            if (my $skip_count = $s->{scratch}{skipped_atom}) {
+                $s->{scratch}{skipped_atom} = 0;
+                $s->write(\ "<sorryTooSlow youMissed=\"$skip_count\" />\n");
+            }
+            $s->write($atomref);
+        }
     }
 
     if ($need_clean) {
