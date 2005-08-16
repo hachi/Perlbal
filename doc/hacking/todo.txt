@@ -50,3 +50,10 @@
 
 * more global & per node/service/pool bytes in/out
 
+* security for those unaware: make reproxy-file and reproxy-url
+  optional things you must explicitly enable on a service
+
+* make the response-code-tracking-per-ipport a plugin, not on by default:
+    my $ref = ($NodeStats{$self->{ipport}}->{responsecodes} ||= []);
+    ....
+
