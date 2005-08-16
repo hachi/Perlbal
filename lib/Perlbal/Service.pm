@@ -23,6 +23,7 @@ use fields (
 
             # end-user tunables
             'listen',             # scalar IP:port of where we're listening for new connections
+            'enable_ssl',         # bool: whether this service speaks SSL to the client
             'docroot',            # document root for webserver role
             'dirindexing',        # bool: direcotry indexing?  (for webserver role)  not async.
             'index_files',        # arrayref of filenames to try for index files
@@ -206,6 +207,13 @@ our $tunables = {
         default => 0,
         check_role => "web_server",
         check_type => "bool",
+    },
+
+    'enable_ssl' => {
+        des => "Enable SSL to the client.  Must have certs/server-key.pem and certs/server-cert.pem available.",
+        default => 0,
+        check_type => "bool",
+        check_role => "*",
     },
 
     'enable_delete' => {
@@ -1074,7 +1082,7 @@ sub enable {
 
     # create listening socket
     if ($self->{listen}) {
-        my $tl = Perlbal::TCPListener->new($self->{listen}, $self);
+        my $tl = Perlbal::TCPListener->new($self->{listen}, $self, $self->{enable_ssl});
         unless ($tl) {
             $mc && $mc->err("Can't start service '$self->{name}' on $self->{listen}: $Perlbal::last_error");
             return 0;

@@ -16,17 +16,20 @@ use Socket qw(IPPROTO_TCP);
 
 # TCPListener
 sub new {
-    my ($class, $hostport, $service) = @_;
+    my ($class, $hostport, $service, $ssl) = @_;
 
-    my $sock = IO::Socket::INET->new(
-                                     LocalAddr => $hostport,
-                                     Proto => IPPROTO_TCP,
-                                     Listen => 1024,
-                                     ReuseAddr => 1,
-                                     Blocking => 0,
-                                     );
+    my $sockclass = $ssl ? "IO::Socket::SSL" : "IO::Socket::INET";
+    my $sock = eval {
+        $sockclass->new(
+                        LocalAddr => $hostport,
+                        Proto => IPPROTO_TCP,
+                        Listen => 1024,
+                        ReuseAddr => 1,
+                        Blocking => 0,
+                        );
+    };
 
-    return Perlbal::error("Error creating listening socket: $!")
+    return Perlbal::error("Error creating listening socket: " . ($@ || $!))
         unless $sock;
 
     # IO::Socket::INET's Blocking => 0 just doesn't seem to work

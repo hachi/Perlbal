@@ -37,8 +37,9 @@ use IO::File;
 
 # Try and use IO::AIO or Linux::AIO, if it's around.
 BEGIN {
-    $Perlbal::OPTMOD_IO_AIO    = eval "use IO::AIO (); 1;";
-    $Perlbal::OPTMOD_LINUX_AIO = eval "use Linux::AIO '1.3'; 1;";
+    $Perlbal::OPTMOD_IO_AIO        = eval "use IO::AIO (); 1;";
+    $Perlbal::OPTMOD_LINUX_AIO     = eval "use Linux::AIO 1.3; 1;";
+    $Perlbal::OPTMOD_IO_SOCKET_SSL = eval "use IO::Socket::SSL 0.97; 1;";
 }
 
 $Perlbal::AIO_MODE = "none";
