@@ -61,6 +61,22 @@ sub get_created_objects_ref {
     return \@created_objects;
 }
 
+sub write_debuggy {
+    my $self = shift;
+
+    my $cref = $_[0];
+    my $content = ref $cref eq "SCALAR" ? $$cref : $cref;
+    my $clen = defined $content ? length($content) : "undef";
+    $content = substr($content, 0, 17) . "..." if defined $content && $clen > 30;
+    my ($pkg, $filename, $line) = caller;
+    print "write($self, <$clen>\"$content\") from ($pkg, $filename, $line)\n" if Perlbal::DEBUG >= 4;
+    $self->SUPER::write(@_);
+}
+
+if (Perlbal::DEBUG >= 4) {
+    *write = \&write_debuggy;
+}
+
 sub new {
     my Perlbal::Socket $self = shift;
     $self = fields::new( $self ) unless ref $self;

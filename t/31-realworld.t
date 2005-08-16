@@ -4,7 +4,7 @@ use strict;
 use Perlbal::Test;
 use Perlbal::Test::WebServer;
 use Perlbal::Test::WebClient;
-use Test::More tests => 32;
+use Test::More tests => 106;
 
 my $buffer_dir = tempdir();
 

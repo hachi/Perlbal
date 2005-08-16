@@ -25,6 +25,11 @@ END {
 sub start_webserver {
     my $port = new_port();
 
+    # dummy mode
+    if ($ENV{'TEST_PERLBAL_USE_EXISTING'}) {
+        return $port;
+    }
+
     if (my $child = fork) {
         # i am parent, wait for child to startup
         push @webserver_pids, $child;
