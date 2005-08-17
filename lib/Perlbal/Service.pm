@@ -23,7 +23,6 @@ use fields (
 
             # end-user tunables
             'listen',             # scalar IP:port of where we're listening for new connections
-            'enable_ssl',         # bool: whether this service speaks SSL to the client
             'docroot',            # document root for webserver role
             'dirindexing',        # bool: direcotry indexing?  (for webserver role)  not async.
             'index_files',        # arrayref of filenames to try for index files
@@ -73,7 +72,13 @@ use fields (
             'buffer_upload_threshold_time', # int; buffer uploads estimated to take longer than this
             'buffer_upload_threshold_size', # int; buffer uploads greater than this size (in bytes)
             'buffer_upload_threshold_rate', # int; buffer uploads uploading at less than this rate (in bytes/sec)
+
+            'enable_ssl',         # bool: whether this service speaks SSL to the client
+            'ssl_key_file',       # file:  path to key pem file
+            'ssl_cert_file',      # file:  path to key pem file
+            'ssl_cipher_list',    # OpenSSL cipher list string
             );
+
 
 our $tunables = {
 
@@ -207,13 +212,6 @@ our $tunables = {
         default => 0,
         check_role => "web_server",
         check_type => "bool",
-    },
-
-    'enable_ssl' => {
-        des => "Enable SSL to the client.  Must have certs/server-key.pem and certs/server-cert.pem available.",
-        default => 0,
-        check_type => "bool",
-        check_role => "*",
     },
 
     'enable_delete' => {
@@ -362,6 +360,33 @@ our $tunables = {
         check_type => "int",
     },
 
+    'enable_ssl' => {
+        des => "Enable SSL to the client.",
+        default => 0,
+        check_type => "bool",
+        check_role => "*",
+    },
+
+    'ssl_key_file' => {
+        des => "Path to private key PEM file for SSL.",
+        default => "certs/server-key.pem",
+        check_type => "file_or_none",
+        check_role => "*",
+    },
+
+    'ssl_cert_file' => {
+        des => "Path to certificate PEM file for SSL.",
+        default => "certs/server-cert.pem",
+        check_type => "file_or_none",
+        check_role => "*",
+    },
+
+    'ssl_cipher_list' => {
+        des => "OpenSSL-style cipher list.",
+        default => "ALL:!LOW:!EXP",
+        check_role => "*",
+    },
+
 };
 sub autodoc_get_tunables { return $tunables; }
 
@@ -493,6 +518,12 @@ sub set {
                 $val = $1 * 1024 * 1024 if $val =~ /^(\d+)m$/i;
                 return $mc->err("Expecting size unit value for parameter '$key' in bytes, or suffixed with 'K' or 'M'")
                     unless $val =~ /^\d+$/;
+            } elsif ($req_type eq "file") {
+                return $mc->err("File '$val' not found for '$key'") unless -f $val;
+            } elsif ($req_type eq "file_or_none") {
+                return $mc->err("File '$val' not found for '$key'") unless -f $val || $val eq $tun->{default};
+            } else {
+                die "Unknown check_type: $req_type\n";
             }
         }
 
@@ -1082,7 +1113,19 @@ sub enable {
 
     # create listening socket
     if ($self->{listen}) {
-        my $tl = Perlbal::TCPListener->new($self->{listen}, $self, $self->{enable_ssl});
+        my $opts = {};
+        if ($self->{enable_ssl}) {
+            $opts->{ssl} = {
+                SSL_key_file    => $self->{ssl_key_file},
+                SSL_cert_file   => $self->{ssl_cert_file},
+                SSL_cipher_list => $self->{ssl_cipher_list},
+            };
+            return $mc->err("IO::Socket:SSL (0.97+) not available.  Can't do SSL.") unless eval "use IO::Socket::SSL 0.97 (); 1;";
+            return $mc->err("SSL key file ($self->{ssl_key_file}) doesn't exist")   unless -f $self->{ssl_key_file};
+            return $mc->err("SSL cert file ($self->{ssl_cert_file}) doesn't exist") unless -f $self->{ssl_cert_file};
+        }
+
+        my $tl = Perlbal::TCPListener->new($self->{listen}, $self, $opts);
         unless ($tl) {
             $mc && $mc->err("Can't start service '$self->{name}' on $self->{listen}: $Perlbal::last_error");
             return 0;

@@ -16,9 +16,10 @@ use Socket qw(IPPROTO_TCP);
 
 # TCPListener
 sub new {
-    my ($class, $hostport, $service, $ssl) = @_;
+    my ($class, $hostport, $service, $opts) = @_;
+    $opts ||= {};
 
-    my $sockclass = $ssl ? "IO::Socket::SSL" : "IO::Socket::INET";
+    my $sockclass = $opts->{ssl} ? "IO::Socket::SSL" : "IO::Socket::INET";
     my $sock = eval {
         $sockclass->new(
                         LocalAddr => $hostport,
@@ -26,6 +27,7 @@ sub new {
                         Listen => 1024,
                         ReuseAddr => 1,
                         Blocking => 0,
+                        ($opts->{ssl} ? %{$opts->{ssl}} : ()),
                         );
     };
 

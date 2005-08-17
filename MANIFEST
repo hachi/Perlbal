@@ -38,6 +38,7 @@ conf/nodelist.dat
 conf/webserver.conf
 conf/load-balancer.conf
 conf/virtual-hosts.conf
+conf/ssl.conf
 t/00-use.t
 t/10-testharness.t
 t/12-headers.t
