@@ -39,8 +39,6 @@
 
 * disabling services that have no listen configured anyway --- can they still be selected to?
 
-* SSL proxying (IO::Socket::SSL drop-in replacement already exists)
-
 * Proxying non-HTTP services
   -- hard bit:  SMTP/etc needs original client IP.  ignore that and document that deficiency?
 
@@ -56,4 +54,24 @@
 * make the response-code-tracking-per-ipport a plugin, not on by default:
     my $ref = ($NodeStats{$self->{ipport}}->{responsecodes} ||= []);
     ....
+
+
+******* SSL TO-DO
+
+option: SSL_key_file
+option: SSL_cert_file
+option: SSL_cipher_list
+
+example setup docs, and min IO::Socket::SSL version
+
+example docs on how to generate a self-signed crt/key pair:
+
+    openssl req -x509 -newkey rs:1024 -keyout test.pem -out test.pem \
+         -days 365 -nodes
+
+X-SSL headers to clean?
+
+speaking regular HTTP to SSL socket --- error?  seems to correctly fail.
+
+
 
