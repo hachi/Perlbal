@@ -1,3 +1,13 @@
+1.35: (beta of 1.40) 2005-08-16
+
+    -- beta SSL support in a few lines of code.  maybe it's completely
+       done.  maybe it's barely done.  But it seems to work?  I'm no
+       SSL master... IO::Socket::SSL just made it so easy.
+
+    -- lots more tests
+
+    -- lots more cleanup
+
     -- fix potential crashing bugs in the PUT path.  luckily ones we
        never hit.
 
