@@ -55,23 +55,10 @@
     my $ref = ($NodeStats{$self->{ipport}}->{responsecodes} ||= []);
     ....
 
+* pidfile writing
 
-******* SSL TO-DO
+* --version / --help
 
-option: SSL_key_file
-option: SSL_cert_file
-option: SSL_cipher_list
+* acl stuff
 
-example setup docs, and min IO::Socket::SSL version
-
-example docs on how to generate a self-signed crt/key pair:
-
-    openssl req -x509 -newkey rs:1024 -keyout test.pem -out test.pem \
-         -days 365 -nodes
-
-X-SSL headers to clean?
-
-speaking regular HTTP to SSL socket --- error?  seems to correctly fail.
-
-
-
+* CREATE SERVICE foo LIKE webserver
