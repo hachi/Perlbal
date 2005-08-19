@@ -13,7 +13,7 @@ use Perlbal::HTTPHeaders;
 use Sys::Syscall;
 use POSIX ();
 
-use Danga::Socket '1.44';
+use Danga::Socket 1.44;
 use base 'Danga::Socket';
 
 use fields (

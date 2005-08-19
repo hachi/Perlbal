@@ -1,3 +1,6 @@
+    -- now checks correctly for Danga::Socket version 1.44 or above.
+       (required version was in quotes, confusing perl.)
+
     -- vhost plugin: strip off port specification from the Host header
        before trying to match with configured patterns.
 
