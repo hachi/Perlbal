@@ -13,7 +13,7 @@ use ExtUtils::MakeMaker;
 
 WriteMakefile(
     NAME                    => 'Perlbal',
-    VERSION                 => '1.35',
+    VERSION_FROM            => 'perlbal',
     AUTHOR                  => 'Brad Fitzpatrick <brad@danga.com>',
     ABSTRACT_FROM           => 'perlbal',
 

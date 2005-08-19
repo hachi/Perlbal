@@ -1,3 +1,9 @@
+    -- new --version and --help flags.  also a usage message on bogus
+       options (or when --help).  props to Jacques Marneweck
+       <jacques@powertrip.co.za> for the help and motivation.
+
+1.36 (beta for 1.40) 2005-08-19
+
     -- fix bug in ClientProxy when user disconnects after POST/PUTing
        a content body, but before a response comes back.
 
