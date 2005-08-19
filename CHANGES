@@ -1,3 +1,6 @@
+    -- fix bug in ClientProxy when user disconnects after POST/PUTing
+       a content body, but before a response comes back.
+
     -- now checks correctly for Danga::Socket version 1.44 or above.
        (required version was in quotes, confusing perl.)
 

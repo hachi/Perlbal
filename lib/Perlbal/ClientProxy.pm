@@ -467,6 +467,11 @@ sub close {
 sub client_disconnected { # : void
     my Perlbal::ClientProxy $self = shift;
     print "ClientProxy::client_disconnected\n" if Perlbal::DEBUG >= 2;
+
+    # if client disconnected, then we need to turn off watching for
+    # further reads and purge the existing upload if any. also, we
+    # should just return and do nothing else.
+
     $self->watch_read(0);
     $self->purge_buffered_upload if $self->{bureason};
     return $self->close('user_disconnected');
@@ -529,16 +534,16 @@ sub event_read {
 
     my $bref = $self->read($read_size);
 
+    # if the read returned undef, that means the connection was closed
+    # (see: Danga::Socket::read)
+    return $self->client_disconnected unless defined $bref;
+
+    # if we got data that we weren't expecting, something's bogus with
+    # our state machine (internal error)
     if (defined $remain && ! $remain) {
         my $blen = $bref ? length($$bref) : "<undef>";
-        Carp::confess("event_read called when we're expecting no more bytes.  len=$blen\n");
+        Carp::confess("INTERNAL ERROR: event_read called when we're expecting no more bytes.  len=$blen\n");
     }
-
-    # if the read returned undef, that means the connection was closed
-    # (see: Danga::Socket::read) and we need to turn off watching for
-    # further reads and purge the existing upload if any. also, we
-    # should just return and do nothing else.
-    return $self->client_disconnected unless defined $bref;
 
     # now that we know we have a defined value, determine how long it is, and do
     # housekeeping to keep our tracking numbers up to date.
@@ -550,6 +555,7 @@ sub event_read {
 
     my $done_reading = defined $self->{content_length_remain} && $self->{content_length_remain} <= 0;
     my $backend = $self->backend;
+    print("  done_reading = $done_reading, backend = ", ($backend || "<undef>"), "\n") if Perlbal::DEBUG >= 3;
 
     # just dump the read into the nether if we're dangling. that is
     # the case when we send the headers to the backend and it responds
@@ -574,7 +580,6 @@ sub event_read {
     # come later is an extra \r\n which we handle later when parsing
     # new request headers.  and if it's something else, we'll bail on
     # the next request, not this one.
-    print "  done_reading = $done_reading\n" if Perlbal::DEBUG >= 3;
     if ($done_reading) {
         Carp::confess("content_length_remain less than zero: self->{content_length_remain}")
             if $self->{content_length_remain} < 0;

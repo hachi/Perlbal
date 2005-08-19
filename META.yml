@@ -1,12 +1,12 @@
 # http://module-build.sourceforge.net/META-spec.html
 #XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
 name:         Perlbal
-version:      1.3.1
+version:      1.35
 version_from: 
 installdirs:  site
 requires:
     BSD::Resource:                 0
-    Danga::Socket:                 1.43
+    Danga::Socket:                 1.44
     File::Find:                    0
     Sys::Syscall:                  0
     Test::More:                    0
