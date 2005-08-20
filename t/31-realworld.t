@@ -6,8 +6,6 @@ use Perlbal::Test::WebServer;
 use Perlbal::Test::WebClient;
 use Test::More tests => 106;
 
-my $buffer_dir = tempdir();
-
 # option setup
 my $start_servers = 3; # web servers to start
 
@@ -19,6 +17,8 @@ ok(scalar(@web_ports) == $start_servers, 'web servers started');
 # setup a simple perlbal that uses the above server
 my $pb_port = new_port();
 my $pb_ss_port = new_port();
+
+my $buffer_dir = tempdir();
 
 my $conf = qq{
 CREATE POOL a

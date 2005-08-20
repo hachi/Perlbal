@@ -327,7 +327,7 @@ our $tunables = {
             my ($self, $val, $errref) = @_;
             #FIXME: require absolute paths?
             return 1 if $val && -d $val;
-            $$errref = "Directory not found for service $self->{name} (buffer_uploads_path)";
+            $$errref = "Directory ($val) not found for service $self->{name} (buffer_uploads_path)";
             return 0;
         },
     },
