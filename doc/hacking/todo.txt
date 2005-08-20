@@ -62,3 +62,15 @@
 * acl stuff
 
 * CREATE SERVICE foo LIKE webserver
+
+* HTTP::Request (and other LWP/etc stuff) is required for make test
+  but not the rest of the app.  fix that one way or another.
+
+* ProxyPassReverse-like system
+
+* t/31-realworld half the time says:
+ERROR: Directory not found for service test (buffer_uploads_path)
+Configuration error at lib/Perlbal/Test.pm line 132, <GEN2> line 1.
+Child process (webserver) died.
+
+   -- some tempdir creation problem
