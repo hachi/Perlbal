@@ -1,3 +1,5 @@
+    -- remove warnings accessing undefs in ranges and vhosts
+
     -- new --version and --help flags.  also a usage message on bogus
        options (or when --help).  props to Jacques Marneweck
        <jacques@powertrip.co.za> for the help and motivation.

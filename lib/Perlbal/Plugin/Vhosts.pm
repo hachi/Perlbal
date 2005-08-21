@@ -84,9 +84,6 @@ sub vhost_selector {
 
     my $vhost = $req->header("Host");
 
-    # Strip off the :portnumber, if any
-    $vhost =~ s/:\d+$//;
-
     my $maps = $cb->{service}{extra_config}{_vhosts} ||= {};
 
     # returns 1 if done with client, 0 if no action taken
@@ -116,6 +113,9 @@ sub vhost_selector {
 
     # if no vhost, just try the * mapping
     return $map_using->("*", 1) unless $vhost;
+
+    # Strip off the :portnumber, if any
+    $vhost =~ s/:\d+$//;
 
     # try the literal mapping
     return if $map_using->($vhost);

@@ -403,9 +403,13 @@ sub range {
     my $not_satisfiable;
     my $range = $self->header("Range");
 
-    return 200 unless $range && defined $size;
+    return 200 unless
+        $range && 
+        defined $size &&
+        $range =~ /^bytes=(\d*)-(\d*)$/;
 
-    my ($range_start, $range_end) = $range =~ /^bytes=(\d*)-(\d*)$/;
+    my ($range_start, $range_end) = ($1, $2);
+
     undef $range_start if $range_start eq '';
     undef $range_end if $range_end eq '';
     return 200 unless defined($range_start) or defined($range_end);
