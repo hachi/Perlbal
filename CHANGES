@@ -1,3 +1,6 @@
+    -- webserver mode now ignores URL arguments when looking up
+       filename
+
     -- remove warnings accessing undefs in ranges and vhosts
 
     -- new --version and --help flags.  also a usage message on bogus

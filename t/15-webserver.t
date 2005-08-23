@@ -3,7 +3,7 @@
 use strict;
 use Perlbal::Test;
 
-use Test::More 'no_plan';
+use Test::More tests => 11;
 require HTTP::Request;
 
 my $port = new_port();
@@ -58,6 +58,9 @@ ok(filecontent($disk_file) eq $contents, "disk file verify");
 
 # a simple get
 ok(get($url) eq $contents, "GET request");
+
+# a get with URL parameters
+ok(get("$url?foo=bar") eq $contents, "GET request");
 
 # 404 path
 ok(! get("$url/404.txt"), "missing file");

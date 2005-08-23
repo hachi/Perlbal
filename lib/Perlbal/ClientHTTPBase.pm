@@ -302,6 +302,9 @@ sub _serve_request {
 
     my $uri = Perlbal::Util::durl($self->{replacement_uri} || $hd->request_uri);
 
+    # chop off the query string
+    $uri =~ s/\?.*//;
+
     # don't allow directory traversal
     if ($uri =~ /\.\./ || $uri !~ m!^/!) {
         return $self->_simple_response(403, "Bogus URL");

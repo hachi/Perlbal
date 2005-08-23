@@ -57,8 +57,6 @@
 
 * pidfile writing
 
-* --version / --help
-
 * acl stuff
 
 * CREATE SERVICE foo LIKE webserver
@@ -67,5 +65,3 @@
   but not the rest of the app.  fix that one way or another.
 
 * ProxyPassReverse-like system
-
-* webserver mode doesn't chop of URL parameters
