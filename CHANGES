@@ -1,3 +1,8 @@
+    -- make accept_client and its callers deal with the possibility
+       that accept_client fails not because the backend is bogus, but
+       because the client is.  so now accept_client can close the
+       client and callers have to be aware of that.
+
     -- after running this version on production on LiveJournal.com for
        a bit, we discovered some cases that we'd flag as should never happen,
        but actually do, so updated the comments and behavior to

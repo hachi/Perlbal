@@ -170,6 +170,15 @@ sub assign_client {
     my Perlbal::HTTPHeaders $hds = $client->{req_headers}->clone;
     $self->{req_headers} = $hds;
 
+    my $client_ip = $client->peer_ip_string;
+
+    # I think I've seen this be undef in practice.  Double-check
+    unless ($client_ip) {
+        warn "Undef client_ip ($client) in assign_client.  Closing.";
+        $client->close;
+        return 0;
+    }
+
     # Use HTTP/1.0 to backend (FIXME: use 1.1 and support chunking)
     $hds->set_version("1.0");
 
@@ -180,11 +189,11 @@ sub assign_client {
     $hds->header("X-Proxy-Capabilities", "reproxy-file");
 
     # decide whether we trust the upstream or not
-    my $trust = $self->{service}->trusted_ip($client->peer_ip_string);
+    my $trust = $self->{service}->trusted_ip($client_ip);
 
     # if we're not going to trust the upstream, reset these for security reasons
     unless ($trust) {
-        $hds->header("X-Forwarded-For", $client->peer_ip_string);
+        $hds->header("X-Forwarded-For", $client_ip);
         $hds->header("X-Host", undef);
         $hds->header("X-Forwarded-Host", undef);
     }

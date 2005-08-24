@@ -815,14 +815,12 @@ sub register_boredom {
     # now try to fetch a client for it
     my Perlbal::ClientProxy $cp = $self->get_client;
     if ($cp) {
-        if ($be->assign_client($cp)) {
-            return;
-        } else {
-            # don't want to lose client, so we (unfortunately)
-            # stick it at the end of the waiting queue.
-            # fortunately, assign_client shouldn't ever fail.
-            $self->request_backend_connection($cp);
-        }
+        return if $be->assign_client($cp);
+
+        # don't want to lose client, so we (unfortunately)
+        # stick it at the end of the waiting queue.
+        # fortunately, assign_client shouldn't ever fail.
+        $self->request_backend_connection($cp);
     }
 
     # don't hang onto more bored, persistent connections than
@@ -872,10 +870,12 @@ sub note_bad_backend_connect {
     $self->spawn_backends;
 }
 
-sub request_backend_connection {
+sub request_backend_connection { # : void
     my Perlbal::Service $self;
     my Perlbal::ClientProxy $cp;
     ($self, $cp) = @_;
+
+    return unless $cp && ! $cp->{closed};
 
     my $hi_pri = 0;  # by default, low priority
 
@@ -927,6 +927,9 @@ sub request_backend_connection {
             $self->spawn_backends;
             return;
         }
+
+        # assign client can end up closing the connection, so check for that
+        return if $cp->{closed};
     }
 
     if ($hi_pri) {
