@@ -543,7 +543,7 @@ sub event_read {
     # our state machine (internal error)
     if (defined $remain && ! $remain) {
         my $blen = length($$bref);
-        my $content = substr($$bref, 0, 80 < $blen ? 80 : $blen)
+        my $content = substr($$bref, 0, 80 < $blen ? 80 : $blen);
         Carp::cluck("INTERNAL ERROR: event_read called on when we're expecting no more bytes.  len=$blen, content=[$content]\n");
         $self->close;
         return;
