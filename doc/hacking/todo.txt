@@ -65,3 +65,9 @@
   but not the rest of the app.  fix that one way or another.
 
 * ProxyPassReverse-like system
+
+* "getter" commands to retrieve the running config (GET?) or DUMP/SHOW/LIST?
+  dumping just one property, vs whole service, vs whole server?
+
+* add tests for "trusted_upstream_proxies" and "always_trusted"
+  (rename to always_trust_upstream?)

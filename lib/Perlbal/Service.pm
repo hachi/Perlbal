@@ -44,7 +44,7 @@ use fields (
                                  # connections to activate pressure relief at
             'queue_relief_chance', # int:0-100; % chance to take a standard priority
                                    # request when we're in pressure relief mode
-            'trusted_upstreams', # Net::Netmask object containing netmasks for trusted upstreams
+            'trusted_upstream_proxies', # Net::Netmask object containing netmasks for trusted upstreams
             'always_trusted', # bool; if true, always trust upstreams
 
             # Internal state:
@@ -275,7 +275,7 @@ our $tunables = {
                 return 0;
             }
 
-            return 1 if $self->{trusted_upstreams} = Net::Netmask->new2($val);
+            return 1 if $self->{trusted_upstream_proxies} = Net::Netmask->new2($val);
             $$errref = "Error defining trusted upstream proxies: " . Net::Netmask::errstr();
             return 0;
         },
@@ -420,7 +420,7 @@ sub new {
     $self->{buffer_uploads_path} = undef;
 
     # don't have an object for this yet
-    $self->{trusted_upstreams} = undef;
+    $self->{trusted_upstream_proxies} = undef;
 
     # bare data structure for extra header info
     $self->{extra_headers} = { remove => [], insert => [] };
@@ -1024,7 +1024,7 @@ sub trusted_ip {
 
     return 1 if $self->{'always_trusted'};
 
-    my $tmap = $self->{trusted_upstreams};
+    my $tmap = $self->{trusted_upstream_proxies};
     return 0 unless $tmap;
 
     # try to use it as a Net::Netmask object

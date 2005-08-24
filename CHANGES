@@ -1,3 +1,6 @@
+    -- fix misspellings of trusted_upstream_proxies that didn't
+       come along for the renaming ride earlier
+
     -- webserver mode now ignores URL arguments when looking up
        filename
 
