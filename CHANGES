@@ -1,3 +1,9 @@
+    -- ClientManage could spin in its inherited event_write, causing
+       99.9% cpu usage.  Bug is arguably Danga::Socket's, but also
+       ours because it's documented what we should do and we didn't.
+       The fix is to shut down watching writability when we're done
+       writing.
+
     -- make accept_client and its callers deal with the possibility
        that accept_client fails not because the backend is bogus, but
        because the client is.  so now accept_client can close the

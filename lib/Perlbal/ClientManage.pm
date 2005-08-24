@@ -68,6 +68,11 @@ sub event_read {
     }
 }
 
+sub event_write {
+    my $self = shift;
+    $self->watch_write(0) if $self->write(undef);
+}
+
 # ClientManage
 sub event_err {  my $self = shift; $self->close; }
 sub event_hup {  my $self = shift; $self->close; }
