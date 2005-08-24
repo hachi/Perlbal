@@ -71,3 +71,5 @@
 
 * add tests for "trusted_upstream_proxies" and "always_trusted"
   (rename to always_trust_upstream?)
+
+* get rid of httpres vs. res distinction in HTTPHeaders

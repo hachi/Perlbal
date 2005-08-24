@@ -394,9 +394,10 @@ sub backend_finished {
     # if we don't have any data yet to read
     return $self->http_response_sent unless $self->{unread_data_waiting};
 
-    # FIXME: else what happens?  we slurp it up in event_read?  guess we'll
-    # die for now to be safe and see if this ever happens in practice.
-    Carp::confess("Backend finished and we have unread data waiting.");
+    # if we get here (and we do, rarely, in practice) then that means
+    # the backend read was empty/disconected (or otherwise messed up),
+    # and the only thing we can really do is close the client down.
+    $self->close("backend_finished_while_unread_data");
 }
 
 # called when we've sent a response to a user fully and we need to reset state
@@ -541,8 +542,11 @@ sub event_read {
     # if we got data that we weren't expecting, something's bogus with
     # our state machine (internal error)
     if (defined $remain && ! $remain) {
-        my $blen = $bref ? length($$bref) : "<undef>";
-        Carp::confess("INTERNAL ERROR: event_read called when we're expecting no more bytes.  len=$blen\n");
+        my $blen = length($$bref);
+        my $content = substr($$bref, 0, 80 < $blen ? 80 : $blen)
+        Carp::cluck("INTERNAL ERROR: event_read called on when we're expecting no more bytes.  len=$blen, content=[$content]\n");
+        $self->close;
+        return;
     }
 
     # now that we know we have a defined value, determine how long it is, and do

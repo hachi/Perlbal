@@ -1,3 +1,8 @@
+    -- after running this version on production on LiveJournal.com for
+       a bit, we discovered some cases that we'd flag as should never happen,
+       but actually do, so updated the comments and behavior to
+       do the right thing and not just crash with an assertion.
+
     -- fix misspellings of trusted_upstream_proxies that didn't
        come along for the renaming ride earlier
 
