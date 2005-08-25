@@ -1,7 +1,7 @@
 # http://module-build.sourceforge.net/META-spec.html
 #XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
 name:         Perlbal
-version:      1.37
+version:      1.37-cvs
 version_from: perlbal
 installdirs:  site
 requires:
