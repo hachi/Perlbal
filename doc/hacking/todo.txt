@@ -73,3 +73,19 @@
   (rename to always_trust_upstream?)
 
 * get rid of httpres vs. res distinction in HTTPHeaders
+
+* verify that we support all the HTTP methods that subversion needs:
+  (what the content body/length assumptions there are, if any special)
+
+    GET, PROPFIND, REPORT, OPTIONS, MERGE, MKACTIVITY, CHECKOUT
+
+    HTTP/1.1: GET, HEAD, POST, PUT, DELETE, OPTIONS, TRACE, CONNECT
+    WebDAV: LOCK, UNLOCK, PROPFIND, PROPPATCH, COPY, MOVE, MKCOL
+    DeltaV: CHECKIN, CHECKOUT, UNCHECKOUT, VERSION-CONTROL, REPORT,
+            UPDATE, LABEL, MERGE, MKWORKSPACE, BASELINE-CONTROL, MKACTIVITY
+
+  Subversion uses no methods outside these. It doesn't use all of them
+  either, but it's better to support the full WebDAV/DeltaV than just
+  some arbitrary subset. If the proxy being configured is a recent
+  Squid, it probably has everything from HTTP/1.1 and WebDAV - and then
+  it only needs the DeltaV extensions added.

@@ -8,12 +8,11 @@ no  warnings qw(deprecated);
 # commands like:
 #
 #  access default deny
-#  access allow 127.0.0.1/24
-#  access allow 127.0.0.1/24
+#  access allow 127.0.0.1/24 [upstream]
+#  access allow 127.0.0.1/24 [upstream]
 #  access reset
 #  access deny 129.0.0.5
 #
-
 
 # when "LOAD" directive loads us up
 sub load {
@@ -27,13 +26,12 @@ sub load {
             return $mc->err("omitted service name not implied from context");
         }
 
-        my $ss = Perlbal->service($selname);
-        return $mc->err("Service '$selname' doesn't exist")
-            unless $ss && $ss->{role} eq "selector";
+        my $cfg = $ss->{extra_config}->{_access} ||= {};
 
-
-        $ss->{extra_config}->{_vhosts} ||= {};
-        $ss->{extra_config}->{_vhosts}{$host} = $target;
+        if ($action eq "reset") {
+            $ss->{extra_config}->{_access} = {};
+            return $mc->ok;
+        }
 
         return $mc->ok;
     });
