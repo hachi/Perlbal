@@ -585,8 +585,9 @@ sub set {
     return $mc->err("Unknown service parameter '$key'");
 }
 
-# run the hooks in a list one by one until one hook returns 1.  returns
-# 1 or 0 depending on if any hooks handled the request.
+# run the hooks in a list one by one until one hook returns a true
+# value.  returns 1 or 0 depending on if any hooks handled the
+# request.
 sub run_hook {
     my Perlbal::Service $self = shift;
     my $hook = shift;
@@ -594,7 +595,7 @@ sub run_hook {
         # call all the hooks until one returns true
         foreach my $hookref (@$ref) {
             my $rval = $hookref->[1]->(@_);
-            return 1 if defined $rval && $rval;
+            return 1 if $rval;
         }
     }
     return 0;

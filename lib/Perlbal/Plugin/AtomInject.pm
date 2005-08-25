@@ -1,7 +1,3 @@
-###########################################################################
-# basic Perlbal statistics gatherer
-###########################################################################
-
 package Perlbal::Plugin::AtomInject;
 
 use Perlbal;
@@ -51,7 +47,6 @@ sub register {
 # called when we're no longer active on a service
 sub unregister {
     my ($class, $svc) = @_;
-
     return 1;
 }
 
@@ -63,23 +58,6 @@ sub load {
 # called for a global unload
 sub unload {
     return 1;
-}
-
-sub durl
-{
-    my ($a) = @_;
-    $a =~ tr/+/ /;
-    $a =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
-    return $a;
-}
-
-sub ejs
-{
-    my $a = $_[0];
-    $a =~ s/[\"\'\\]/\\$&/g;
-    $a =~ s/\r?\n/\\n/gs;
-    $a =~ s/\r//;
-    return $a;
 }
 
 

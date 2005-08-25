@@ -20,6 +20,7 @@ lib/Perlbal/Test/WebClient.pm
 lib/Perlbal/ManageCommand.pm
 lib/Perlbal/CommandContext.pm
 lib/Perlbal/Pool.pm
+lib/Perlbal/Plugin/AccessControl.pm
 lib/Perlbal/Plugin/Palimg.pm
 lib/Perlbal/Plugin/Queues.pm
 lib/Perlbal/Plugin/Stats.pm

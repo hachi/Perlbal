@@ -220,6 +220,8 @@ sub event_read {
     my $hd = $self->read_request_headers;
     return unless $hd;
 
+    return if $self->{service}->run_hook('start_http_request', $self);
+
     # we must stop watching for events now, otherwise if there's
     # PUT/POST overflow, it'll be sent to ClientHTTPBase, which can't
     # handle it yet.  must wait for the selector (which has as much
