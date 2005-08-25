@@ -89,3 +89,6 @@
   some arbitrary subset. If the proxy being configured is a recent
   Squid, it probably has everything from HTTP/1.1 and WebDAV - and then
   it only needs the DeltaV extensions added.
+
+* secure downloads, ala: http://www.lighttpd.net/documentation/secdownload.html
+

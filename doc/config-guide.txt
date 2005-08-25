@@ -20,6 +20,9 @@ set [<service>] <param> = <value>  -- set a property on a service (see service-p
 enable <service>                   -- enable a service (start listening)
 disable <service>                  -- disable a service (stops listening)
 
+use <service_or_pool>              -- sets the implied service or pool for future operations.  note
+                                      that creating a service or pool object also "uses" it
+
 header <service> remove <header>           -- remove a header before going to backend node
 header <service> insert <header>: <value>  -- insert a header before going to backend node
 

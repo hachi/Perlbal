@@ -1,3 +1,8 @@
+    -- "use <name>" command to set the direct object for future commands
+
+    -- AccessControl plugin to allow/deny by default or on IPs or
+       netmasks.
+
     -- ClientManage could spin in its inherited event_write, causing
        99.9% cpu usage.  Bug is arguably Danga::Socket's, but also
        ours because it's documented what we should do and we didn't.
