@@ -432,35 +432,35 @@ sub try_index_files {
     # make sure this starts at 0 initially, and fail if it's past the end
     $filepos ||= 0;
     if ($filepos >= scalar(@{$self->{service}->{index_files} || []})) {
-        if ($self->{service}->{dirindexing}) {
-            # open the directory and create an index
-            my $body;
-            my $file = $self->{service}->{docroot} . '/' . $hd->request_uri;
-
-            $res->header("Content-Type", "text/html");
-            opendir(D, $file);
-            foreach my $de (sort readdir(D)) {
-                if (-d "$file/$de") {
-                    $body .= "<b><a href='$de/'>$de</a></b><br />\n";
-                } else {
-                    $body .= "<a href='$de'>$de</a><br />\n";
-                }
-            }
-            closedir(D);
-
-            $res->header("Content-Length", length($body));
-            $self->setup_keepalive($res);
-
-            $self->state('xfer_resp');
-            $self->tcp_cork(1);  # cork writes to self
-            $self->write($res->to_string_ref);
-            $self->write(\$body);
-            $self->write(sub { $self->http_response_sent; });
-        } else {
+        unless ($self->{service}->{dirindexing}) {
             # just inform them that listing is disabled
-            $self->_simple_response(200, "Directory listing disabled")
+            $self->_simple_response(200, "Directory listing disabled");
+            return;
         }
 
+        # open the directory and create an index
+        my $body = "";
+        my $file = $self->{service}->{docroot} . '/' . $hd->request_uri;
+
+        $res->header("Content-Type", "text/html");
+        opendir(D, $file);
+        foreach my $de (sort readdir(D)) {
+            if (-d "$file/$de") {
+                $body .= "<b><a href='$de/'>$de</a></b><br />\n";
+            } else {
+                $body .= "<a href='$de'>$de</a><br />\n";
+            }
+        }
+        closedir(D);
+
+        $res->header("Content-Length", length($body));
+        $self->setup_keepalive($res);
+
+        $self->state('xfer_resp');
+        $self->tcp_cork(1);  # cork writes to self
+        $self->write($res->to_string_ref);
+        $self->write(\$body);
+        $self->write(sub { $self->http_response_sent; });
         return;
     }
 
