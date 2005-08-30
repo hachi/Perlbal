@@ -1,3 +1,5 @@
+1.37 (beta for 1.40) 2005-08-29
+
     -- "use <name>" command to set the direct object for future commands
 
     -- AccessControl plugin to allow/deny by default or on IPs or

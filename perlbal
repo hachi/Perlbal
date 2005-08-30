@@ -34,7 +34,7 @@ use lib 'lib';
 use Perlbal;
 
 use vars qw($VERSION);
-$VERSION = '1.37-cvs';
+$VERSION = '1.37';
 
 my $opt_daemonize;
 my $opt_config;
