@@ -92,3 +92,4 @@
 
 * secure downloads, ala: http://www.lighttpd.net/documentation/secdownload.html
 
+* decode + and %xx in web_server mode.  (BEFORE .. checks/etc are done)
