@@ -420,14 +420,14 @@ sub _serve_request {
             });
 
         } elsif (-d _) {
-            $self->try_index_files($hd, $res);
+            $self->try_index_files($hd, $res, $uri);
         }
     });
 }
 
 sub try_index_files {
     my Perlbal::ClientHTTPBase $self = shift;
-    my ($hd, $res, $filepos) = @_;
+    my ($hd, $res, $uri, $filepos) = @_;
 
     # make sure this starts at 0 initially, and fail if it's past the end
     $filepos ||= 0;
@@ -440,7 +440,7 @@ sub try_index_files {
 
         # open the directory and create an index
         my $body = "";
-        my $file = $self->{service}->{docroot} . '/' . $hd->request_uri;
+        my $file = $self->{service}->{docroot} . $uri;
 
         $res->header("Content-Type", "text/html");
         opendir(D, $file);
@@ -466,15 +466,15 @@ sub try_index_files {
 
     # construct the file path we need to check
     my $file = $self->{service}->{index_files}->[$filepos];
-    my $fullpath = $self->{service}->{docroot} . '/' . $hd->request_uri . '/' . $file;
+    my $fullpath = $self->{service}->{docroot} . $uri . '/' . $file;
 
     # now see if it exists
     Perlbal::AIO::aio_stat($fullpath, sub {
         return if $self->{closed};
-        return $self->try_index_files($hd, $res, $filepos + 1) unless -f _;
+        return $self->try_index_files($hd, $res, $uri, $filepos + 1) unless -f _;
 
         # at this point the file exists, so we just want to serve it
-        $self->{replacement_uri} = $hd->request_uri . '/' . $file;
+        $self->{replacement_uri} = $uri . '/' . $file;
         return $self->_serve_request($hd);
     });
 }
