@@ -554,6 +554,11 @@ sub event_read {
     my $len = length($$bref);
     print "  read $len bytes\n" if Perlbal::DEBUG >= 3;
 
+    # when run under the program "trickle", epoll speaks the truth to
+    # us, but then trickle interferes and steals our reads/writes, so
+    # this fails.  normally this check isn't needed.
+    return unless $len;
+
     $self->{read_size} += $len;
     $self->{content_length_remain} -= $len if $remain;
 
@@ -828,7 +833,7 @@ sub buffered_upload_update {
 
         # check for error
         unless ($bytes) {
-            Perlbal::log('critical', "Error writing buffered upload: $!");
+            Perlbal::log('critical', "Error writing buffered upload: $!.  Tried to do $len bytes at $self->{buoutpos}.");
             return $self->_simple_response(500);
         }
 

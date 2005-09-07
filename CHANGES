@@ -1,3 +1,7 @@
+    -- work a little better under "trickle".  (but still not perfect...
+       trickle doesn't quite work on Perlbal, unfortunately. it's useful,
+       or would've been useful, for testing some parts...)
+
     -- avoid an occasional warning with dirindexing on unreadable directories
 
 1.37 (beta for 1.40) 2005-08-29
