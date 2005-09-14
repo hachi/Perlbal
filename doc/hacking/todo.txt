@@ -92,4 +92,6 @@
 
 * secure downloads, ala: http://www.lighttpd.net/documentation/secdownload.html
 
+* fix up req_keep_alive and res_keep_alive --- too much duplicated code
+  and too many calls.  doesn't feel right.
 

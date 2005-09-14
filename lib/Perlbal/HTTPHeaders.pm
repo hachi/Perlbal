@@ -321,6 +321,10 @@ sub content_length {
 # given the request (self) and the backend response?"  this is used in proxy
 # mode to determine based on the client's request and the backend's response
 # whether or not the response from the proxy (us) should do keep-alive.
+#
+# FIXME: this is called too often (especially with service selector),
+# and should be redesigned to be simpler, and/or cached on the
+# connection.  there's too much duplication with res_keep_alive.
 sub req_keep_alive {
     my Perlbal::HTTPHeaders $self = $_[0];
     my Perlbal::HTTPHeaders $res = $_[1] or Carp::confess("ASSERT: No response headers given");
@@ -359,6 +363,10 @@ sub res_keep_alive_options {
 # answers the question: "is the backend expected to stay open?"  this
 # is a combination of the request we sent to it and the response they
 # sent...
+
+# FIXME: this is called too often (especially with service selector),
+# and should be redesigned to be simpler, and/or cached on the
+# connection.  there's too much duplication with req_keep_alive.
 sub res_keep_alive {
     my Perlbal::HTTPHeaders $self = $_[0];
     my Perlbal::HTTPHeaders $req = $_[1];
@@ -379,7 +387,11 @@ sub res_keep_alive {
             $conn =~ /\bkeep-alive\b/i &&
             ($is_options ||
              defined $self->header('Content-length') ||
-             $req->request_method eq 'HEAD');
+             $req->request_method eq 'HEAD' ||
+             $self->response_code == 304 || # not modified
+             $self->response_code == 204
+             ); # no content
+
         return 0;
     }
 
@@ -404,7 +416,7 @@ sub range {
     my $range = $self->header("Range");
 
     return 200 unless
-        $range && 
+        $range &&
         defined $size &&
         $range =~ /^bytes=(\d*)-(\d*)$/;
 

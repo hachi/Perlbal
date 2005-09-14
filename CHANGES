@@ -1,3 +1,7 @@
+    -- there was a bug where 304 Not Modified responses would
+       cause a connection close (and thus RST packets) even
+       though keep-alive was negotiated and would've worked
+
     -- ignore URL arguments when doing directory indexing
 
     -- work a little better under "trickle".  (but still not perfect...
