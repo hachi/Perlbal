@@ -41,9 +41,9 @@ if (TRACK_OBJECTS) {
     use Scalar::Util qw(weaken isweak);
 }
 
-# time we last did a full connection sweep (O(n) .. lame)
-# and closed idle connections.
-our $last_cleanup = 0;
+# kick-off one cleanup
+_do_cleanup();
+
 our %state_changes = (); # { "objref" => [ state, state, state, ... ] }
 our $last_callbacks = 0; # time last ran callbacks
 our $callbacks = []; # [ [ time, subref ], [ time, subref ], ... ]
@@ -97,13 +97,6 @@ sub new {
     my $now = time;
     $self->{alive_time} = $self->{create_time} = $now;
 
-    # see if it's time to do a cleanup
-    # FIXME: constant time interval is lame.  on pressure/idle?
-    if ($now - 15 > $last_cleanup) {
-        $last_cleanup = $now;
-        _do_cleanup();
-    }
-
     # now put this item in the list of created objects
     if (TRACK_OBJECTS) {
         # clean the created objects list if necessary
@@ -152,7 +145,11 @@ sub _do_cleanup {
         }
     }
 
-    $_->close("perlbal_timeout") foreach @to_close;
+    foreach my $sock (@to_close) {
+        $sock->close("perlbal_timeout")
+    }
+
+    Danga::Socket->AddTimer(5, \&_do_cleanup);
 }
 
 # CLASS METHOD: given a delay (in seconds) and a subref, this will call
