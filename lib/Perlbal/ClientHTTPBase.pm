@@ -145,6 +145,10 @@ sub http_response_sent {
         $self->{do_die}
         )
     {
+        # do a final read so we don't have unread_data_waiting and RST
+        # the connection.  IE and others send an extra \r\n after POSTs
+        my $dummy = $self->read(5);
+
         # close if we have no response headers or they say to close
         $self->close("no_keep_alive");
         return 0;

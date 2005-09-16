@@ -1,3 +1,9 @@
+    -- do a final little read before closing an HTTP connection
+       to make sure we have no unread data in kernel (notably
+       an extra "\r\n" from an IE post), so when we do close, we
+       don't send a RST packet to the end user.  Thanks to Kevin
+       Lewandowski from discogs.com for the bug report.
+
     -- use Danga::Socket's AddTimer interface to disconnect
        stale persistent connections every 5 seconds, driven by
        a timer, rather than every 15 seconds, driven by
