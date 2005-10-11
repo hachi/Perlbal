@@ -1,4 +1,4 @@
-Perlbal Service parameters
+                           Perlbal Service parameters
 
    Set via commands of either forms:
 
@@ -61,158 +61,182 @@ For all services:
 
 Only for 'reverse_proxy' services:
 
-   +---------------------------------------------------------------------------+
-   |            Param            |type|Default|          Description           |
-   |-----------------------------+----+-------+--------------------------------|
-   |                             |    |       |Whether to trust all incoming   |
-   |                             |    |       |requests' X-Forwarded-For and   |
-   |                             |    |       |related headers. Set to true    |
-   |always_trusted               |bool|false  |only if you know that all       |
-   |                             |    |       |incoming requests from your own |
-   |                             |    |       |proxy servers that clean/set    |
-   |                             |    |       |those headers.                  |
-   |-----------------------------+----+-------+--------------------------------|
-   |                             |    |       |The number of backend           |
-   |backend_persist_cache        |int |2      |connections to keep alive on    |
-   |                             |    |       |reserve while there are no      |
-   |                             |    |       |clients.                        |
-   |-----------------------------+----+-------+--------------------------------|
-   |                             |    |       |How much content-body           |
-   |                             |    |       |(POST/PUT/etc) data we read from|
-   |                             |    |       |a client before we start sending|
-   |                             |    |       |it to a backend web node. If    |
-   |buffer_backend_connect       |size|100k   |'buffer_uploads' is enabled,    |
-   |                             |    |       |this value is used to determine |
-   |                             |    |       |how many bytes are read before  |
-   |                             |    |       |Perlbal makes a determination on|
-   |                             |    |       |whether or not to spool the     |
-   |                             |    |       |upload to disk.                 |
-   |-----------------------------+----+-------+--------------------------------|
-   |                             |    |       |How much we'll ahead of a client|
-   |                             |    |       |we'll get while copying from a  |
-   |buffer_size                  |size|256k   |backend to a client. If a client|
-   |                             |    |       |gets behind this much, we stop  |
-   |                             |    |       |reading from the backend for a  |
-   |                             |    |       |bit.                            |
-   |-----------------------------+----+-------+--------------------------------|
-   |                             |    |       |How much we'll get ahead of a   |
-   |                             |    |       |client we'll get while copying  |
-   |                             |    |       |from a reproxied URL to a       |
-   |                             |    |       |client. If a client gets behind |
-   |                             |    |       |this much, we stop reading from |
-   |                             |    |       |the reproxied URL for a bit. The|
-   |                             |    |       |default is lower than the       |
-   |                             |    |       |regular buffer_size (50k instead|
-   |buffer_size_reproxy_url      |size|50k    |of 256k) because it's assumed   |
-   |                             |    |       |that you're only reproxying to  |
-   |                             |    |       |large files on event-based      |
-   |                             |    |       |webservers, which are less      |
-   |                             |    |       |sensitive to many open          |
-   |                             |    |       |connections, whereas the 256k   |
-   |                             |    |       |buffer size is good for keeping |
-   |                             |    |       |heavy process-based free of slow|
-   |                             |    |       |clients.                        |
-   |-----------------------------+----+-------+--------------------------------|
-   |                             |    |       |If an upload is coming in at a  |
-   |                             |    |       |rate less than this value in    |
-   |buffer_upload_threshold_rate |int |0      |bytes per second, it will be    |
-   |                             |    |       |buffered to disk. Set to 0 to   |
-   |                             |    |       |not check rate.                 |
-   |-----------------------------+----+-------+--------------------------------|
-   |                             |    |       |If an upload is larger than this|
-   |buffer_upload_threshold_size |size|250k   |size in bytes, it will be       |
-   |                             |    |       |buffered to disk. Set to 0 to   |
-   |                             |    |       |not check size.                 |
-   |-----------------------------+----+-------+--------------------------------|
-   |                             |    |       |If an upload is estimated to    |
-   |                             |    |       |take more than this number of   |
-   |buffer_upload_threshold_time |int |5      |seconds, it will be buffered to |
-   |                             |    |       |disk. Set to 0 to not check     |
-   |                             |    |       |estimated time.                 |
-   |-----------------------------+----+-------+--------------------------------|
-   |                             |    |       |Used to enable or disable the   |
-   |                             |    |       |buffer uploads to disk system.  |
-   |                             |    |       |If enabled,                     |
-   |                             |    |       |'buffer_backend_connect' bytes  |
-   |                             |    |       |worth of the upload will be     |
-   |buffer_uploads               |bool|false  |stored in memory. At that point,|
-   |                             |    |       |the buffer upload thresholds    |
-   |                             |    |       |will be checked to see if we    |
-   |                             |    |       |should just send this upload to |
-   |                             |    |       |the backend, or if we should    |
-   |                             |    |       |spool it to disk.               |
-   |-----------------------------+----+-------+--------------------------------|
-   |buffer_uploads_path          |    |       |Directory root for storing files|
-   |                             |    |       |used to buffer uploads.         |
-   |-----------------------------+----+-------+--------------------------------|
-   |                             |    |       |How many extra backend          |
-   |                             |    |       |connections we keep alive in    |
-   |connect_ahead                |int |0      |addition to the current ones, in|
-   |                             |    |       |anticipation of new client      |
-   |                             |    |       |connections.                    |
-   |-----------------------------+----+-------+--------------------------------|
-   |                             |    |       |The cookie name to inspect to   |
-   |high_priority_cookie         |    |       |determine if the client goes    |
-   |                             |    |       |onto the high-priority queue.   |
-   |-----------------------------+----+-------+--------------------------------|
-   |                             |    |       |A string that the               |
-   |high_priority_cookie_contents|    |       |high_priority_cookie must       |
-   |                             |    |       |contain to go onto the          |
-   |                             |    |       |high-priority queue.            |
-   |-----------------------------+----+-------+--------------------------------|
-   |                             |    |       |The max number of requests to be|
-   |                             |    |       |made on a single persistent     |
-   |                             |    |       |backend connection before       |
-   |                             |    |       |releasing the connection. The   |
-   |max_backend_uses             |    |0      |default value of 0 means no     |
-   |                             |    |       |limit, and the connection will  |
-   |                             |    |       |only be discarded once the      |
-   |                             |    |       |backend asks it to be, or when  |
-   |                             |    |       |Perlbal is sufficiently idle.   |
-   |-----------------------------+----+-------+--------------------------------|
-   |                             |    |       |Whether to enable HTTP          |
-   |                             |    |       |keep-alives to the backend      |
-   |                             |    |       |webnodes. (Off by default, but  |
-   |                             |    |       |highly recommended if Perlbal   |
-   |persist_backend              |bool|false  |will be the only client to your |
-   |                             |    |       |backends. If not, beware that   |
-   |                             |    |       |Perlbal will hog the            |
-   |                             |    |       |connections, starving other     |
-   |                             |    |       |clients.)                       |
-   |-----------------------------+----+-------+--------------------------------|
-   |                             |    |       |Name of previously-created pool |
-   |pool                         |    |       |object containing the backend   |
-   |                             |    |       |nodes that this reverse proxy   |
-   |                             |    |       |sends requests to.              |
-   |-----------------------------+----+-------+--------------------------------|
-   |queue_relief_chance          |    |0      |                                |
-   |-----------------------------+----+-------+--------------------------------|
-   |queue_relief_size            |int |0      |                                |
-   |-----------------------------+----+-------+--------------------------------|
-   |                             |    |       |A Net::Netmask filter (e.g.     |
-   |                             |    |       |10.0.0.0/24, see Net::Netmask)  |
-   |                             |    |       |that determines whether upstream|
-   |trusted_upstream_proxies     |    |       |clients are trusted or not,     |
-   |                             |    |       |where trusted means their       |
-   |                             |    |       |X-Forwarded-For/etc headers are |
-   |                             |    |       |not munged.                     |
-   |-----------------------------+----+-------+--------------------------------|
-   |                             |    |       |Whether Perlbal should send a   |
-   |                             |    |       |quick OPTIONS request to the    |
-   |                             |    |       |backends before sending an      |
-   |                             |    |       |actual client request to them.  |
-   |                             |    |       |If your backend is Apache or    |
-   |                             |    |       |some other process-based        |
-   |                             |    |       |webserver, this is HIGHLY       |
-   |verify_backend               |bool|false  |recommended. All too often a    |
-   |                             |    |       |loaded backend box will reply to|
-   |                             |    |       |new TCP connections, but it's   |
-   |                             |    |       |the kernel's TCP stack Perlbal  |
-   |                             |    |       |is talking to, not an actual    |
-   |                             |    |       |Apache process yet. Using this  |
-   |                             |    |       |option reduces end-user latency |
-   |                             |    |       |a ton on loaded sites.          |
-   +---------------------------------------------------------------------------+
+   +------------------------------------------------------------------------+
+   |            Param            |type|Default|         Description         |
+   |-----------------------------+----+-------+-----------------------------|
+   |                             |    |       |Whether to trust all incoming|
+   |                             |    |       |requests' X-Forwarded-For and|
+   |                             |    |       |related headers. Set to true |
+   |always_trusted               |bool|false  |only if you know that all    |
+   |                             |    |       |incoming requests from your  |
+   |                             |    |       |own proxy servers that       |
+   |                             |    |       |clean/set those headers.     |
+   |-----------------------------+----+-------+-----------------------------|
+   |                             |    |       |The number of backend        |
+   |backend_persist_cache        |int |2      |connections to keep alive on |
+   |                             |    |       |reserve while there are no   |
+   |                             |    |       |clients.                     |
+   |-----------------------------+----+-------+-----------------------------|
+   |                             |    |       |How much content-body        |
+   |                             |    |       |(POST/PUT/etc) data we read  |
+   |                             |    |       |from a client before we start|
+   |                             |    |       |sending it to a backend web  |
+   |                             |    |       |node. If 'buffer_uploads' is |
+   |buffer_backend_connect       |size|100k   |enabled, this value is used  |
+   |                             |    |       |to determine how many bytes  |
+   |                             |    |       |are read before Perlbal makes|
+   |                             |    |       |a determination on whether or|
+   |                             |    |       |not to spool the upload to   |
+   |                             |    |       |disk.                        |
+   |-----------------------------+----+-------+-----------------------------|
+   |                             |    |       |How much we'll ahead of a    |
+   |                             |    |       |client we'll get while       |
+   |                             |    |       |copying from a backend to a  |
+   |buffer_size                  |size|256k   |client. If a client gets     |
+   |                             |    |       |behind this much, we stop    |
+   |                             |    |       |reading from the backend for |
+   |                             |    |       |a bit.                       |
+   |-----------------------------+----+-------+-----------------------------|
+   |                             |    |       |How much we'll get ahead of a|
+   |                             |    |       |client we'll get while       |
+   |                             |    |       |copying from a reproxied URL |
+   |                             |    |       |to a client. If a client gets|
+   |                             |    |       |behind this much, we stop    |
+   |                             |    |       |reading from the reproxied   |
+   |                             |    |       |URL for a bit. The default is|
+   |                             |    |       |lower than the regular       |
+   |buffer_size_reproxy_url      |size|50k    |buffer_size (50k instead of  |
+   |                             |    |       |256k) because it's assumed   |
+   |                             |    |       |that you're only reproxying  |
+   |                             |    |       |to large files on event-based|
+   |                             |    |       |webservers, which are less   |
+   |                             |    |       |sensitive to many open       |
+   |                             |    |       |connections, whereas the 256k|
+   |                             |    |       |buffer size is good for      |
+   |                             |    |       |keeping heavy process-based  |
+   |                             |    |       |free of slow clients.        |
+   |-----------------------------+----+-------+-----------------------------|
+   |                             |    |       |If an upload is coming in at |
+   |                             |    |       |a rate less than this value  |
+   |buffer_upload_threshold_rate |int |0      |in bytes per second, it will |
+   |                             |    |       |be buffered to disk. Set to 0|
+   |                             |    |       |to not check rate.           |
+   |-----------------------------+----+-------+-----------------------------|
+   |                             |    |       |If an upload is larger than  |
+   |buffer_upload_threshold_size |size|250k   |this size in bytes, it will  |
+   |                             |    |       |be buffered to disk. Set to 0|
+   |                             |    |       |to not check size.           |
+   |-----------------------------+----+-------+-----------------------------|
+   |                             |    |       |If an upload is estimated to |
+   |                             |    |       |take more than this number of|
+   |buffer_upload_threshold_time |int |5      |seconds, it will be buffered |
+   |                             |    |       |to disk. Set to 0 to not     |
+   |                             |    |       |check estimated time.        |
+   |-----------------------------+----+-------+-----------------------------|
+   |                             |    |       |Used to enable or disable the|
+   |                             |    |       |buffer uploads to disk       |
+   |                             |    |       |system. If enabled,          |
+   |                             |    |       |'buffer_backend_connect'     |
+   |                             |    |       |bytes worth of the upload    |
+   |buffer_uploads               |bool|false  |will be stored in memory. At |
+   |                             |    |       |that point, the buffer upload|
+   |                             |    |       |thresholds will be checked to|
+   |                             |    |       |see if we should just send   |
+   |                             |    |       |this upload to the backend,  |
+   |                             |    |       |or if we should spool it to  |
+   |                             |    |       |disk.                        |
+   |-----------------------------+----+-------+-----------------------------|
+   |buffer_uploads_path          |    |       |Directory root for storing   |
+   |                             |    |       |files used to buffer uploads.|
+   |-----------------------------+----+-------+-----------------------------|
+   |                             |    |       |How many extra backend       |
+   |                             |    |       |connections we keep alive in |
+   |connect_ahead                |int |0      |addition to the current ones,|
+   |                             |    |       |in anticipation of new client|
+   |                             |    |       |connections.                 |
+   |-----------------------------+----+-------+-----------------------------|
+   |                             |    |       |Enable 'reproxying'          |
+   |                             |    |       |(end-user-transparent        |
+   |                             |    |       |internal redirects) to either|
+   |                             |    |       |local files or other URLs.   |
+   |                             |    |       |When enabled, the backend    |
+   |                             |    |       |servers in the pool that this|
+   |enable_reproxy               |bool|false  |service is configured for    |
+   |                             |    |       |will have access to tell this|
+   |                             |    |       |Perlbal instance to serve any|
+   |                             |    |       |local readable file, or      |
+   |                             |    |       |connect to any other URL that|
+   |                             |    |       |this Perlbal can connect to. |
+   |                             |    |       |Only enable this if you trust|
+   |                             |    |       |the backend web nodes.       |
+   |-----------------------------+----+-------+-----------------------------|
+   |                             |    |       |The cookie name to inspect to|
+   |high_priority_cookie         |    |       |determine if the client goes |
+   |                             |    |       |onto the high-priority queue.|
+   |-----------------------------+----+-------+-----------------------------|
+   |                             |    |       |A string that the            |
+   |high_priority_cookie_contents|    |       |high_priority_cookie must    |
+   |                             |    |       |contain to go onto the       |
+   |                             |    |       |high-priority queue.         |
+   |-----------------------------+----+-------+-----------------------------|
+   |                             |    |       |The max number of requests to|
+   |                             |    |       |be made on a single          |
+   |                             |    |       |persistent backend connection|
+   |                             |    |       |before releasing the         |
+   |max_backend_uses             |    |0      |connection. The default value|
+   |                             |    |       |of 0 means no limit, and the |
+   |                             |    |       |connection will only be      |
+   |                             |    |       |discarded once the backend   |
+   |                             |    |       |asks it to be, or when       |
+   |                             |    |       |Perlbal is sufficiently idle.|
+   |-----------------------------+----+-------+-----------------------------|
+   |                             |    |       |Whether to enable HTTP       |
+   |                             |    |       |keep-alives to the backend   |
+   |                             |    |       |webnodes. (Off by default,   |
+   |                             |    |       |but highly recommended if    |
+   |persist_backend              |bool|false  |Perlbal will be the only     |
+   |                             |    |       |client to your backends. If  |
+   |                             |    |       |not, beware that Perlbal will|
+   |                             |    |       |hog the connections, starving|
+   |                             |    |       |other clients.)              |
+   |-----------------------------+----+-------+-----------------------------|
+   |                             |    |       |Name of previously-created   |
+   |                             |    |       |pool object containing the   |
+   |pool                         |    |       |backend nodes that this      |
+   |                             |    |       |reverse proxy sends requests |
+   |                             |    |       |to.                          |
+   |-----------------------------+----+-------+-----------------------------|
+   |queue_relief_chance          |    |0      |                             |
+   |-----------------------------+----+-------+-----------------------------|
+   |queue_relief_size            |int |0      |                             |
+   |-----------------------------+----+-------+-----------------------------|
+   |                             |    |       |A Net::Netmask filter (e.g.  |
+   |                             |    |       |10.0.0.0/24, see             |
+   |                             |    |       |Net::Netmask) that determines|
+   |trusted_upstream_proxies     |    |       |whether upstream clients are |
+   |                             |    |       |trusted or not, where trusted|
+   |                             |    |       |means their                  |
+   |                             |    |       |X-Forwarded-For/etc headers  |
+   |                             |    |       |are not munged.              |
+   |-----------------------------+----+-------+-----------------------------|
+   |                             |    |       |Whether Perlbal should send a|
+   |                             |    |       |quick OPTIONS request to the |
+   |                             |    |       |backends before sending an   |
+   |                             |    |       |actual client request to     |
+   |                             |    |       |them. If your backend is     |
+   |                             |    |       |Apache or some other         |
+   |                             |    |       |process-based webserver, this|
+   |                             |    |       |is HIGHLY recommended. All   |
+   |verify_backend               |bool|false  |too often a loaded backend   |
+   |                             |    |       |box will reply to new TCP    |
+   |                             |    |       |connections, but it's the    |
+   |                             |    |       |kernel's TCP stack Perlbal is|
+   |                             |    |       |talking to, not an actual    |
+   |                             |    |       |Apache process yet. Using    |
+   |                             |    |       |this option reduces end-user |
+   |                             |    |       |latency a ton on loaded      |
+   |                             |    |       |sites.                       |
+   +------------------------------------------------------------------------+
 
 Only for 'web_server' services:
 

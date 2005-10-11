@@ -46,6 +46,7 @@ use fields (
                                    # request when we're in pressure relief mode
             'trusted_upstream_proxies', # Net::Netmask object containing netmasks for trusted upstreams
             'always_trusted', # bool; if true, always trust upstreams
+            'enable_reproxy', # bool; if true, advertise that server will reproxy files and/or URLs
 
             # Internal state:
             'waiting_clients',         # arrayref of clients waiting for backendhttp conns
@@ -218,6 +219,13 @@ our $tunables = {
         des => "Enable HTTP DELETE requests.",
         default => 0,
         check_role => "web_server",
+        check_type => "bool",
+    },
+
+    'enable_reproxy' => {
+        des => "Enable 'reproxying' (end-user-transparent internal redirects) to either local files or other URLs.  When enabled, the backend servers in the pool that this service is configured for will have access to tell this Perlbal instance to serve any local readable file, or connect to any other URL that this Perlbal can connect to.  Only enable this if you trust the backend web nodes.",
+        default => 0,
+        check_role => "reverse_proxy",
         check_type => "bool",
     },
 

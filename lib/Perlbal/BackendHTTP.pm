@@ -161,8 +161,10 @@ sub assign_client {
     my Perlbal::ClientProxy $client = shift;
     return 0 if $self->{client};
 
+    my $svc = $self->{service};
+
     # set our client, and the client's backend to us
-    $self->{service}->mark_node_used($self->{ipport});
+    $svc->mark_node_used($self->{ipport});
     $self->{client} = $client;
     $self->state("sending_req");
     $self->{client}->backend($self);
@@ -182,14 +184,16 @@ sub assign_client {
     # Use HTTP/1.0 to backend (FIXME: use 1.1 and support chunking)
     $hds->set_version("1.0");
 
-    my $persist = $self->{service}{persist_backend};
+    my $persist = $svc->{persist_backend};
 
     $hds->header("Connection", $persist ? "keep-alive" : "close");
 
-    $hds->header("X-Proxy-Capabilities", "reproxy-file");
+    if ($svc->{enable_reproxy}) {
+        $hds->header("X-Proxy-Capabilities", "reproxy-file");
+    }
 
     # decide whether we trust the upstream or not
-    my $trust = $self->{service}->trusted_ip($client_ip);
+    my $trust = $svc->trusted_ip($client_ip);
 
     # if we're not going to trust the upstream, reset these for security reasons
     unless ($trust) {
@@ -205,10 +209,10 @@ sub assign_client {
     $self->{content_length_remain} = undef;
 
     # run hooks
-    return 1 if $self->{service}->run_hook('backend_client_assigned', $self);
+    return 1 if $svc->run_hook('backend_client_assigned', $self);
 
     # now cleanup the headers before we send to the backend
-    $self->{service}->munge_headers($hds) if $self->{service};
+    $svc->munge_headers($hds) if $svc;
 
     $self->write($hds->to_string_ref);
     $self->write(sub {
@@ -361,12 +365,12 @@ sub handle_response { # : void
     }
     $self->{content_length_remain} = $self->{content_length} || 0;
 
-    if (my $rep = $hd->header('X-REPROXY-FILE')) {
+    if ((my $rep = $hd->header('X-REPROXY-FILE')) && $self->may_reproxy) {
         # make the client begin the async IO while we move on
         $client->start_reproxy_file($rep, $hd);
         $self->next_request;
         return;
-    } elsif (my $urls = $hd->header('X-REPROXY-URL')) {
+    } elsif ((my $urls = $hd->header('X-REPROXY-URL')) && $self->may_reproxy) {
         $client->start_reproxy_uri($self->{res_headers}, $urls);
         $self->next_request;
         return;
@@ -409,6 +413,13 @@ sub handle_response { # : void
             });
         }
     }
+}
+
+sub may_reproxy {
+    my Perlbal::BackendHTTP $self = shift;
+    my Perlbal::Service $svc = $self->{service};
+    return 0 unless $svc;
+    return $svc->{enable_reproxy};
 }
 
 # Backend

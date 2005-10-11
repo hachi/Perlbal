@@ -1,3 +1,6 @@
+    -- WARNING: reproxying (files or URLs) is now disabled by default,
+       and must be enabled per-service with "enable_reproxy = true"
+
     -- do a final little read before closing an HTTP connection
        to make sure we have no unread data in kernel (notably
        an extra "\r\n" from an IE post), so when we do close, we
