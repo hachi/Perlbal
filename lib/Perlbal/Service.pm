@@ -74,6 +74,9 @@ use fields (
             'buffer_upload_threshold_size', # int; buffer uploads greater than this size (in bytes)
             'buffer_upload_threshold_rate', # int; buffer uploads uploading at less than this rate (in bytes/sec)
 
+            'upload_status_listeners',  # string: comma separated list of ip:port of UDP upload status receivers
+            'upload_status_listeners_sockaddr',  # arrayref of sockaddrs (packed ip/port)
+
             'enable_ssl',         # bool: whether this service speaks SSL to the client
             'ssl_key_file',       # file:  path to key pem file
             'ssl_cert_file',      # file:  path to key pem file
@@ -87,7 +90,7 @@ our $tunables = {
         des => "What type of service.  One of 'reverse_proxy' for a service that load balances to a pool of backend webserver nodes, 'web_server' for a typical webserver', 'management' for a Perlbal management interface (speaks both command-line or HTTP, auto-detected), or 'selector', for a virtual service that maps onto other services.",
         required => 1,
 
-        check_type => ["enum", ["reverse_proxy", "web_server", "management", "selector"]],
+        check_type => ["enum", ["reverse_proxy", "web_server", "management", "selector", "upload_tracker"]],
         check_role => '*',
         setter => sub {
             my ($self, $val, $set, $mc) = @_;
@@ -227,6 +230,25 @@ our $tunables = {
         default => 0,
         check_role => "reverse_proxy",
         check_type => "bool",
+    },
+
+    'upload_status_listeners' => {
+        des => "Comma separated list of hosts in form 'a.b.c.d:port' which will receive UDP upload status packets no faster than once a second per HTTP request (PUT/POST) from clients that have requested an upload status bar, which they request by appending the URL get argument ?client_up_session=[xxxxxx] where xxxxx is 5-50 'word' characters (a-z, A-Z, 0-9, underscore).",
+        default => "",
+        check_role => "reverse_proxy",
+        check_type => sub {
+            my ($self, $val, $errref) = @_;
+            my @packed;
+            foreach my $ipa (grep { $_ } split(/\s*,\s*/, $val)) {
+                unless ($ipa =~ /^(\d+\.\d+\.\d+\.\d+):(\d+)$/) {
+                    $$errref = "Invalid UDP endpoint: \"$ipa\".  Must be of form a.b.c.d:port";
+                    return 0;
+                }
+                push @packed, scalar Socket::sockaddr_in($2, Socket::inet_aton($1));
+            }
+            $self->{upload_status_listeners_sockaddr} = \@packed;
+            return 1;
+        },
     },
 
     'min_put_directory' => {
@@ -1123,8 +1145,15 @@ sub enable {
         return 0;
     }
 
-    # create listening socket
-    if ($self->{listen}) {
+    my $listener;
+
+    # create UDP upload tracker listener
+    if ($self->{role} eq "upload_tracker") {
+        $listener = Perlbal::UploadListener->new($self->{listen}, $self);
+    }
+
+    # create TCP listening socket
+    if (! $listener && $self->{listen}) {
         my $opts = {};
         if ($self->{enable_ssl}) {
             $opts->{ssl} = {
@@ -1142,10 +1171,11 @@ sub enable {
             $mc && $mc->err("Can't start service '$self->{name}' on $self->{listen}: $Perlbal::last_error");
             return 0;
         }
-        $self->{listener} = $tl;
+        $listener = $tl;
     }
 
-    $self->{enabled} = 1;
+    $self->{listener} = $listener;
+    $self->{enabled}  = 1;
     return $mc ? $mc->ok : 1;
 }
 

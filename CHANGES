@@ -1,3 +1,6 @@
+    -- new feature: inter-perlbal upload tracking.  for fancy upload
+       bars driven by XmlHttpRequest when clients are upload large files
+
     -- WARNING: reproxying (files or URLs) is now disabled by default,
        and must be enabled per-service with "enable_reproxy = true"
 

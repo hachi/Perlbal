@@ -58,6 +58,7 @@ use Perlbal::HTTPHeaders;
 use Perlbal::Service;
 use Perlbal::Socket;
 use Perlbal::TCPListener;
+use Perlbal::UploadListener;
 use Perlbal::ClientManage;
 use Perlbal::ClientHTTPBase;
 use Perlbal::ClientProxy;
