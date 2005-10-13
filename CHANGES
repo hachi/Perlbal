@@ -1,3 +1,9 @@
+1.38: (beta for 1.40) 2005-10-12
+
+    -- some paranoia evals around some parts of buffered uploads that
+       SAPO reported crashes in occasionally.  added FIXMEs to investigate
+       too.  for now, though, evals around closing files is safer.
+
     -- new feature: inter-perlbal upload tracking.  for fancy upload
        bars driven by XmlHttpRequest when clients are upload large files
 
