@@ -24,6 +24,7 @@ SET test.persist_client = 1
 SET test.persist_backend = 1
 SET test.pool = a
 SET test.connect_ahead = 0
+SET test.enable_reproxy = true
 ENABLE test
 
 CREATE SERVICE ws
