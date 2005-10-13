@@ -930,18 +930,29 @@ sub buffered_upload_update {
 sub purge_buffered_upload {
     my Perlbal::ClientProxy $self = shift;
 
+    # FIXME: it's reported that sometimes the two now-in-eval blocks
+    # fail, hence the eval blocks and warnings.  the FIXME is to
+    # figure this out, why it happens sometimes.
+
     # first close our filehandle... not async
-    CORE::close($self->{bufh});
+    eval {
+        CORE::close($self->{bufh});
+    };
+    if ($@) { warn "Error closing file in ClientProxy::purge_buffered_upload: $@\n"; }
+
     $self->{bufh} = undef;
 
-    # now asyncronously unlink the file
-    Perlbal::AIO::aio_unlink($self->{bufilename}, sub {
-        if ($!) {
-            # note an error, but whatever, we'll either overwrite the file later (O_TRUNC | O_CREAT)
-            # or a cleaner will come through and do it for us someday (if the user runs one)
-            Perlbal::log('warning', "Unable to link $self->{bufilename}: $!");
-        }
-    });
+    eval {
+        # now asyncronously unlink the file
+        Perlbal::AIO::aio_unlink($self->{bufilename}, sub {
+            if ($!) {
+                # note an error, but whatever, we'll either overwrite the file later (O_TRUNC | O_CREAT)
+                # or a cleaner will come through and do it for us someday (if the user runs one)
+                Perlbal::log('warning', "Unable to link $self->{bufilename}: $!");
+              }
+        });
+    };
+    if ($@) { warn "Error unlinking file in ClientProxy::purge_buffered_upload: $@\n"; }
 }
 
 
