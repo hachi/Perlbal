@@ -442,21 +442,25 @@ sub try_index_files {
             return;
         }
 
+        # ensure uri has one and only one trailing slash for better URLs
+        $uri =~ s!/*$!/!;
+
         # open the directory and create an index
-        my $body = "";
+        my $body = "<html><body>";
         my $file = $self->{service}->{docroot} . $uri;
 
         $res->header("Content-Type", "text/html");
         opendir(D, $file);
         foreach my $de (sort readdir(D)) {
             if (-d "$file/$de") {
-                $body .= "<b><a href='$de/'>$de</a></b><br />\n";
+                $body .= "<b><a href='$uri$de/'>$de</a></b><br />\n";
             } else {
-                $body .= "<a href='$de'>$de</a><br />\n";
+                $body .= "<a href='$uri$de'>$de</a><br />\n";
             }
         }
         closedir(D);
 
+        $body .= "</body></html>";
         $res->header("Content-Length", length($body));
         $self->setup_keepalive($res);
 
