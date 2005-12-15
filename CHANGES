@@ -1,3 +1,6 @@
+    -- clean up directory indexing HTML: Mark Smith and Fred Moyer
+       (fred@redhotpenguin.com)
+
 1.39: (beta for 1.40) 2005-10-26
 
     -- new feature for virtual host plugin:  the Host header can be trumped
