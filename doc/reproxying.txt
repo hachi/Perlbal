@@ -4,6 +4,11 @@ that says "this file is really over there, get it there."  Perlbal will
 then load that file or URL and send it to the user transparently, without
 them ever knowing that they got reproxied to another location.
 
+Add the following line to your perlbal.conf to enable reproxying on a per
+service basis ( reproxying is disabled by default in >= 1.38 ):
+
+  SET enable_reproxy  = true
+
 This can be useful for having URLs that get mapped to files on disk without
 giving users enough information to map out your directory structure.  For
 example, you can create a file structure such as:
