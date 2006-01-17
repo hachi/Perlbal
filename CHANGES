@@ -1,3 +1,7 @@
+    -- support for optional retrying of requests after a 500 error,
+       so user won't see the 500 error.  boolean option, as well
+       as configurable schedule of how often to retry backends.
+
     -- clean up directory indexing HTML: Mark Smith and Fred Moyer
        (fred@redhotpenguin.com)
 

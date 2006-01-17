@@ -328,9 +328,11 @@ sub handle_response { # : void
 
     print "BackendHTTP: handle_response\n" if Perlbal::DEBUG >= 2;
 
-    # note we got this response code
+    my $res_code = $hd->response_code;
+
+    # keep a rolling window of the last 500 response codes
     my $ref = ($NodeStats{$self->{ipport}}->{responsecodes} ||= []);
-    push @$ref, $hd->response_code;
+    push @$ref, $res_code;
     if (scalar(@$ref) > 500) {
         shift @$ref;
     }
@@ -365,6 +367,7 @@ sub handle_response { # : void
     }
     $self->{content_length_remain} = $self->{content_length} || 0;
 
+    # special cases:  reproxying and retrying after server errors:
     if ((my $rep = $hd->header('X-REPROXY-FILE')) && $self->may_reproxy) {
         # make the client begin the async IO while we move on
         $client->start_reproxy_file($rep, $hd);
@@ -374,44 +377,55 @@ sub handle_response { # : void
         $client->start_reproxy_uri($self->{res_headers}, $urls);
         $self->next_request;
         return;
-    } else {
-        my $res_source = $client->{primary_res_hdrs} || $hd;
-        my $thd = $client->{res_headers} = $res_source->clone;
+    } elsif ($res_code == 500 &&
+             $rqhd->request_method =~ /^GET|HEAD$/ &&
+             $client->should_retry_after_500($self)) {
+        # eh, 500 errors are rare.  just close and don't spend effort reading
+        # rest of body's error message to no client.
+        $self->close;
 
-        # setup_keepalive will set Connection: and Keep-Alive: headers for us
-        # as well as setup our HTTP version appropriately
-        $client->setup_keepalive($thd);
+        # and tell the client to try again with a new backend
+        $client->retry_after_500($self->{service});
+        return;
+    }
 
-        # if we had an alternate primary response header, make sure
-        # we send the real content-length (from the reproxied URL)
-        # and not the one the first server gave us
-        if ($client->{primary_res_hdrs}) {
-            $thd->header('Content-Length', $hd->header('Content-Length'));
-            $thd->header('X-REPROXY-FILE', undef);
-            $thd->header('X-REPROXY-URL', undef);
-            $thd->header('X-REPROXY-EXPECTED-SIZE', undef);
+    # regular path:
+    my $res_source = $client->{primary_res_hdrs} || $hd;
+    my $thd = $client->{res_headers} = $res_source->clone;
 
-            # also update the response code, in case of 206 partial content
-            my $rescode = $hd->response_code;
-            $thd->code($rescode) if $rescode == 206 || $rescode == 416;
-        }
+    # setup_keepalive will set Connection: and Keep-Alive: headers for us
+    # as well as setup our HTTP version appropriately
+    $client->setup_keepalive($thd);
 
-        print "  writing response headers to client\n" if Perlbal::DEBUG >= 3;
-        $client->write($thd->to_string_ref);
+    # if we had an alternate primary response header, make sure
+    # we send the real content-length (from the reproxied URL)
+    # and not the one the first server gave us
+    if ($client->{primary_res_hdrs}) {
+        $thd->header('Content-Length', $hd->header('Content-Length'));
+        $thd->header('X-REPROXY-FILE', undef);
+        $thd->header('X-REPROXY-URL', undef);
+        $thd->header('X-REPROXY-EXPECTED-SIZE', undef);
 
-        print("  content_length=", (defined $self->{content_length} ? $self->{content_length} : "(undef)"),
-              "  remain=",         (defined $self->{content_length_remain} ? $self->{content_length_remain} : "(undef)"), "\n")
-            if Perlbal::DEBUG >= 3;
+        # also update the response code, in case of 206 partial content
+        my $rescode = $hd->response_code;
+        $thd->code($rescode) if $rescode == 206 || $rescode == 416;
+    }
 
-        if (defined $self->{content_length} && ! $self->{content_length_remain}) {
-            print "  done.  detaching.\n" if Perlbal::DEBUG >= 3;
-            # order important:  next_request detaches us from client, so
-            # $client->close can't kill us
-            $self->next_request;
-            $client->write(sub {
-                $client->backend_finished;
-            });
-        }
+    print "  writing response headers to client\n" if Perlbal::DEBUG >= 3;
+    $client->write($thd->to_string_ref);
+
+    print("  content_length=", (defined $self->{content_length} ? $self->{content_length} : "(undef)"),
+          "  remain=",         (defined $self->{content_length_remain} ? $self->{content_length_remain} : "(undef)"), "\n")
+        if Perlbal::DEBUG >= 3;
+
+    if (defined $self->{content_length} && ! $self->{content_length_remain}) {
+        print "  done.  detaching.\n" if Perlbal::DEBUG >= 3;
+        # order important:  next_request detaches us from client, so
+        # $client->close can't kill us
+        $self->next_request;
+        $client->write(sub {
+            $client->backend_finished;
+        });
     }
 }
 

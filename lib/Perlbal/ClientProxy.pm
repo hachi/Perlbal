@@ -38,6 +38,9 @@ use fields (
             # for perlbal sending out UDP packets related to upload status (for xmlhttprequest upload bar)
             'last_upload_packet',  # unixtime we last sent a UDP upload packet
             'upload_session',      # client's self-generated upload session
+
+            # error-retrying stuff
+            'retry_count',         # number of times we've retried this request so far after getting 500 errors
             );
 
 use constant READ_SIZE         => 131072;    # 128k, ~common TCP window size?
@@ -98,6 +101,8 @@ sub init {
     $self->{reproxy_uris} = undef;
     $self->{reproxy_expected_size} = undef;
     $self->{currently_reproxying} = undef;
+
+    $self->{retry_count} = 0;
 }
 
 # call this with a string of space separated URIs to start a process
@@ -436,6 +441,15 @@ sub http_response_sent {
     return 1;
 }
 
+# to request a backend connection AFTER you've already done so, if you
+# didn't like the results from the first one.  (like after a 500 error)
+sub rerequest_backend {
+    my Perlbal::ClientProxy $self = shift;
+
+    $self->{backend_requested} = 0;
+    $self->{backend} = undef;
+    $self->request_backend;
+}
 
 sub request_backend {
     my Perlbal::ClientProxy $self = shift;
@@ -955,6 +969,36 @@ sub purge_buffered_upload {
     if ($@) { warn "Error unlinking file in ClientProxy::purge_buffered_upload: $@\n"; }
 }
 
+# returns bool; whether backend should hide the 500 error from the client
+#   and have us try a new backend.  return true to retry, false to get a 500 error.
+sub should_retry_after_500 {
+    my Perlbal::ClientProxy $self = shift;
+    my Perlbal::BackendHTTP $be   = shift;
+    my $svc = $be->{service};
+    return 0 unless $svc->{enable_error_retries};
+    my @sched = split(/\s*,\s*/, $svc->{error_retry_schedule});
+    return 0 if ++$self->{retry_count} > @sched;
+    return 1;
+}
+
+# called by Backend to tell us it got a 500 error and we should retry another backend.
+sub retry_after_500 {
+    my Perlbal::ClientProxy $self = shift;
+    my Perlbal::Service     $svc  = shift;
+
+    my @sched = split(/\s*,\s*/, $svc->{error_retry_schedule});
+    my $delay = $sched[$self->{retry_count} - 1];
+
+    if ($delay) {
+        Danga::Socket->AddTimer($delay, sub {
+            return if $self->{closed};
+            $self->rerequest_backend;
+        });
+    } else {
+        $self->rerequest_backend;
+    }
+
+}
 
 sub as_string {
     my Perlbal::ClientProxy $self = shift;

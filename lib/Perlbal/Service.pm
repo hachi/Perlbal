@@ -81,6 +81,9 @@ use fields (
             'ssl_key_file',       # file:  path to key pem file
             'ssl_cert_file',      # file:  path to key pem file
             'ssl_cipher_list',    # OpenSSL cipher list string
+
+            'enable_error_retries',  # bool: whether we should retry requests after errors
+            'error_retry_schedule',  # string of comma-separated seconds (full or partial) to delay between retries
             );
 
 
@@ -416,6 +419,20 @@ our $tunables = {
         default => "ALL:!LOW:!EXP",
         check_role => "*",
     },
+
+    'enable_error_retries' => {
+        des => 'Whether Perlbal should transparently retry requests to backends if a backend returns a 500 server error.',
+        default => 0,
+        check_type => "bool",
+        check_role => "reverse_proxy",
+    },
+
+    'error_retry_schedule' => {
+        des => 'String of comma-separated seconds (full or partial) to delay between retries.  For example "0,2" would mean do at most two retries, the first zero seconds after the first failure, and the second 2 seconds after the 2nd failure.  You probably don\'t need to modify the default value',
+        default => '0,.25,.50,1,1,1,1,1',
+        check_role => "reverse_proxy",
+    },
+
 
 };
 sub autodoc_get_tunables { return $tunables; }
