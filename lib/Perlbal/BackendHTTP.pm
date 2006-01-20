@@ -377,6 +377,12 @@ sub handle_response { # : void
         $client->start_reproxy_uri($self->{res_headers}, $urls);
         $self->next_request;
         return;
+    } elsif ((my $svcname = $hd->header('X-REPROXY-SERVICE')) && $self->may_reproxy) {
+        print STDERR "reproxy service!  to '$svcname'.\n";
+        $self->{client} = undef;
+        $client->start_reproxy_service($self->{res_headers}, $svcname);
+        $self->next_request;
+        return;
     } elsif ($res_code == 500 &&
              $rqhd->request_method =~ /^GET|HEAD$/ &&
              $client->should_retry_after_500($self)) {

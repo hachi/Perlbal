@@ -105,6 +105,25 @@ sub init {
     $self->{retry_count} = 0;
 }
 
+# given a service name, re-request (GET/HEAD only) to that service, even though
+# you've already done a request to your original service
+sub start_reproxy_service {
+    my Perlbal::ClientProxy $self = $_[0];
+    my Perlbal::HTTPHeaders $primary_res_hdrs = $_[1];
+    my $svc_name = $_[2];
+
+    my $svc = $svc_name ? Perlbal->service($svc_name) : undef;
+    unless ($svc) {
+        $self->_simple_response(404, "Vhost twiddling not configured for requested pair.");
+        return 1;
+    }
+
+    $self->{backend_requested} = 0;
+    $self->{backend} = undef;
+
+    $svc->adopt_base_client($self);
+}
+
 # call this with a string of space separated URIs to start a process
 # that will fetch the item at the first and return it to the user,
 # on failure it will try the second, then third, etc
