@@ -1,3 +1,26 @@
+perlbal (1.39+cvs20050116-1) unstable; urgency=low
+
+  * Rebuilding using CVS sources from 01/16/2006.
+
+ -- Pavel Skaldin <pskaldin@sixapart.com>  Sun,  8 Jan 2006 06:35:33 -0800
+
+perlbal (1.39-1) unstable; urgency=low
+
+  * Updated dependency tree for perlbal and libperl-perl
+  * libio-aio-perl now serves as optional replacement for liblinux-io-perl
+  * Removed components that are no longer in CVS
+  * Removed CVS related files and dirs from *.deb's
+  * Removed man3's from perlbal to avoid conflict with libperl-perl
+  * Created a default perlbal.conf with generic reverse proxy configuration
+  * Added nodelist.dat to perlbal's effective configuration
+  * Added blank defaults files for perlbal's init script
+  * Moved perlbal binary to /usr/sbin
+  * Added configuration examples to perlbal
+  * Updated package descriptions
+  * Added update of docs with gendocs.pl during build time
+
+ -- Pavel Skaldin <pskaldin@sixapart.com>  Thu,  5 Jan 2006 04:04:36 -0800
+
 perlbal (1.01-1) unstable; urgency=low
 
   * Initial Release

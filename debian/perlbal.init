@@ -11,7 +11,7 @@
 #
 
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
-DAEMON=/usr/bin/perlbal
+DAEMON=/usr/sbin/perlbal
 NAME=perlbal
 DESC=Perlbal
 PIDFILE=/var/run/$NAME.pid

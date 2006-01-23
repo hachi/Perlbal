@@ -13,7 +13,9 @@ ENV=/usr/bin/env
 PERL=/usr/bin/perl
 MODULESPACKAGE=libperlbal-perl
 DAEMONPACKAGE=perlbal
-CONFDIR=$(CURDIR)/debian/$(DAEMONPACKAGE)/usr/share/perlbal
+DOCPACKAGE=perlbal-doc
+SBIN=$(CURDIR)/debian/$(DAEMONPACKAGE)/usr/sbin
+CONFDIR=$(CURDIR)/debian/$(DAEMONPACKAGE)/etc/perlbal
 
 BM=blib.modules
 BD=blib.daemon
@@ -23,7 +25,7 @@ build:
 	# Add here commands to compile the package.
 	$(ENV) DANGABUILD_MODULESONLY=1 $(PERL) Makefile.PL verbose INSTALLDIRS=vendor INST_LIB=$(BM)
 	cp Makefile Makefile.modules
-	$(ENV) DANGABUILD_DAEMONONLY=1 $(PERL) Makefile.PL verbose INSTALLDIRS=vendor INST_LIB=$(BD) INST_SCRIPT=$(BD) 
+	$(ENV) DANGABUILD_DAEMONONLY=1 $(PERL) Makefile.PL verbose INSTALLSCRIPT=$(SBIN) INSTALLDIRS=vendor INST_LIB=$(BD) INST_SCRIPT=$(BD) 
 	cp Makefile Makefile.daemon
 
 clean:
@@ -43,21 +45,33 @@ install:
 	dh_installdirs
 
 	$(MAKE) -f Makefile.modules PREFIX=$(CURDIR)/debian/$(MODULESPACKAGE)/usr OPTIMIZE="-O2 -g -Wall" test install
-	$(MAKE) -f Makefile.daemon PREFIX=$(CURDIR)/debian/$(DAEMONPACKAGE)/usr OPTIMIZE="-O2 -g -Wall" install
+	$(MAKE) -f Makefile.daemon PREFIX=$(CURDIR)/debian/$(DAEMONPACKAGE)/usr INSTALLSCRIPT=$(SBIN) OPTIMIZE="-O2 -g -Wall" install
 	-find $(CURDIR)/debian -type d | xargs rmdir -p --ignore-fail-on-non-empty
 
+	# Install configs
 	install -d $(CONFDIR)
-	install -m 644 conf/perlbal.conf $(CONFDIR)/perlbal.conf.default
-	install -m 644 conf/nodelist.dat $(CONFDIR)/nodelist.dat.default
+	install -m 644 conf/perlbal.conf $(CONFDIR)/perlbal.conf
+	install -m 644 conf/nodelist.dat $(CONFDIR)/nodelist.dat
 
+	# Bring doc/*.txt's up to date
+	$(PERL) $(CURDIR)/devtools/gendocs.pl
+
+	# Remove man3 from main binary package
+	rm -rf $(CURDIR)/debian/$(DAEMONPACKAGE)/usr/share/man/man3
+	
 binary-arch:;
 binary-indep: build install
 	dh_testdir
 	dh_testroot
 	dh_installdocs
+	dh_installexamples
 	dh_installman
 	dh_installinit
 	dh_installchangelogs CHANGES
+
+	# Weed out cvs files prior to packaging
+	find $(CURDIR)/debian/$(MODULESPACKAGE) $(CURDIR)/debian/$(DAEMONPACKAGE) $(CURDIR)/debian/$(DOCPACKAGE) | grep -f $(CURDIR)/debian/cvs.excludes | xargs rm -rf
+
 	dh_link
 	dh_strip
 	dh_compress

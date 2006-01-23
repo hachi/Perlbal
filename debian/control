@@ -1,30 +1,53 @@
 Source: perlbal
-Section: perl
-Priority: optional
+Section: web
+Priority: extra
 Maintainer: Jay Bonci <jaybonci@debian.org>
-Build-Depends-Indep: debhelper (>= 4.1.40), perl (>= 5.8.4), libbsd-resource-perl, liblinux-aio-perl (>= 1.3), libdanga-socket-perl, libwww-perl, libnet-netmask-perl
+Build-Depends-Indep: debhelper (>= 4.1.40), perl (>= 5.8.4), libbsd-resource-perl, liblinux-aio-perl (>= 1.3) | libio-aio-perl, libdanga-socket-perl, libwww-perl, libnet-netmask-perl, links
 Standards-Version: 3.6.1.0
 
 Package: perlbal
+Section: web
+Priority: extra
 Architecture: all
-Depends: ${perl:Depends}, libbsd-resource-perl, liblinux-aio-perl (>= 1.3), libdanga-socket-perl, libwww-perl, libnet-netmask-perl
+Depends: ${perl:Depends}, ${shlibs:Depends}, ${misc:Depends}, libbsd-resource-perl, liblinux-aio-perl (>= 1.3) | libio-aio-perl, libdanga-socket-perl, libwww-perl, libnet-netmask-perl
 Recomends: libperlbal-perl
 Suggests: perlbal-doc
-Description: reverse-proxy load balancer and webserver
- Perlbal is a poll/epoll based system that supports multiple personalities 
- dictated by what port a request comes in on. It supports the creation of an 
- unlimited number of services that can each have their own entirely 
- independent configurations.
+Description: Perl-based reverse proxy load balancer and web server
+ Perlbal is a single-threaded event-based server supporting HTTP load
+ balancing, web serving, and a mix of the two. Perlbal can act as either a web
+ server or a reverse proxy.
+ .
+ One of the defining things about Perlbal is that almost everything can be
+ configured or reconfigured on the fly without needing to restart the software.
+ A basic configuration file containing a management port enables you to easily
+ perform operations on a running instance of Perlbal.
+ .
+ Perlbal can also be extended by means of per-service (and global) plugins that
+ can override many parts of request handling and behavior.
+ .
+ Homepage: http://danga.com/perlbal/
 
 Package: libperlbal-perl
+Section: perl
+Priority: optional
 Architecture: all
-Depends: ${perl:Depends}, libbsd-resource-perl, liblinux-aio-perl (>= 1.3), libdanga-socket-perl, libwww-perl, libnet-netmask-perl
-Description: supporting perl libraries for perlbal
+Depends: ${perl:Depends}, ${shlibs:Depends}, ${misc:Depends}, libbsd-resource-perl, liblinux-aio-perl (>= 1.3) | libio-aio-perl, libdanga-socket-perl, libwww-perl, libnet-netmask-perl
+Description: Supporting perl libraries for perlbal
+ Perlbal is a single-threaded event-based server supporting HTTP load
+ balancing, web serving, and a mix of the two. Perlbal can act as either a web
+ server or a reverse proxy.
+ .
  This package contains the module files (but not the daemon) for use with 
  perlbal, the reverse-proxy load balancer and webserver.
 
 Package: perlbal-doc
+Section: doc
+Priority: optional
 Architecture: all
-Description: documentation for perlbal
+Description: Documentation for Perlbal
+ Perlbal is a single-threaded event-based server supporting HTTP load
+ balancing, web serving, and a mix of the two. Perlbal can act as either a web
+ server or a reverse proxy.
+ .
  This package contains documentation and implementation notes for use with
  perlbal, the reverse-proxy load balancer and webserver.
