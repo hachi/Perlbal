@@ -335,11 +335,24 @@ sub _serve_request {
         return $self->_simple_response(404) unless -e _;
 
         my $lastmod = HTTP::Date::time2str((stat(_))[9]);
-        my $not_mod = ($hd->header("If-Modified-Since") || "") eq $lastmod && -f _;
+        my $ims     = $hd->header("If-Modified-Since") || "";
+
+        # IE sends a request header like "If-Modified-Since: <DATE>; length=<length>"
+        # so we have to remove the length bit before comparing it with our date.
+        # then we save the length to compare later.
+        my $ims_len;
+        if ($ims && $ims =~ s/; length=(\d+)//) {
+            $ims_len = $1;
+        }
+
+        my $not_mod = $ims eq $lastmod && -f _;
 
         my $res;
         my $not_satisfiable = 0;
         my $size = -s _ if -f _;
+
+        # extra protection for IE, since it's offering the info anyway.  (see above)
+        $not_mod = 0 if $ims_len && $ims_len != $size;
 
         my ($status, $range_start, $range_end) = $hd->range($size);
 
