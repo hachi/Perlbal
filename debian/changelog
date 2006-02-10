@@ -1,3 +1,10 @@
+perlbal (1.41-1) unstable; urgency=low
+
+  * Upstream fix: IE header santizing
+  * Upstream fix: added support for reproxying to a named service.
+
+ -- Pavel Skaldin <pskaldin@sixapart.com>  Thu,  9 Feb 2006 18:50:27 -0800
+
 perlbal (1.39+cvs20050116-1) unstable; urgency=low
 
   * Rebuilding using CVS sources from 01/16/2006.
