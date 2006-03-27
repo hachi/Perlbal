@@ -684,6 +684,11 @@ sub event_read {
     # over the buffer-to-memory size, see if we should start spooling to disk.
     return if $self->{service}->{buffer_uploads} && $self->decide_to_buffer_to_disk;
 
+    # give plugins a chance to act on the request before we request a backend
+    # (added by Chris Hondl <chris@imvu.com>, March 2006)
+    my $svc = $self->{service};
+    return if $svc->run_hook('proxy_read_request', $self);
+
     # if we fall through to here, we need to ensure that a backend is on the
     # way, because no specialized handling took over above
     print "  finally requesting a backend\n" if Perlbal::DEBUG >= 3;
