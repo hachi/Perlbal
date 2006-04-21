@@ -84,6 +84,7 @@ use fields (
 
             'enable_error_retries',  # bool: whether we should retry requests after errors
             'error_retry_schedule',  # string of comma-separated seconds (full or partial) to delay between retries
+            'latency',               # int: milliseconds of latency to add to request
             );
 
 
@@ -390,6 +391,13 @@ our $tunables = {
         des => "If an upload is coming in at a rate less than this value in bytes per second, it will be buffered to disk.  Set to 0 to not check rate.",
         default => 0,
         check_role => "reverse_proxy",
+        check_type => "int",
+    },
+
+    'latency' => {
+        des => "Forced latency (in milliseconds) to add to request.",
+        default => 0,
+        check_role => "selector",
         check_type => "int",
     },
 

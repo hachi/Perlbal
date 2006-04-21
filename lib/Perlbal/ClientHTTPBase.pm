@@ -233,13 +233,22 @@ sub event_read {
     # renable reads.
     $self->watch_read(0);
 
-    # now that we have headers, it's time to tell the selector
-    # plugin that it's time for it to select which real service to
-    # use
-    my $selector = $self->{'service'}->selector();
-    return $self->_simple_response(500, "No service selector configured.")
-        unless ref $selector eq "CODE";
-    $selector->($self);
+    my $select = sub {
+        # now that we have headers, it's time to tell the selector
+        # plugin that it's time for it to select which real service to
+        # use
+        my $selector = $self->{'service'}->selector();
+        return $self->_simple_response(500, "No service selector configured.")
+            unless ref $selector eq "CODE";
+        $selector->($self);
+    };
+
+    my $svc = $self->{'service'};
+    if ($svc->{latency}) {
+        Danga::Socket->AddTimer($svc->{latency} / 1000, $select);
+    } else {
+        $select->();
+    }
 }
 
 # client is ready for more of its file.  so sendfile some more to it.
