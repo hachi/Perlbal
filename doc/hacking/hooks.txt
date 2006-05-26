@@ -98,6 +98,11 @@ You can change or add response headers at this point, or cancel the
 process by returning a true value.  You will have to send the response to
 the client yourself if you do this.
 
+HANDLER     reproxy_fh_finished         Perlbal::ClientHTTPBase
+Called when a reproxy file has completed and is about to close the file
+handle.  You can cancel the process by returning a true value.  You will
+have to close the reproxy_fh yourself, and  if you do this.
+
 HANDLER     backend_response_received   Perlbal::BackendHTTP
 Called as soon as response headers are read from the backend.  If you
 return a true value, will stop all handling at that point.

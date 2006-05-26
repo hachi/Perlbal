@@ -274,6 +274,8 @@ sub event_write_reproxy_fh {
     $self->{reproxy_file_offset} += $sent;
 
     if ($sent >= $to_send) {
+        return if $self->{service}->run_hook('reproxy_fh_finished', $self);
+        
         # close the sendfile fd
         CORE::close($self->{reproxy_fh});
 
