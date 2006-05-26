@@ -403,6 +403,8 @@ sub _serve_request {
 
             # has to happen after content-length is set to work:
             $self->setup_keepalive($res);
+            
+            return if $self->{service}->run_hook('modify_response_headers', $self);
 
             if ($rm eq "HEAD" || $not_mod || $not_satisfiable) {
                 # we can return already, since we know the size
