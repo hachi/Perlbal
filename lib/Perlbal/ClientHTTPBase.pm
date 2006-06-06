@@ -256,32 +256,52 @@ sub event_read {
 sub event_write_reproxy_fh {
     my Perlbal::ClientHTTPBase $self = shift;
 
-    my $to_send = $self->{reproxy_file_size} - $self->{reproxy_file_offset};
+    my $remain = $self->{reproxy_file_size} - $self->{reproxy_file_offset};
     $self->tcp_cork(1) if $self->{reproxy_file_offset} == 0;
 
-    my $sent = Perlbal::Socket::sendfile($self->{fd},
-                                         fileno($self->{reproxy_fh}),
-                                         $to_send);
-    print "REPROXY Sent: $sent\n" if Perlbal::DEBUG >= 2;
+    # cap at 128k sendfiles
+    my $to_send = $remain > 128 * 1024 ? 128 * 1024 : $remain;
 
-    if ($sent < 0) {
-        return $self->close("epipe")     if $! == EPIPE;
-        return $self->close("connreset") if $! == ECONNRESET;
-        print STDERR "Error w/ sendfile: $!\n";
-        $self->close('sendfile_error');
-        return;
-    }
-    $self->{reproxy_file_offset} += $sent;
+    $self->watch_write(0);
 
-    if ($sent >= $to_send) {
-        return if $self->{service}->run_hook('reproxy_fh_finished', $self);
-        
-        # close the sendfile fd
-        CORE::close($self->{reproxy_fh});
+    my $postread = sub {
+        return if $self->{closed};
 
-        $self->{reproxy_fh} = undef;
-        $self->http_response_sent;
-    }
+        my $sent = Perlbal::Socket::sendfile($self->{fd},
+                                             fileno($self->{reproxy_fh}),
+                                             $to_send);
+        #warn "to_send = $to_send, sent = $sent\n";
+        print "REPROXY Sent: $sent\n" if Perlbal::DEBUG >= 2;
+
+        if ($sent < 0) {
+            return $self->close("epipe")     if $! == EPIPE;
+            return $self->close("connreset") if $! == ECONNRESET;
+            print STDERR "Error w/ sendfile: $!\n";
+            $self->close('sendfile_error');
+            return;
+        }
+        $self->{reproxy_file_offset} += $sent;
+
+        if ($sent >= $remain) {
+            return if $self->{service}->run_hook('reproxy_fh_finished', $self);
+
+            # close the sendfile fd
+            CORE::close($self->{reproxy_fh});
+
+            $self->{reproxy_fh} = undef;
+            $self->http_response_sent;
+        } else {
+            $self->watch_write(1);
+        }
+    };
+
+    # TODO: way to bypass readahead and go straight to sendfile for common/hot/recent files.
+    # something like:
+    # if ($hot) { $postread->(); return ; }
+
+    Perlbal::AIO::aio_readahead($self->{reproxy_fh},
+                                $self->{reproxy_file_offset},
+                                $to_send, $postread);
 }
 
 sub event_write {
@@ -405,7 +425,7 @@ sub _serve_request {
 
             # has to happen after content-length is set to work:
             $self->setup_keepalive($res);
-            
+
             return if $self->{service}->run_hook('modify_response_headers', $self);
 
             if ($rm eq "HEAD" || $not_mod || $not_satisfiable) {
@@ -446,6 +466,7 @@ sub _serve_request {
                     $size = $range_end - $range_start + 1;
                 }
 
+                $self->{reproxy_file} = $file;
                 $self->reproxy_fh($rp_fh, $size);
             });
 

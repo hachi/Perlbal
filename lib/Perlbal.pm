@@ -37,13 +37,13 @@ use IO::File;
 
 # Try and use IO::AIO or Linux::AIO, if it's around.
 BEGIN {
-    $Perlbal::OPTMOD_IO_AIO        = eval "use IO::AIO (); 1;";
-    $Perlbal::OPTMOD_LINUX_AIO     = eval "use Linux::AIO 1.3; 1;";
+    $Perlbal::OPTMOD_IO_AIO        = eval "use IO::AIO 1.6 (); 1;";
+    $Perlbal::OPTMOD_LINUX_AIO     = eval "use Linux::AIO 1.71; 1;";
 }
 
 $Perlbal::AIO_MODE = "none";
 $Perlbal::AIO_MODE = "ioaio" if $Perlbal::OPTMOD_IO_AIO;
-$Perlbal::AIO_MODE = "linux"  if $Perlbal::OPTMOD_LINUX_AIO;
+$Perlbal::AIO_MODE = "linux" if $Perlbal::OPTMOD_LINUX_AIO;
 
 use Sys::Syslog;
 

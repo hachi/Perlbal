@@ -1,3 +1,7 @@
+    -- do AIO readahead before sendfile to reduce blocking caused
+       by disk reads from sendfile.  increases throughput.  see:
+       http://brad.livejournal.com/2228488.html
+
     -- add 'latency' configuration on selector roles
 
 1.41: 2006-02-06

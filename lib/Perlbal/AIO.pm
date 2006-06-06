@@ -7,6 +7,17 @@ package Perlbal::AIO;
 
 use Fcntl qw(SEEK_CUR SEEK_SET SEEK_END);
 
+sub aio_readahead {
+    my ($fh, $offset, $length, $cb) = @_;
+    if ($Perlbal::AIO_MODE eq "linux") {
+        Linux::AIO::aio_readahead($fh, $offset, $length, $cb);
+    } elsif ($Perlbal::AIO_MODE eq "ioaio") {
+        IO::AIO::aio_readahead($fh, $offset, $length, $cb);
+    } else {
+        $cb->();
+    }
+}
+
 sub aio_stat {
     my ($file, $cb) = @_;
     if ($Perlbal::AIO_MODE eq "linux") {
