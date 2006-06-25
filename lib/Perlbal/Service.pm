@@ -26,6 +26,7 @@ use fields (
             'docroot',            # document root for webserver role
             'dirindexing',        # bool: direcotry indexing?  (for webserver role)  not async.
             'index_files',        # arrayref of filenames to try for index files
+            'enable_concatenate_get',   # bool:  if user can request concatenated files
             'enable_put', # bool: whether PUT is supported
             'max_put_size', # int: max size in bytes of a put file
             'min_put_directory', # int: number of directories required to exist at beginning of URIs in put
@@ -264,6 +265,13 @@ our $tunables = {
 
     'dirindexing' => {
         des => "Show directory indexes when an HTTP request is for a directory.  Warning:  this is not an async operation, so will slow down Perlbal on heavily loaded sites.",
+        default => 0,
+        check_role => "web_server",
+        check_type => "bool",
+    },
+
+    'enable_concatenate_get' => {
+        des => "Enable Perlbal's multiple-files-in-one-request mode, where a client have use a comma-separated list of files to return, always in text/plain.  Useful for webapps which have dozens/hundreds of tiny css/js files, and don't trust browsers/etc to do pipelining.  Decreases overall roundtrip latency a bunch, but requires app to be modified to support it.  See t/17-concat.t test for details.",
         default => 0,
         check_role => "web_server",
         check_type => "bool",

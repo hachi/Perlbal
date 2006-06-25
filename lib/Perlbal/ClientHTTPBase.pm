@@ -30,12 +30,15 @@ use fields ('service',             # Perlbal::Service object
             'reproxy_fh',          # if needed, IO::Handle of fd
             'reproxy_file_offset', # how much we've sent from the file.
 
+            'post_sendfile_cb',    # subref to run after we're done sendfile'ing the current file
+
             'requests',            # number of requests this object has performed for the user
 
             # service selector parent
             'selector_svc',        # the original service from which we came
             );
 
+use Fcntl ':mode';
 use Errno qw( EPIPE ECONNRESET );
 use POSIX ();
 
@@ -86,6 +89,9 @@ sub close {
 
     # don't close twice
     return if $self->{closed};
+
+    # could contain a closure with circular reference
+    $self->{post_sendfile_cb} = undef;
 
     # close the file we were reproxying, if any
     CORE::close($self->{reproxy_fh}) if $self->{reproxy_fh};
@@ -166,7 +172,7 @@ sub http_response_sent {
     # we will recork when we're processing a new request.
     $self->tcp_cork(0);
 
-    # prepare!
+    # reset state
     $self->{replacement_uri} = undef;
     $self->{headers_string} = '';
     $self->{req_headers} = undef;
@@ -179,8 +185,7 @@ sub http_response_sent {
     $self->{read_ahead} = 0;
     $self->{read_size} = 0;
     $self->{scratch} = {};
-
-    # reset state
+    $self->{post_sendfile_cb} = undef;
     $self->state('persist_wait');
 
     if (my $selector_svc = $self->{selector_svc}) {
@@ -289,7 +294,11 @@ sub event_write_reproxy_fh {
             CORE::close($self->{reproxy_fh});
 
             $self->{reproxy_fh} = undef;
-            $self->http_response_sent;
+            if (my $cb = $self->{post_sendfile_cb}) {
+                $cb->();
+            } else {
+                $self->http_response_sent;
+            }
         } else {
             $self->watch_write(1);
         }
@@ -338,19 +347,24 @@ sub _serve_request {
     }
 
     my $uri = Perlbal::Util::durl($self->{replacement_uri} || $hd->request_uri);
+    my Perlbal::Service $svc = $self->{service};
 
-    # chop off the query string
-    $uri =~ s/\?.*//;
+    # start_serve_request hook
+    return 1 if $self->{service}->run_hook('start_serve_request', $self, \$uri);
 
     # don't allow directory traversal
     if ($uri =~ /\.\./ || $uri !~ m!^/!) {
         return $self->_simple_response(403, "Bogus URL");
     }
 
-    my Perlbal::Service $svc = $self->{service};
+    # double question mark means to serve multiple files, comma separated after the
+    # questions.  the uri part before the question mark is the relative base directory
+    # TODO: only do this if $uri has ?? and the service also allows it.  otherwise
+    # we don't want to mess with anybody's meaning of '??' on the backend service
+    return $self->_serve_request_multiple($hd, $uri) if $uri =~ /\?\?/;
 
-    # start_serve_request hook
-    return 1 if $self->{service}->run_hook('start_serve_request', $self, \$uri);
+    # chop off the query string
+    $uri =~ s/\?.*//;
 
     return $self->_simple_response(500, "Docroot unconfigured")
         unless $svc->{docroot};
@@ -474,6 +488,144 @@ sub _serve_request {
             $self->try_index_files($hd, $res, $uri);
         }
     });
+}
+
+sub _serve_request_multiple {
+    my Perlbal::ClientHTTPBase $self = shift;
+    my ($hd, $uri) = @_;
+
+    my @multiple_files;
+    my %statinfo;  # file -> [ stat fields ]
+
+    # double question mark means to serve multiple files, comma
+    # separated after the questions.  the uri part before the question
+    # mark is the relative base directory
+    my ($base, $list) = ($uri =~ /(.+)\?\?(.+)/);
+
+    unless ($base =~ m!/$!) {
+        return $self->_simple_response(500, "Base directory (before ??) must end in slash.")
+    }
+
+    my Perlbal::Service $svc = $self->{service};
+    return $self->_simple_response(500, "Docroot unconfigured")
+        unless $svc->{docroot};
+
+    @multiple_files = split(/,/, $list);
+
+    # TODO: don't allow this if multiple files aren't enabled
+    return $self->_simple_response(403, "Multiple file serving isn't enabled") unless $svc->{enable_concatenate_get};
+    return $self->_simple_response(403, "Too many files requested") if @multiple_files > 100;
+
+    my $remain = @multiple_files + 1;  # 1 for the base directory
+    my $dirbase = $svc->{docroot} . $base;
+    foreach my $file ('', @multiple_files) {
+        Perlbal::AIO::aio_stat("$dirbase$file", sub {
+            $remain--;
+            $statinfo{$file} = $! ? [] : [ stat(_) ];
+            return if $remain || $self->{closed};
+            $self->_serve_request_multiple_poststat($hd, $dirbase, \@multiple_files, \%statinfo);
+        });
+    }
+}
+
+sub _serve_request_multiple_poststat {
+    my Perlbal::ClientHTTPBase $self = shift;
+    my ($hd, $basedir, $filelist, $stats) = @_;
+
+    # base directory must be a directory
+    unless (S_ISDIR($stats->{''}[2])) {
+        return $self->_simple_response(404, "Base directory not a directory");
+    }
+
+    # files must all exist
+    my $sum_length      = 0;
+    my $most_recent_mod = 0;
+    foreach my $f (@$filelist) {
+        my $stat = $stats->{$f};
+        unless (S_ISREG($stat->[2])) {
+            return $self->_simple_response(404, "One or more file does not exist");
+        }
+        $sum_length     += $stat->[7];
+        $most_recent_mod = $stat->[9] if
+            $stat->[9] >$most_recent_mod;
+    }
+
+    my $lastmod = HTTP::Date::time2str($most_recent_mod);
+    my $ims     = $hd->header("If-Modified-Since") || "";
+
+    # IE sends a request header like "If-Modified-Since: <DATE>; length=<length>"
+    # so we have to remove the length bit before comparing it with our date.
+    # then we save the length to compare later.
+    my $ims_len;
+    if ($ims && $ims =~ s/; length=(\d+)//) {
+        $ims_len = $1;
+    }
+
+    my $not_mod = $ims eq $lastmod && -f _;
+    my $res;
+    if ($not_mod) {
+        $res = $self->{res_headers} = Perlbal::HTTPHeaders->new_response(304);
+    } else {
+        $res = $self->{res_headers} = Perlbal::HTTPHeaders->new_response(200);
+    }
+
+    $res->header("Date", HTTP::Date::time2str());
+    $res->header("Server", "Perlbal");
+    $res->header("Last-Modified", $lastmod);
+    $res->header("Content-Length", $sum_length);
+    $res->header("Content-Type",   'text/plain');
+    # has to happen after content-length is set to work:
+    $self->setup_keepalive($res);
+    return if $self->{service}->run_hook('modify_response_headers', $self);
+
+    if ($hd->request_method eq "HEAD" || $not_mod) {
+        # we can return already, since we know the size
+        $self->tcp_cork(1);
+        $self->state('xfer_resp');
+        $self->write($res->to_string_ref);
+        $self->write(sub { $self->http_response_sent; });
+        return;
+    }
+
+    $self->tcp_cork(1);  # cork writes to self
+    $self->write($res->to_string_ref);
+    $self->state('wait_open');
+
+    # gotta send all files, one by one...
+    my @remain = @$filelist;
+    my $do_next;
+    $do_next = sub {
+        unless (@remain) {
+            $self->write(sub { $self->http_response_sent; });
+            return;
+        }
+
+        my $file     = shift @remain;
+        my $fullfile = "$basedir$file";
+        my $size     = $stats->{$file}[7];
+
+        Perlbal::AIO::aio_open($fullfile, 0, 0, sub {
+            my $rp_fh = shift;
+
+            # if client's gone, just close filehandle and abort
+            if ($self->{closed}) {
+                CORE::close($rp_fh) if $rp_fh;
+                  return;
+              }
+
+            # handle errors
+            if (! $rp_fh) {
+                # couldn't open the file we had already successfully stat'ed.
+                # FIXME: do 500 vs. 404 vs whatever based on $!
+                return $self->close('aio_open_failure');
+            }
+
+            $self->{reproxy_file}     = $file;
+            $self->{post_sendfile_cb} = $do_next;
+            $self->reproxy_fh($rp_fh, $size);
+        });
+    };
+    $do_next->();
 }
 
 sub try_index_files {

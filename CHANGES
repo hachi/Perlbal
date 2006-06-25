@@ -1,3 +1,11 @@
+    -- concatenated get feature.  where a client have use a
+       comma-separated list of files to return, always in text/plain.
+       Useful for webapps which have dozens/hundreds of tiny css/js
+       files, and don't trust browsers/etc to do pipelining.
+       Decreases overall roundtrip latency a bunch, but requires app
+       to be modified to support it.  See t/17-concat.t test for
+       details.
+
     -- do AIO readahead before sendfile to reduce blocking caused
        by disk reads from sendfile.  increases throughput.  see:
        http://brad.livejournal.com/2228488.html
