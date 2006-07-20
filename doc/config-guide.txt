@@ -75,6 +75,15 @@ leaks [....]
 queues
 state changes
 
+Expansions
+- - - - - -
+The following things expand/interpolate in config files/commands
+
+    ${ip:eth0}       -- expands to the configured IP for interface "eth0".  Probably
+                        only works on Linux.
+
+That is all.
+
 
 
 

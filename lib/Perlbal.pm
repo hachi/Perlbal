@@ -204,6 +204,22 @@ sub run_manage_commands {
     return 1;
 }
 
+# allows ${ip:eth0} in config.  currently the only supported expansion
+sub _expand_config_var {
+    my $cmd = shift;
+    $cmd =~ /^(\w+):(.+)/
+        or die "Unknown config variable: $cmd\n";
+    my ($type, $val) = ($1, $2);
+    if ($type eq "ip") {
+        die "Bogus-looking iface name" unless $val =~ /^\w+$/;
+        my $conf = `/sbin/ifconfig $val`;
+        $conf =~ /inet addr:(\S+)/
+            or die "Can't find IP of interface '$val'";
+        return $1;
+    }
+    die "Unknown config variable type: $type\n";
+}
+
 # returns 1 if command succeeded, 0 otherwise
 sub run_manage_command {
     my ($cmd, $out, $ctx) = @_;  # $out is output stream closure
@@ -216,6 +232,9 @@ sub run_manage_command {
     my $orig = $cmd; # save original case for some commands
     $cmd =~ s/^([^=]+)/lc $1/e; # lowercase everything up to an =
     return 1 unless $cmd =~ /^\S/;
+
+    # expand variables
+    $cmd =~ s/\$\{(.+?)\}/_expand_config_var($1)/eg;
 
     $out ||= sub {};
     $ctx ||= Perlbal::CommandContext->new;
