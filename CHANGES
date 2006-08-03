@@ -1,3 +1,7 @@
+    -- allow expansion/interoplation of stuff in config files/commands.
+       for now just mapping network device names to IP addresses:
+          SET listen = ${ip:eth0}:80
+
     -- concatenated get feature.  where a client have use a
        comma-separated list of files to return, always in text/plain.
        Useful for webapps which have dozens/hundreds of tiny css/js
