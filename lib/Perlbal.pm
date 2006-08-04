@@ -53,6 +53,12 @@ use Carp qw(cluck croak);
 use Errno qw(EBADF);
 use POSIX ();
 
+our(%TrackVar);
+sub track_var {
+    my ($name, $ref) = @_;
+    $TrackVar{$name} = $ref;
+}
+
 use Perlbal::AIO;
 use Perlbal::HTTPHeaders;
 use Perlbal::Service;
@@ -278,6 +284,44 @@ sub run_manage_command {
     }
 
     return $mc->err("unknown command: $basecmd");
+}
+
+sub MANAGE_varsize {
+    my $mc = shift->no_opts;
+
+    my $emit;
+    $emit = sub {
+        my ($v, $depth, $name) = @_;
+        $name ||= "";
+
+        my $show;
+        if (ref $v eq "ARRAY") {
+            return unless @$v;
+            $show = "[] " . scalar @$v;
+        }
+        elsif (ref $v eq "HASH") {
+            return unless %$v;
+            $show = "{} " . scalar keys %$v;
+        }
+        else {
+            $show = " = $v";
+        }
+        my $pre = "  " x $depth;
+        $mc->out("$pre$name $show");
+
+        if (ref $v eq "HASH") {
+            foreach my $k (sort keys %$v) {
+                $emit->($v->{$k}, $depth+1, "{$k}");
+            }
+        }
+    };
+
+    foreach my $k (sort keys %TrackVar) {
+        my $v = $TrackVar{$k} or next;
+        $emit->($v, 0, $k);
+    }
+
+    $mc->end;
 }
 
 sub MANAGE_obj {

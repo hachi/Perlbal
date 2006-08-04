@@ -1,6 +1,14 @@
+    -- debug management command 'varsize' to track size of internal
+       data structures, to make sure none get out of control.
+       there's a report that CPU/mem grow slowly over time, and after
+       a month or so of uptime, a restart is needed.  this might help
+       diagnose that.
+
     -- allow expansion/interoplation of stuff in config files/commands.
        for now just mapping network device names to IP addresses:
           SET listen = ${ip:eth0}:80
+
+    -- more hooks as requested by community
 
     -- concatenated get feature.  where a client have use a
        comma-separated list of files to return, always in text/plain.

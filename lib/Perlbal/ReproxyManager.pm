@@ -22,6 +22,11 @@ our $ReproxyGlobalMax;  # int; the global cap used if no per-host cap is specifi
 our $NoSpawn = 0;       # bool; when set, spawn_backend immediately returns without running
 our $LastCleanup = 0;   # int; time we last ran our cleanup logic (FIXME: temp hack)
 
+Perlbal::track_var("rep_connecting", \%ReproxyConnecting);
+Perlbal::track_var("rep_bored",      \%ReproxyBored);
+Perlbal::track_var("rep_queues",     \%ReproxyQueues);
+Perlbal::track_var("rep_backends",   \%ReproxyBackends);
+
 # singleton new function; returns us if we exist, else creates us
 sub get {
     return $ReproxySelf if $ReproxySelf;

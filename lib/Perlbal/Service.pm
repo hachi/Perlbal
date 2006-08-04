@@ -478,6 +478,7 @@ sub new {
     $self->{waiting_clients} = [];
     $self->{waiting_clients_highpri} = [];
     $self->{waiting_client_count} = 0;
+    $self->{waiting_client_map} = {};
 
     # buffered upload setup
     $self->{buffer_uploads_path} = undef;
@@ -487,6 +488,15 @@ sub new {
 
     # bare data structure for extra header info
     $self->{extra_headers} = { remove => [], insert => [] };
+
+    # things to watch...
+    foreach my $v (qw(pending_connects bored_backends waiting_clients
+                      waiting_clients_highpri backend_no_spawn
+                      waiting_client_map
+                      )) {
+        die "Field '$v' not set" unless $self->{$v};
+        Perlbal::track_var("svc-$name-$v", $self->{$v});
+    }
 
     return $self;
 }
