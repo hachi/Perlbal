@@ -45,10 +45,10 @@ $Perlbal::AIO_MODE = "none";
 $Perlbal::AIO_MODE = "ioaio" if $Perlbal::OPTMOD_IO_AIO;
 $Perlbal::AIO_MODE = "linux" if $Perlbal::OPTMOD_LINUX_AIO;
 
-use Sys::Syslog;
+$Perlbal::SYSLOG_AVAILABLE = eval { require Sys::Syslog; 1; };
+$Perlbal::BSD_RESOURCE_AVAILABLE = eval { require BSD::Resource; 1; };
 
 use Getopt::Long;
-use BSD::Resource;
 use Carp qw(cluck croak);
 use Errno qw(EBADF);
 use POSIX ();
@@ -428,8 +428,10 @@ sub MANAGE_xs {
 sub MANAGE_fd {
     my $mc = shift->no_opts;
 
+    return $mc->err('This command is not available unless BSD::Resource is installed') unless ($Perlbal::BSD_RESOURCE_AVAILABLE);
+    
     # called in list context on purpose, but we want the hard limit
-    my (undef, $max) = getrlimit(RLIMIT_NOFILE);
+    my (undef, $max) = eval "BSD::Resource::getrlimit(RLIMIT_NOFILE)";
     my $ct = 0;
 
     # first try procfs if one exists, as that's faster than iterating
@@ -452,7 +454,9 @@ sub MANAGE_fd {
 sub MANAGE_proc {
     my $mc = shift->no_opts;
 
-    my $ru = getrusage();
+    return $mc->err('This command is not available unless BSD::Resource is installed') unless ($Perlbal::BSD_RESOURCE_AVAILABLE);
+
+    my $ru = BSD::Resource::getrusage();
     my ($ut, $st) = ($ru->utime, $ru->stime);
     my ($udelta, $sdelta) = ($ut - $lastutime, $st - $laststime);
     my $rdelta = $reqs - $lastreqs;
@@ -801,8 +805,9 @@ sub MANAGE_server {
     }
 
     if ($key eq "max_connections") {
+        return $mc->err('This command is not available unless BSD::Resource is installed') unless ($Perlbal::BSD_RESOURCE_AVAILABLE);
         return $mc->err("Expected numeric parameter") unless $val =~ /^-?\d+$/;
-        my $rv = setrlimit(RLIMIT_NOFILE, $val, $val);
+        my $rv = BSD::Resource::setrlimit(eval("RLIMIT_NOFILE"), $val, $val);
         unless (defined $rv && $rv) {
             if ($> == 0) {
                 $mc->err("Unable to set limit.");
@@ -1040,7 +1045,7 @@ sub daemonize {
 
 sub run {
     # setup for logging
-    openlog('perlbal', 'pid', 'daemon');
+    Sys::Syslog::openlog('perlbal', 'pid', 'daemon') if $Perlbal::SYSLOG_AVAILABLE;
     Perlbal::log('info', 'beginning run');
 
     # number of AIO threads.  the number of outstanding requests isn't
@@ -1081,7 +1086,7 @@ sub run {
         $clean_exit = 0;
     }
     Perlbal::log('info', 'ending run');
-    closelog();
+    Sys::Syslog::closelog() if $Perlbal::SYSLOG_AVAILABLE;
 
     return $clean_exit;
 }
@@ -1094,7 +1099,7 @@ sub log {
         printf(shift(@_) . "\n", @_);
     } else {
         # just pass the parameters to syslog
-        syslog(@_);
+        syslog(@_) if $Perlbal::SYSLOG_AVAILABLE;
     }
 }
 

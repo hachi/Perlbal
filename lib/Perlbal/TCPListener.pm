@@ -26,7 +26,6 @@ sub new {
                         Proto => IPPROTO_TCP,
                         Listen => 1024,
                         ReuseAddr => 1,
-                        Blocking => 0,
                         ($opts->{ssl} ? %{$opts->{ssl}} : ()),
                         );
     };
@@ -34,9 +33,17 @@ sub new {
     return Perlbal::error("Error creating listening socket: " . ($@ || $!))
         unless $sock;
 
-    # IO::Socket::INET's Blocking => 0 just doesn't seem to work
-    # on lots of perls.  who knows why.
-    IO::Handle::blocking($sock, 0);
+    if ($^O eq 'MSWin32') {
+        # On Windows, we have to do this a bit differently.
+        # IO::Socket should really do this for us, but whatever.
+        my $do = 1;
+        ioctl($sock, 0x8004667E, \$do) or return Perlbal::error("Unable to make listener on $hostport non-blocking: $!");
+    }
+    else {
+        # IO::Socket::INET's Blocking => 0 just doesn't seem to work
+        # on lots of perls.  who knows why.
+        IO::Handle::blocking($sock, 0) or return Perlbal::error("Unable to make listener on $hostport non-blocking: $!");
+    }
 
     my $self = $class->SUPER::new($sock);
     $self->{service} = $service;
