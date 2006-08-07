@@ -1,6 +1,8 @@
-	-- added the ability for plugins to create custom service roles and
-	   add custom configuration options to services, demo is available
-	   as conf/echoservice.conf and lib/Perlbal/Plugin/EchoService.pm
+    -- work better on win32
+
+    -- added the ability for plugins to create custom service roles and
+       add custom configuration options to services, demo is available
+       as conf/echoservice.conf and lib/Perlbal/Plugin/EchoService.pm
 
 1.42: 2006-08-03
 
