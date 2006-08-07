@@ -27,6 +27,7 @@ lib/Perlbal/Plugin/Queues.pm
 lib/Perlbal/Plugin/Stats.pm
 lib/Perlbal/Plugin/Highpri.pm
 lib/Perlbal/Plugin/Vhosts.pm
+lib/Perlbal/Plugin/EchoService.pm
 lib/Perlbal/ReproxyManager.pm
 META.yml                                 Module meta-data (added by MakeMaker)
 devtools/gendocs.pl
@@ -41,6 +42,7 @@ conf/webserver.conf
 conf/load-balancer.conf
 conf/virtual-hosts.conf
 conf/ssl.conf
+conf/echoservice.conf
 t/00-use.t
 t/10-testharness.t
 t/12-headers.t

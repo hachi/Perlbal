@@ -88,6 +88,8 @@ use fields (
             'latency',               # int: milliseconds of latency to add to request
             );
 
+# hash; 'role' => coderef to instantiate a client for this role
+our %PluginRoles;
 
 our $tunables = {
 
@@ -95,7 +97,14 @@ our $tunables = {
         des => "What type of service.  One of 'reverse_proxy' for a service that load balances to a pool of backend webserver nodes, 'web_server' for a typical webserver', 'management' for a Perlbal management interface (speaks both command-line or HTTP, auto-detected), or 'selector', for a virtual service that maps onto other services.",
         required => 1,
 
-        check_type => ["enum", ["reverse_proxy", "web_server", "management", "selector", "upload_tracker"]],
+        check_type => sub {
+            my ($self, $val, $errref) = @_;
+            return 0 unless $val;
+            return 1 if $val =~ /^(?:reverse_proxy|web_server|management|selector|upload_tracker)$/;
+            return 1 if $PluginRoles{$val};
+            $$errref = "Role not valid for service $self->{name}";
+            return 0;
+        },
         check_role => '*',
         setter => sub {
             my ($self, $val, $set, $mc) = @_;
@@ -461,6 +470,7 @@ sub new {
 
     $self->{name} = $name;
     $self->{enabled} = 0;
+    $self->{extra_config} = {};
 
     $self->{backend_no_spawn} = {};
     $self->{generation} = 0;
@@ -604,6 +614,11 @@ sub set {
 
         if (ref $setter eq "CODE") {
             return $setter->($self, $val, $set, $mc);
+        } elsif ($tun->{_plugin_inserted}) {
+            # plugins that add tunables need to be stored in the extra_config hash due to the main object
+            # using fields.  this passthrough is done so the config files don't need to specify this.
+            $self->{extra_config}->{$key} = $val;
+            return $mc->ok;
         } else {
             return $set->();
         }
@@ -656,6 +671,51 @@ sub set {
     }
 
     return $mc->err("Unknown service parameter '$key'");
+}
+
+# CLASS METHOD -
+# used by plugins that want to add tunables so that the config file
+# can have more options for service settings
+sub add_tunable {
+    my ($name, $hashref) = @_;
+    return 0 unless $name && $hashref && ref $hashref eq 'HASH';
+    return 0 if $tunables->{$name};
+    $hashref->{_plugin_inserted} = 1; # mark that a plugin did this
+    $tunables->{$name} = $hashref;
+    return 1;
+}
+
+# CLASS METHOD -
+# remove a defined tunable, but only if a plugin is what created it
+sub remove_tunable {
+    my $name = shift;
+    my $tun = $tunables->{$name} or return 0;
+    return 0 unless $tun->{_plugin_inserted};
+    delete $tunables->{$name};
+    return 1;
+}
+
+# CLASS METHOD -
+# used by plugins to define a new role that services can take on
+sub add_role {
+    my ($role, $creator) = @_;
+    return 0 unless $role && $creator && ref $creator eq 'CODE';
+    return 0 if $PluginRoles{$role};
+    $PluginRoles{$role} = $creator;
+    return 1;
+}
+
+# CLASS METHOD -
+# remove a defined plugin role
+sub remove_role {
+    return 0 unless delete $PluginRoles{$_[0]};
+    return 1;
+}
+
+# CLASS METHOD -
+# returns a defined role creator, if it exists.  (undef if it does not)
+sub get_role_creator {
+    return $PluginRoles{$_[0]};
 }
 
 # run the hooks in a list one by one until one hook returns a true

@@ -78,6 +78,9 @@ sub event_read {
         } elsif ($service_role eq "selector") {
             # will be cast to a more specific class later...
             Perlbal::ClientHTTPBase->new($self->{service}, $psock, $self->{service});
+        } elsif (my $creator = Perlbal::Service::get_role_creator($service_role)) {
+            # was defined by a plugin, so we want to return one of these
+            $creator->($self->{service}, $psock);
         }
 
     }
