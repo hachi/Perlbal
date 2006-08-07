@@ -23,6 +23,9 @@ You can use and redistribute Perlbal under the same terms as Perl itself.
 
 package Perlbal;
 
+use vars qw($VERSION);
+$VERSION = '1.42';
+
 use constant DEBUG => $ENV{PERLBAL_DEBUG} || 0;
 use constant DEBUG_OBJ => $ENV{PERLBAL_DEBUG_OBJ} || 0;
 use constant TRACK_STATES => $ENV{PERLBAL_TRACK_STATES} || 0; # if on, track states for "state changes" command
