@@ -24,7 +24,7 @@ You can use and redistribute Perlbal under the same terms as Perl itself.
 package Perlbal;
 
 use vars qw($VERSION);
-$VERSION = '1.42';
+$VERSION = '1.43';
 
 use constant DEBUG => $ENV{PERLBAL_DEBUG} || 0;
 use constant DEBUG_OBJ => $ENV{PERLBAL_DEBUG_OBJ} || 0;
@@ -432,7 +432,7 @@ sub MANAGE_fd {
     my $mc = shift->no_opts;
 
     return $mc->err('This command is not available unless BSD::Resource is installed') unless ($Perlbal::BSD_RESOURCE_AVAILABLE);
-    
+
     # called in list context on purpose, but we want the hard limit
     my (undef, $max) = eval "BSD::Resource::getrlimit(RLIMIT_NOFILE)";
     my $ct = 0;

@@ -308,6 +308,14 @@ sub event_write_reproxy_fh {
     # something like:
     # if ($hot) { $postread->(); return ; }
 
+    if ($to_send < 0) {
+        Perlbal::log('warning', "tried to readahead negative bytes.  filesize=$self->{reproxy_file_size}, offset=$self->{reproxy_file_offset}");
+        # this code, doing sendfile, will fail gracefully with return
+        # code, not 'die', and we'll close with sendfile_error:
+        $postread->();
+        return;
+    }
+
     Perlbal::AIO::aio_readahead($self->{reproxy_fh},
                                 $self->{reproxy_file_offset},
                                 $to_send, $postread);
@@ -533,7 +541,7 @@ sub _serve_request_multiple_poststat {
     my ($hd, $basedir, $filelist, $stats) = @_;
 
     # base directory must be a directory
-    unless (S_ISDIR($stats->{''}[2])) {
+    unless (S_ISDIR($stats->{''}[2] || 0)) {
         return $self->_simple_response(404, "Base directory not a directory");
     }
 
@@ -542,7 +550,7 @@ sub _serve_request_multiple_poststat {
     my $most_recent_mod = 0;
     foreach my $f (@$filelist) {
         my $stat = $stats->{$f};
-        unless (S_ISREG($stat->[2])) {
+        unless (S_ISREG($stat->[2] || 0)) {
             return $self->_simple_response(404, "One or more file does not exist");
         }
         $sum_length     += $stat->[7];

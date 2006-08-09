@@ -1,3 +1,14 @@
+1.43: 2006-08-09
+
+    -- there's a case where offset gets past end of file in static file
+       code, but very rarely.  sendfile handles this w/ an error that
+       we dealt with, but the new readahead code didn't and crashed.
+       working around for now, until root cause is found for offset
+       going past.
+
+    -- eliminate some warnings in error cases.  only really affects noise
+       in test suite
+
     -- work better on win32
 
     -- added the ability for plugins to create custom service roles and
