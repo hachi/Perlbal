@@ -514,6 +514,10 @@ sub _serve_request_multiple {
         return $self->_simple_response(500, "Base directory (before ??) must end in slash.")
     }
 
+    # and remove any trailing ?.+ on the list, so you can do things like cache busting
+    # with a ?v=<modtime> at the end of a list of files.
+    $list =~ s/\?.+//;
+
     my Perlbal::Service $svc = $self->{service};
     return $self->_simple_response(500, "Docroot unconfigured")
         unless $svc->{docroot};
@@ -548,15 +552,20 @@ sub _serve_request_multiple_poststat {
     # files must all exist
     my $sum_length      = 0;
     my $most_recent_mod = 0;
+    my $mime;                  # undef until set, or defaults to text/plain later
     foreach my $f (@$filelist) {
         my $stat = $stats->{$f};
         unless (S_ISREG($stat->[2] || 0)) {
             return $self->_simple_response(404, "One or more file does not exist");
         }
+        if (!$mime && $f =~ /\.(\w+)$/ && $MimeType->{$1}) {
+            $mime = $MimeType->{$1};
+        }
         $sum_length     += $stat->[7];
         $most_recent_mod = $stat->[9] if
             $stat->[9] >$most_recent_mod;
     }
+    $mime ||= 'text/plain';
 
     my $lastmod = HTTP::Date::time2str($most_recent_mod);
     my $ims     = $hd->header("If-Modified-Since") || "";
@@ -581,7 +590,7 @@ sub _serve_request_multiple_poststat {
     $res->header("Server", "Perlbal");
     $res->header("Last-Modified", $lastmod);
     $res->header("Content-Length", $sum_length);
-    $res->header("Content-Type",   'text/plain');
+    $res->header("Content-Type",   $mime);
     # has to happen after content-length is set to work:
     $self->setup_keepalive($res);
     return if $self->{service}->run_hook('modify_response_headers', $self);

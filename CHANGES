@@ -1,3 +1,19 @@
+1.44: 2006-08-09
+
+    -- allow a no-op ?foo at the end of concatenated-get URLs, so they'd be of
+       the form:  http://host/dir??file1,file2,file3?noopsection.  the no-op
+       section is good for cache-busting, putting in, say, the modtime of the
+       newest file, forcing browsers like safari (who over-cache) to reload.
+
+    -- set a mime-type other than text/plain on concatenated-get requests,
+       only falling back to text/plain if none of files have a known mime type.
+       in practice a request is all css or all js, so match is found by looking
+       at 1st file.  this is required since mozilla won't show CSS if not text/css.
+
+    -- actually be able to start up using 'perlbal' command.  test
+       suite passed before, but moving $VERSION into Perlbal.pm
+       had quitely broke it all.
+
 1.43: 2006-08-09
 
     -- there's a case where offset gets past end of file in static file

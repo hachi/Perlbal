@@ -65,7 +65,7 @@ USAGE
 }
 
 if ($opt_version) {
-    print STDOUT "Perlbal version $VERSION\n";
+    print STDOUT "Perlbal version $Perlbal::VERSION\n";
     exit 0;
 }
 
