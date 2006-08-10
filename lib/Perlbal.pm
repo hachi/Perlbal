@@ -24,7 +24,7 @@ You can use and redistribute Perlbal under the same terms as Perl itself.
 package Perlbal;
 
 use vars qw($VERSION);
-$VERSION = '1.44';
+$VERSION = '1.45';
 
 use constant DEBUG => $ENV{PERLBAL_DEBUG} || 0;
 use constant DEBUG_OBJ => $ENV{PERLBAL_DEBUG_OBJ} || 0;
@@ -430,11 +430,10 @@ sub MANAGE_xs {
 
 sub MANAGE_fd {
     my $mc = shift->no_opts;
-
-    return $mc->err('This command is not available unless BSD::Resource is installed') unless ($Perlbal::BSD_RESOURCE_AVAILABLE);
+    return $mc->err('This command is not available unless BSD::Resource is installed') unless $Perlbal::BSD_RESOURCE_AVAILABLE;
 
     # called in list context on purpose, but we want the hard limit
-    my (undef, $max) = eval "BSD::Resource::getrlimit(RLIMIT_NOFILE)";
+    my (undef, $max) = BSD::Resource::getrlimit(BSD::Resource::RLIMIT_NOFILE());
     my $ct = 0;
 
     # first try procfs if one exists, as that's faster than iterating
@@ -457,7 +456,7 @@ sub MANAGE_fd {
 sub MANAGE_proc {
     my $mc = shift->no_opts;
 
-    return $mc->err('This command is not available unless BSD::Resource is installed') unless ($Perlbal::BSD_RESOURCE_AVAILABLE);
+    return $mc->err('This command is not available unless BSD::Resource is installed') unless $Perlbal::BSD_RESOURCE_AVAILABLE;
 
     my $ru = BSD::Resource::getrusage();
     my ($ut, $st) = ($ru->utime, $ru->stime);
@@ -808,9 +807,9 @@ sub MANAGE_server {
     }
 
     if ($key eq "max_connections") {
-        return $mc->err('This command is not available unless BSD::Resource is installed') unless ($Perlbal::BSD_RESOURCE_AVAILABLE);
+        return $mc->err('This command is not available unless BSD::Resource is installed') unless $Perlbal::BSD_RESOURCE_AVAILABLE;
         return $mc->err("Expected numeric parameter") unless $val =~ /^-?\d+$/;
-        my $rv = BSD::Resource::setrlimit(eval("RLIMIT_NOFILE"), $val, $val);
+        my $rv = BSD::Resource::setrlimit(BSD::Resource::RLIMIT_NOFILE(), $val, $val);
         unless (defined $rv && $rv) {
             if ($> == 0) {
                 $mc->err("Unable to set limit.");

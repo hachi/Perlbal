@@ -1,3 +1,8 @@
+1.45: 2006-08-10
+
+    -- fix Mart's broken win32 support that broke Unix.  TODO:  test to raise/check
+       fd limit so this doesn't happen again on unix.
+
 1.44: 2006-08-10
 
     -- allow a no-op ?foo at the end of concatenated-get URLs, so they'd be of
