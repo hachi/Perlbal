@@ -584,12 +584,12 @@ sub _serve_request_multiple_poststat {
         $res = $self->{res_headers} = Perlbal::HTTPHeaders->new_response(304);
     } else {
         $res = $self->{res_headers} = Perlbal::HTTPHeaders->new_response(200);
+        $res->header("Content-Length", $sum_length);
     }
 
     $res->header("Date", HTTP::Date::time2str());
     $res->header("Server", "Perlbal");
     $res->header("Last-Modified", $lastmod);
-    $res->header("Content-Length", $sum_length);
     $res->header("Content-Type",   $mime);
     # has to happen after content-length is set to work:
     $self->setup_keepalive($res);

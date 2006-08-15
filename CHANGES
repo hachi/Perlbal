@@ -1,3 +1,7 @@
+    -- concatenanted GETs sent 304 Not Modified w/ content-lengths.  should
+       be without.  fixed.  also including t/17-webserver-concat which forgot
+       to be checked into svn/MANIFEST earlier
+
 1.46: 2006-08-10
 
     -- fix Mart's broken win32 support that broke Unix, part 2:  syslog when
