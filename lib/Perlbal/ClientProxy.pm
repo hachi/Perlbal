@@ -120,6 +120,7 @@ sub start_reproxy_service {
 
     $self->{backend_requested} = 0;
     $self->{backend} = undef;
+    $self->{res_headers} = $primary_res_hdrs;
 
     $svc->adopt_base_client($self);
 }
