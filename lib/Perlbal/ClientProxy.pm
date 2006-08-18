@@ -773,7 +773,7 @@ sub satisfy_request_from_cache {
     }
 
     my $res_hd = Perlbal::HTTPHeaders->new_response(200);
-
+    $res_hd->header("Date", HTTP::Date::time2str(time()));
     while (my ($key, $value) = each %headers) {
         $res_hd->header($key, $value);
     }

@@ -1,3 +1,5 @@
+    -- optionally cache in-process the results of X-Reproxy-URL reponses
+
 1.47: 2006-08-15
 
     -- concatenanted GETs sent 304 Not Modified w/ content-lengths.  should
