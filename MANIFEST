@@ -5,6 +5,7 @@ perlbal
 lib/Perlbal.pm
 lib/Perlbal/AIO.pm
 lib/Perlbal/BackendHTTP.pm
+lib/Perlbal/Cache.pm
 lib/Perlbal/ClientHTTP.pm
 lib/Perlbal/ClientHTTPBase.pm
 lib/Perlbal/ClientManage.pm

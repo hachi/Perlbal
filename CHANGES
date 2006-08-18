@@ -1,3 +1,5 @@
+1.48: 2006-08-18
+
     -- optionally cache in-process the results of X-Reproxy-URL reponses
 
 1.47: 2006-08-15
