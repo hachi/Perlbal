@@ -89,6 +89,10 @@ use fields (
             'enable_error_retries',  # bool: whether we should retry requests after errors
             'error_retry_schedule',  # string of comma-separated seconds (full or partial) to delay between retries
             'latency',               # int: milliseconds of latency to add to request
+
+            # stats:
+            '_stat_requests',       # total requests to this service
+            '_stat_cache_hits',     # total requests to this service that were served via the reproxy-url cache
             );
 
 # hash; 'role' => coderef to instantiate a client for this role
@@ -1333,7 +1337,7 @@ sub stats_info
     my $now = time;
 
     $out->("SERVICE $self->{name}");
-    $out->("     listening: $self->{listen}");
+    $out->("     listening: " . ($self->{listen} || "--"));
     $out->("          role: $self->{role}");
     if ($self->{role} eq "reverse_proxy" ||
         $self->{role} eq "web_server") {
@@ -1347,6 +1351,13 @@ sub stats_info
         }
     }
     if ($self->{role} eq "reverse_proxy") {
+        if ($self->{reproxy_cache}) {
+            my $hits     = $self->{_stat_cache_hits} || 0;
+            my $hit_rate = sprintf("%0.02f%%", eval { $hits / ($self->{_stat_requests} || 0) * 100 } || 0);
+            $out->("    cache hits: $hits");
+            $out->("cache hit rate: $hit_rate");
+        }
+
         my $bored_count = scalar @{$self->{bored_backends}};
         $out->(" connect-ahead: $bored_count/$self->{connect_ahead}");
         if ($self->{pool}) {

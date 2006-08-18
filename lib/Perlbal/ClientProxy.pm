@@ -739,7 +739,9 @@ sub satisfy_request_from_cache {
     my Perlbal::ClientProxy $self = shift;
 
     my $req_hd = $self->{req_headers};
-    my $cache  = $self->{service}->{reproxy_cache};
+    my $svc    = $self->{service};
+    my $cache  = $svc->{reproxy_cache};
+    $svc->{_stat_requests}++;
 
     my $requri   = $req_hd->request_uri    || '';
     my $hostname = $req_hd->header("Host") || '';
@@ -752,11 +754,12 @@ sub satisfy_request_from_cache {
     my ($timeout, $headers, $urls) = @$reproxy;
     return 0 if time() > $timeout;
 
+    $svc->{_stat_cache_hits}++;
     my %headers = map { ref $_ eq 'SCALAR' ? $$_ : $_ } @{$headers || []};
 
     if (my $ims = $req_hd->header("If-Modified-Since")) {
         my ($lm_key) = grep { uc($_) eq "LAST-MODIFIED" } keys %headers;
-        my $lm = $headers->{$lm_key} || "";
+        my $lm = $headers{$lm_key} || "";
 
         # remove the IE length suffix
         $ims =~ s/; length=(\d+)//;
@@ -764,6 +767,7 @@ sub satisfy_request_from_cache {
         # If 'Last-Modified' is same as 'If-Modified-Since', send a 304
         if ($ims eq $lm) {
             my $res_hd = Perlbal::HTTPHeaders->new_response(304);
+            $res_hd->header("Content-Length", "0");
             $self->tcp_cork(1);
             $self->state('xfer_resp');
             $self->write($res_hd->to_string_ref);
