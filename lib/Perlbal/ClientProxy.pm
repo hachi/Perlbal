@@ -727,8 +727,43 @@ sub handle_request {
     } else {
         # get the backend request process moving, since we aren't buffering
         $self->{is_buffering} = 0;
+
+        # if reproxy-caching is enabled, we can often bypass needing to allocate a BackendHTTP connection:
+        return if $svc->{reproxy_cache} && $self->satisfy_request_from_cache;
+
         $self->request_backend;
     }
+}
+
+sub satisfy_request_from_cache {
+    my Perlbal::ClientProxy $self = shift;
+    my $req_hd = $self->{req_headers};
+
+    if ($self->may_reproxy and my $reproxy_cache = $svc->reproxy_cache) {
+        my $requri   = $client->{req_headers}->request_uri    || '';
+        my $hostname = $client->{req_headers}->header("Host") || '';
+        my $key      = "$hostname|$request";
+
+#        warn "Reproxy possible, checking LRUCache '$key'\n";
+        if (my $reproxy = $reproxy_cache->get($key)) {
+            my ($timeout, $headers, $urls) = @$reproxy;
+            if ($timeout > time) {
+                my $head_obj = Perlbal::HTTPHeaders->new_response( 200 );
+                my %headers = map { ref $_ eq 'SCALAR' ? $$_ : $_ } @$headers;
+                while (my ($key, $value) = each %headers) {
+                    $head_obj->header($key, $value);
+                }
+#                warn "Reproxy in cache!\n";
+                $client->start_reproxy_uri($head_obj, $urls);
+#            $self->next_request;
+                return 1;
+            } else {
+#                warn "Reproxy in cache, but expired";
+            }
+        }
+    }
+
+    return 0;
 }
 
 # return 1 to steal this connection (when they're asking status of an

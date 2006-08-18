@@ -164,33 +164,6 @@ sub assign_client {
 
     my $svc = $self->{service};
 
-    if ($self->may_reproxy and my $reproxy_cache = $svc->reproxy_cache) {
-        my $request = $client->{req_headers}->{requestLine};
-        my $hostname = $client->{req_headers}->header("Host");
-
-        $request = '' unless defined $request;
-        $hostname = '' unless defined $hostname;
-
-        my $key = "$hostname|$request";
-#        warn "Reproxy possible, checking LRUCache '$key'\n";
-        if (my $reproxy = $reproxy_cache->get($key)) {
-            my ($timeout, $headers, $urls) = @$reproxy;
-            if ($timeout > time) {
-                my $head_obj = Perlbal::HTTPHeaders->new_response( 200 );
-                my %headers = map { ref $_ eq 'SCALAR' ? $$_ : $_ } @$headers;
-                while (my ($key, $value) = each %headers) {
-                    $head_obj->header($key, $value);
-                }
-#                warn "Reproxy in cache!\n";
-                $client->start_reproxy_uri($head_obj, $urls);
-#            $self->next_request;
-                return 1;
-            } else {
-#                warn "Reproxy in cache, but expired";
-            }
-        }
-    }
-
     # set our client, and the client's backend to us
     $svc->mark_node_used($self->{ipport});
     $self->{client} = $client;
