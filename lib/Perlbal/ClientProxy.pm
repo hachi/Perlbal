@@ -737,33 +737,29 @@ sub handle_request {
 
 sub satisfy_request_from_cache {
     my Perlbal::ClientProxy $self = shift;
+
     my $req_hd = $self->{req_headers};
+    my $cache  = $svc->{service}->{reproxy_cache};
 
-    if ($self->may_reproxy and my $reproxy_cache = $svc->reproxy_cache) {
-        my $requri   = $client->{req_headers}->request_uri    || '';
-        my $hostname = $client->{req_headers}->header("Host") || '';
-        my $key      = "$hostname|$request";
+    my $requri   = $req_hd->request_uri    || '';
+    my $hostname = $req_hd->header("Host") || '';
 
-#        warn "Reproxy possible, checking LRUCache '$key'\n";
-        if (my $reproxy = $reproxy_cache->get($key)) {
-            my ($timeout, $headers, $urls) = @$reproxy;
-            if ($timeout > time) {
-                my $head_obj = Perlbal::HTTPHeaders->new_response( 200 );
-                my %headers = map { ref $_ eq 'SCALAR' ? $$_ : $_ } @$headers;
-                while (my ($key, $value) = each %headers) {
-                    $head_obj->header($key, $value);
-                }
-#                warn "Reproxy in cache!\n";
-                $client->start_reproxy_uri($head_obj, $urls);
-#            $self->next_request;
-                return 1;
-            } else {
-#                warn "Reproxy in cache, but expired";
-            }
-        }
+    my $key      = "$hostname|$request";
+    my $reproxy  = $cache->get($key) or
+        return 0;
+
+    my ($timeout, $headers, $urls) = @$reproxy;
+    return 0 if $timeout > time();
+
+    # FIXME: should do 304 Not Modified if req_hd has a if-modified-since header and we have a last-modified header
+    my $res_hd = Perlbal::HTTPHeaders->new_response(200);
+    my %headers = map { ref $_ eq 'SCALAR' ? $$_ : $_ } @{$headers || []};
+    while (my ($key, $value) = each %headers) {
+        $res_hd->header($key, $value);
     }
 
-    return 0;
+    $client->start_reproxy_uri($head_obj, $urls);
+    return 1;
 }
 
 # return 1 to steal this connection (when they're asking status of an
