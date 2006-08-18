@@ -22,7 +22,7 @@ END {
     kill 9, @webserver_pids;
 }
 
-my $testpid;
+my $testpid; # of the test suite's main program, the one running the HTTP client
 
 sub start_webserver {
     my $port = new_port();
