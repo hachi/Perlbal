@@ -1385,29 +1385,34 @@ sub reproxy_cache {
 
 sub add_to_reproxy_url_cache {
     my Perlbal::Service $self;
-    my ($self, $reshd) = @_;
+    my ($reqhd, $reshd);
 
-    my $reproxy_cache_for = $hd->header('X-REPROXY-CACHE-FOR');
-    my $urls              = $hd->header('X-REPROXY-URL');
+    ($self, $reqhd, $reshd) = @_;
 
-        if (defined $reproxy_cache_for and my $reproxy_cache = $self->{service}->reproxy_cache) {
-            my ($timeout_delta, $cache_headers) = split ';', $reproxy_cache_for, 2;
-            my $timeout = $timeout_delta ? time() + $timeout_delta : undef;
+    # is caching enabled on this service?
+    my $cache = $self->{reproxy_cache} or
+        return 0;
 
-            my $hostname = $client->{req_headers}->header("Host") || '';
-            my $requri   = $client->{req_headers}->request_uri    || '';
-            my $key = "$hostname|$requri";
+    # these should always be set anyway, from BackendHTTP:
+    my $reproxy_cache_for = $reshd->header('X-REPROXY-CACHE-FOR') or  return 0;
+    my $urls              = $reshd->header('X-REPROXY-URL')       or  return 0;
 
-            my @headers;
-            foreach my $header (split /\s+/, $cache_headers) {
-                next unless my $value = $res_headers->header($header);
-                $value = _ref_to($value) if uc($header) eq 'CONTENT-TYPE';
-                my $key = _ref_to($header);
-                push @headers, ($key, $value);
-            }
-            $reproxy_cache->set($key, [$timeout, \@headers, $urls]);
-        }
+    my ($timeout_delta, $cache_headers) = split ';', $reproxy_cache_for, 2;
+    my $timeout = $timeout_delta ? time() + $timeout_delta : undef;
 
+    my $hostname = $reqhd->header("Host") || '';
+    my $requri   = $reqhd->request_uri    || '';
+    my $key = "$hostname|$requri";
+
+    my @headers;
+    foreach my $header (split /\s+/, $cache_headers) {
+        my $value;
+        next unless $header && ($value = $reshd->header($header));
+        $value  = _ref_to($value) if uc($header) eq 'CONTENT-TYPE';
+        push @headers, _ref_to($header), $value;
+    }
+
+    $cache->set($key, [$timeout, \@headers, $urls]);
 }
 
 {
