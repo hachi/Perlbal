@@ -20,6 +20,7 @@ use fields (
 
             'pool',            # Perlbal::Pool that we're using to allocate nodes if we're in proxy mode
             'listener',        # Perlbal::TCPListener object, when enabled
+            'reproxy_cache',             # Perlbal::Cache object, when enabled
 
             # end-user tunables
             'listen',             # scalar IP:port of where we're listening for new connections
@@ -48,6 +49,7 @@ use fields (
             'trusted_upstream_proxies', # Net::Netmask object containing netmasks for trusted upstreams
             'always_trusted', # bool; if true, always trust upstreams
             'enable_reproxy', # bool; if true, advertise that server will reproxy files and/or URLs
+            'reproxy_cache_maxsize', # int; maximum number of reproxy results to be cached. (0 is disabled and default)
 
             # Internal state:
             'waiting_clients',         # arrayref of clients waiting for backendhttp conns
@@ -244,6 +246,23 @@ our $tunables = {
         default => 0,
         check_role => "reverse_proxy",
         check_type => "bool",
+    },
+
+    'reproxy_cache_maxsize' => {
+        des => "Set the maximum number of cached reproxy results (X-REPROXY-CACHE-FOR) that may be kept in the service cache. These cached requests take up about 1.25KB of ram each (on Linux x86), but will vary with usage. Perlbal still starts with 0 in the cache and will grow over time. Be careful when adjusting this and watch your ram usage like a hawk.",
+        default => 0,
+        check_role => "reverse_proxy",
+        check_type => "int",
+        setter => sub {
+            my ($self, $val, $set, $mc) = @_;
+            if ($val) {
+                $self->{reproxy_cache} ||= Perlbal::Cache->new({maxsize => 1});
+                $self->{reproxy_cache}->maxsize($val);
+            } else {
+                undef $self->{reproxy_cache};
+            }
+            return $mc->ok;
+        },
     },
 
     'upload_status_listeners' => {
@@ -1356,6 +1375,11 @@ sub name {
 sub listenaddr {
     my Perlbal::Service $self = $_[0];
     return $self->{listen};
+}
+
+sub reproxy_cache {
+    my Perlbal::Service $self = $_[0];
+    return $self->{reproxy_cache};
 }
 
 1;

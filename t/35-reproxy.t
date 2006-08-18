@@ -32,6 +32,7 @@ SET test.persist_backend = 1
 SET test.pool = a
 SET test.connect_ahead = 0
 SET test.enable_reproxy = 1
+SET test.reproxy_cache_maxsize = 150
 ENABLE test
 
 CREATE SERVICE ws
@@ -84,6 +85,19 @@ ok_reproxy_url();
 ok_reproxy_url();
 ok($wc->reqdone >= 4, "4 on same conn");
 
+# reproxy cache support
+{
+    my $break = sub { $wc->request("reproxy_url_cache_break") };
+    my $fix = sub { $wc->request("reproxy_url_cache_fix") };
+
+    ok_reproxy_url_cached("One");
+    ok_reproxy_url_cached("Two");
+    $break->();
+    ok_reproxy_url_cached("Three");
+    sleep 15;
+    ok_reproxy_url_cached("Four");
+}
+
 # back and forth every combo
 #  FROM / TO:  status  file  url
 #  status        X      X    X
@@ -109,6 +123,11 @@ foreach_aio {
 
 # try to reproxy to a list of URLs, where the first one is bogus, and last one is good
 ok_reproxy_url_list();
+
+sub ok_reproxy_url_cached {
+    my $resp = $wc->request("reproxy_url_cached:10:http://127.0.0.1:$webport/foo.txt");
+    ok($resp && $resp->content eq $file_content, "reproxy with cache: $_[0]");
+}
 
 sub ok_reproxy_url_list {
     my $resp = $wc->request("reproxy_url_multi:$deadport:$webport:/foo.txt");

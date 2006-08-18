@@ -42,6 +42,7 @@ use fields ('client',  # Perlbal::ClientProxy connection, or undef
 use Socket qw(PF_INET IPPROTO_TCP SOCK_STREAM);
 
 use Perlbal::ClientProxy;
+use Perlbal::Cache;
 
 # if this is made too big, (say, 128k), then perl does malloc instead
 # of using its slab cache.
@@ -162,6 +163,33 @@ sub assign_client {
     return 0 if $self->{client};
 
     my $svc = $self->{service};
+
+    if ($self->may_reproxy and my $reproxy_cache = $svc->reproxy_cache) {
+        my $request = $client->{req_headers}->{requestLine};
+        my $hostname = $client->{req_headers}->header("Host");
+
+        $request = '' unless defined $request;
+        $hostname = '' unless defined $hostname;
+
+        my $key = "$hostname|$request";
+#        warn "Reproxy possible, checking LRUCache '$key'\n";
+        if (my $reproxy = $reproxy_cache->get($key)) {
+            my ($timeout, $headers, $urls) = @$reproxy;
+            if ($timeout > time) {
+                my $head_obj = Perlbal::HTTPHeaders->new_response( 200 );
+                my %headers = map { ref $_ eq 'SCALAR' ? $$_ : $_ } @$headers;
+                while (my ($key, $value) = each %headers) {
+                    $head_obj->header($key, $value);
+                }
+#                warn "Reproxy in cache!\n";
+                $client->start_reproxy_uri($head_obj, $urls);
+#            $self->next_request;
+                return 1;
+            } else {
+#                warn "Reproxy in cache, but expired";
+            }
+        }
+    }
 
     # set our client, and the client's backend to us
     $svc->mark_node_used($self->{ipport});
@@ -321,6 +349,14 @@ sub event_read_waiting_options { # : void
     return;
 }
 
+{
+    my %refs;
+    sub _ref_to {
+        my $key = shift;
+        return $refs{$key} || ($refs{$key} = \$key);
+    }
+}
+
 sub handle_response { # : void
     my Perlbal::BackendHTTP $self = shift;
     my Perlbal::HTTPHeaders $hd = $self->{res_headers};
@@ -367,6 +403,8 @@ sub handle_response { # : void
     }
     $self->{content_length_remain} = $self->{content_length} || 0;
 
+    my $reproxy_cache_for = $hd->header('X-REPROXY-CACHE-FOR');
+
     # special cases:  reproxying and retrying after server errors:
     if ((my $rep = $hd->header('X-REPROXY-FILE')) && $self->may_reproxy) {
         # make the client begin the async IO while we move on
@@ -374,6 +412,32 @@ sub handle_response { # : void
         $self->next_request;
         return;
     } elsif ((my $urls = $hd->header('X-REPROXY-URL')) && $self->may_reproxy) {
+        my $res_headers = $self->{res_headers};
+
+        if (defined $reproxy_cache_for and my $reproxy_cache = $self->{service}->reproxy_cache) {
+            my ($timeout_delta, $cache_headers) = split ';', $reproxy_cache_for, 2;
+            my $timeout = $timeout_delta ? time + $timeout_delta : undef;
+
+            my $hostname = $client->{req_headers}->header("Host");
+            my $request = $client->{req_headers}->{requestLine};
+
+            $hostname = '' unless defined $hostname;
+            $request = '' unless defined $request;
+
+            my $key = "$hostname|$request";
+#            warn "Caching redirect in '$key'\n";
+
+            my @headers;
+            foreach my $header (split /\s+/, $cache_headers) {
+                next unless my $value = $res_headers->header($header);
+                $value = _ref_to($value) if uc($header) eq 'CONTENT-TYPE';
+                my $key = _ref_to($header);
+                push @headers, ($key, $value);
+            }
+#            warn "Code: $res_headers->{code} Headers: ", join( ",", @headers ), "\n";
+            $reproxy_cache->set($key, [$timeout, \@headers, $urls]);
+        }
+
         $client->start_reproxy_uri($self->{res_headers}, $urls);
         $self->next_request;
         return;
