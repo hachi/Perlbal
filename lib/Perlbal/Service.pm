@@ -12,6 +12,7 @@ use warnings;
 no  warnings qw(deprecated);
 
 use Perlbal::BackendHTTP;
+use Perlbal::Cache;
 
 use fields (
             'name',            # scalar: name of this service
@@ -1408,6 +1409,15 @@ sub add_to_reproxy_url_cache {
         }
 
 }
+
+{
+    my %refs;
+    sub _ref_to {
+        my $key = shift;
+        return $refs{$key} || ($refs{$key} = \$key);
+    }
+}
+
 
 1;
 

@@ -42,7 +42,6 @@ use fields ('client',  # Perlbal::ClientProxy connection, or undef
 use Socket qw(PF_INET IPPROTO_TCP SOCK_STREAM);
 
 use Perlbal::ClientProxy;
-use Perlbal::Cache;
 
 # if this is made too big, (say, 128k), then perl does malloc instead
 # of using its slab cache.
@@ -320,14 +319,6 @@ sub event_read_waiting_options { # : void
         $self->next_request(1); # initial
     }
     return;
-}
-
-{
-    my %refs;
-    sub _ref_to {
-        my $key = shift;
-        return $refs{$key} || ($refs{$key} = \$key);
-    }
 }
 
 sub handle_response { # : void
