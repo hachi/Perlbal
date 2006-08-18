@@ -752,16 +752,17 @@ sub satisfy_request_from_cache {
     my ($timeout, $headers, $urls) = @$reproxy;
     return 0 if time() > $timeout;
 
-
     my %headers = map { ref $_ eq 'SCALAR' ? $$_ : $_ } @{$headers || []};
 
     if (my $ims = $req_hd->header("If-Modified-Since")) {
         my ($lm_key) = grep { uc($_) eq "LAST-MODIFIED" } keys %headers;
         my $lm = $headers->{$lm_key} || "";
 
-        # If 'Last-Modified' is prior or equal to 'If-Modified-Since'
-        if (HTTP::Date::str2time($lm) <= HTTP::Date::str2time($ims)) {
-            # Then we need to return a 304 stating that the file hasn't changed.
+        # remove the IE length suffix
+        $ims =~ s/; length=(\d+)//;
+
+        # If 'Last-Modified' is same as 'If-Modified-Since', send a 304
+        if ($ims eq $lm) {
             my $res_hd = Perlbal::HTTPHeaders->new_response(304);
             $self->tcp_cork(1);
             $self->state('xfer_resp');
