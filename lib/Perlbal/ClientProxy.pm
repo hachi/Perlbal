@@ -739,12 +739,12 @@ sub satisfy_request_from_cache {
     my Perlbal::ClientProxy $self = shift;
 
     my $req_hd = $self->{req_headers};
-    my $cache  = $svc->{service}->{reproxy_cache};
+    my $cache  = $self->{service}->{reproxy_cache};
 
     my $requri   = $req_hd->request_uri    || '';
     my $hostname = $req_hd->header("Host") || '';
 
-    my $key      = "$hostname|$request";
+    my $key      = "$hostname|$requri";
     my $reproxy  = $cache->get($key) or
         return 0;
 
@@ -758,7 +758,7 @@ sub satisfy_request_from_cache {
         $res_hd->header($key, $value);
     }
 
-    $client->start_reproxy_uri($head_obj, $urls);
+    $self->start_reproxy_uri($res_hd, $urls);
     return 1;
 }
 
