@@ -257,10 +257,10 @@ our $tunables = {
         setter => sub {
             my ($self, $val, $set, $mc) = @_;
             if ($val) {
-                $self->{reproxy_cache} ||= Perlbal::Cache->new({maxsize => 1});
-                $self->{reproxy_cache}->maxsize($val);
+                $self->{reproxy_cache} ||= Perlbal::Cache->new(maxsize => 1);
+                $self->{reproxy_cache}->set_maxsize($val);
             } else {
-                undef $self->{reproxy_cache};
+                $self->{reproxy_cache} = undef;
             }
             return $mc->ok;
         },
