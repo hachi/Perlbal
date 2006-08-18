@@ -1382,6 +1382,33 @@ sub reproxy_cache {
     return $self->{reproxy_cache};
 }
 
+sub add_to_reproxy_url_cache {
+    my Perlbal::Service $self;
+    my ($self, $reshd) = @_;
+
+    my $reproxy_cache_for = $hd->header('X-REPROXY-CACHE-FOR');
+    my $urls              = $hd->header('X-REPROXY-URL');
+
+        if (defined $reproxy_cache_for and my $reproxy_cache = $self->{service}->reproxy_cache) {
+            my ($timeout_delta, $cache_headers) = split ';', $reproxy_cache_for, 2;
+            my $timeout = $timeout_delta ? time() + $timeout_delta : undef;
+
+            my $hostname = $client->{req_headers}->header("Host") || '';
+            my $requri   = $client->{req_headers}->request_uri    || '';
+            my $key = "$hostname|$requri";
+
+            my @headers;
+            foreach my $header (split /\s+/, $cache_headers) {
+                next unless my $value = $res_headers->header($header);
+                $value = _ref_to($value) if uc($header) eq 'CONTENT-TYPE';
+                my $key = _ref_to($header);
+                push @headers, ($key, $value);
+            }
+            $reproxy_cache->set($key, [$timeout, \@headers, $urls]);
+        }
+
+}
+
 1;
 
 

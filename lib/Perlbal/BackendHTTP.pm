@@ -385,32 +385,8 @@ sub handle_response { # : void
         $self->next_request;
         return;
     } elsif ((my $urls = $hd->header('X-REPROXY-URL')) && $self->may_reproxy) {
-        my $res_headers = $self->{res_headers};
-
-        if (defined $reproxy_cache_for and my $reproxy_cache = $self->{service}->reproxy_cache) {
-            my ($timeout_delta, $cache_headers) = split ';', $reproxy_cache_for, 2;
-            my $timeout = $timeout_delta ? time + $timeout_delta : undef;
-
-            my $hostname = $client->{req_headers}->header("Host");
-            my $request = $client->{req_headers}->{requestLine};
-
-            $hostname = '' unless defined $hostname;
-            $request = '' unless defined $request;
-
-            my $key = "$hostname|$request";
-#            warn "Caching redirect in '$key'\n";
-
-            my @headers;
-            foreach my $header (split /\s+/, $cache_headers) {
-                next unless my $value = $res_headers->header($header);
-                $value = _ref_to($value) if uc($header) eq 'CONTENT-TYPE';
-                my $key = _ref_to($header);
-                push @headers, ($key, $value);
-            }
-#            warn "Code: $res_headers->{code} Headers: ", join( ",", @headers ), "\n";
-            $reproxy_cache->set($key, [$timeout, \@headers, $urls]);
-        }
-
+        $self->{service}->add_to_reproxy_url_cache($reproxy_cache_for, $hd)
+            if $reproxy_cache_for;
         $client->start_reproxy_uri($self->{res_headers}, $urls);
         $self->next_request;
         return;
