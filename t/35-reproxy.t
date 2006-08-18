@@ -87,15 +87,20 @@ ok($wc->reqdone >= 4, "4 on same conn");
 
 # reproxy cache support
 {
-    my $break = sub { $wc->request("reproxy_url_cache_break") };
-    my $fix = sub { $wc->request("reproxy_url_cache_fix") };
+    my $sig_counter = 0;
+    local $SIG{USR1} = sub  { $sig_counter++ };
 
+    is($sig_counter, 0, "Prior to first hit, counter should be zero.");
     ok_reproxy_url_cached("One");
+    is($sig_counter, 1, "First hit to populate the cache.");
     ok_reproxy_url_cached("Two");
-    $break->();
-    ok_reproxy_url_cached("Three");
-    sleep 15;
+    is($sig_counter, 1, "Second hit should be cached.");
+    sleep 2;
+    is($sig_counter, 1, "Prior to third hit, counter should still be 1.");
+    ok_reproxy_url_cached("Three"); 
+    is($sig_counter, 2, "Third hit isn't cached, now 2.");
     ok_reproxy_url_cached("Four");
+    is($sig_counter, 2, "Forth hit should be cached again, still 2.");
 }
 
 # back and forth every combo
@@ -125,7 +130,7 @@ foreach_aio {
 ok_reproxy_url_list();
 
 sub ok_reproxy_url_cached {
-    my $resp = $wc->request("reproxy_url_cached:10:http://127.0.0.1:$webport/foo.txt");
+    my $resp = $wc->request("reproxy_url_cached:1:http://127.0.0.1:$webport/foo.txt");
     ok($resp && $resp->content eq $file_content, "reproxy with cache: $_[0]");
 }
 

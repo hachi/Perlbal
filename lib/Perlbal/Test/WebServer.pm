@@ -3,7 +3,6 @@
 package Perlbal::Test::WebServer;
 
 use strict;
-use POSIX;
 use IO::Socket::INET;
 use HTTP::Request;
 use Socket qw(MSG_NOSIGNAL IPPROTO_TCP TCP_NODELAY SOL_SOCKET);
@@ -18,15 +17,12 @@ use vars qw(@ISA @EXPORT);
 
 our @webserver_pids;
 
-my $reproxy_cache_break = 0;
-
-my $ipc_dir ||= tempdir();
-my $breakfile = "$ipc_dir/break.txt";
-
 END {
     # ensure we kill off the webserver
     kill 9, @webserver_pids;
 }
+
+my $testpid;
 
 sub start_webserver {
     my $port = new_port();
@@ -37,6 +33,8 @@ sub start_webserver {
     if ($ENV{'TEST_PERLBAL_USE_EXISTING'}) {
         return $port;
     }
+
+    $testpid = $$;
 
     if (my $child = fork) {
         # i am parent, wait for child to startup
@@ -55,7 +53,7 @@ sub start_webserver {
     my $ssock = IO::Socket::INET->new(LocalPort => $port, ReuseAddr => 1, Listen => 3)
         or die "Unable to start socket: $!\n";
     while (my $csock = $ssock->accept) {
-        POSIX::_exit(0) unless $csock;
+        exit 0 unless $csock;
         fork and next; # parent starts waiting for next request
         setsockopt($csock, IPPROTO_TCP, TCP_NODELAY, pack("l", 1)) or die;
         serve_client($csock);
@@ -207,25 +205,10 @@ sub serve_client {
                 $to_send = $response->(headers => "X-Reproxy-URL: $1\r\n");
             }
 
-            if ($cmd =~ /^reproxy_url_cache_break/i) {
-                open my $breakfh, '>', $breakfile or die "Unable to write breakfile '$breakfile': $!\n";
-                print $breakfh "This is the way we populate a file.";
-                close $breakfh;
-                warn "[$$] Breaking cache!\n";
-            }
-
-            if ($cmd =~ /^reproxy_url_cache_fix/i) {
-                unlink $breakfile or die "Unable to unlink breakfile '$breakfile': $!\n";
-                warn "[$$] Fixing cache!\n";
-            }
-
             if ($cmd =~ /^reproxy_url_cached:(\d+):(.+)/i) {
-                if (-e $breakfile) {
-                    warn "[$$] Cache broken!\n";
-                } else {
-                    warn "[$$] Cache unbroken!\n";
-                    $to_send = $response->(headers => "X-Reproxy-URL: $2\r\nX-Reproxy-Cache-For: $1; Last-Modified Content-Type\r\n");
-                }
+                kill 'USR1', $testpid;
+                $to_send = $response->(headers =>
+                                       "X-Reproxy-URL: $2\r\nX-Reproxy-Cache-For: $1; Last-Modified Content-Type\r\n");
             }
 
             if ($cmd =~ /^reproxy_url_multi:((?:\d+:){2,})(\S+)/i) {
