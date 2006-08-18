@@ -752,9 +752,27 @@ sub satisfy_request_from_cache {
     my ($timeout, $headers, $urls) = @$reproxy;
     return 0 if time() > $timeout;
 
-    # FIXME: should do 304 Not Modified if req_hd has a if-modified-since header and we have a last-modified header
-    my $res_hd = Perlbal::HTTPHeaders->new_response(200);
+
     my %headers = map { ref $_ eq 'SCALAR' ? $$_ : $_ } @{$headers || []};
+
+    if (my $ims = $req_hd->header("If-Modified-Since")) {
+        my ($lm_key) = grep { uc($_) eq "LAST-MODIFIED" } keys %headers;
+        my $lm = $headers->{$lm_key} || "";
+
+        # If 'Last-Modified' is prior or equal to 'If-Modified-Since'
+        if (HTTP::Date::str2time($lm) <= HTTP::Date::str2time($ims)) {
+            # Then we need to return a 304 stating that the file hasn't changed.
+            my $res_hd = Perlbal::HTTPHeaders->new_response(304);
+            $self->tcp_cork(1);
+            $self->state('xfer_resp');
+            $self->write($res_hd->to_string_ref);
+            $self->write(sub { $self->http_response_sent; });
+            return 1;
+        }
+    }
+
+    my $res_hd = Perlbal::HTTPHeaders->new_response(200);
+
     while (my ($key, $value) = each %headers) {
         $res_hd->header($key, $value);
     }
