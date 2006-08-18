@@ -27,8 +27,6 @@ my $testpid;
 sub start_webserver {
     my $port = new_port();
 
-    warn "Starting webserver";
-
     # dummy mode
     if ($ENV{'TEST_PERLBAL_USE_EXISTING'}) {
         return $port;
