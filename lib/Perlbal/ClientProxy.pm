@@ -745,11 +745,12 @@ sub satisfy_request_from_cache {
     my $hostname = $req_hd->header("Host") || '';
 
     my $key      = "$hostname|$requri";
+
     my $reproxy  = $cache->get($key) or
         return 0;
 
     my ($timeout, $headers, $urls) = @$reproxy;
-    return 0 if $timeout > time();
+    return 0 if time() > $timeout;
 
     # FIXME: should do 304 Not Modified if req_hd has a if-modified-since header and we have a last-modified header
     my $res_hd = Perlbal::HTTPHeaders->new_response(200);

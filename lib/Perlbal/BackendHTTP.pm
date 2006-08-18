@@ -367,7 +367,7 @@ sub handle_response { # : void
     }
     $self->{content_length_remain} = $self->{content_length} || 0;
 
-    my $reproxy_cache_for = $hd->header('X-REPROXY-CACHE-FOR');
+    my $reproxy_cache_for = $hd->header('X-REPROXY-CACHE-FOR') || 0;
 
     # special cases:  reproxying and retrying after server errors:
     if ((my $rep = $hd->header('X-REPROXY-FILE')) && $self->may_reproxy) {
@@ -376,13 +376,12 @@ sub handle_response { # : void
         $self->next_request;
         return;
     } elsif ((my $urls = $hd->header('X-REPROXY-URL')) && $self->may_reproxy) {
-        $self->{service}->add_to_reproxy_url_cache($reproxy_cache_for, $hd)
+        $self->{service}->add_to_reproxy_url_cache($rqhd, $hd)
             if $reproxy_cache_for;
         $client->start_reproxy_uri($self->{res_headers}, $urls);
         $self->next_request;
         return;
     } elsif ((my $svcname = $hd->header('X-REPROXY-SERVICE')) && $self->may_reproxy) {
-        print STDERR "reproxy service!  to '$svcname'.\n";
         $self->{client} = undef;
         $client->start_reproxy_service($self->{res_headers}, $svcname);
         $self->next_request;

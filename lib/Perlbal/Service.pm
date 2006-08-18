@@ -1415,14 +1415,13 @@ sub add_to_reproxy_url_cache {
     $cache->set($key, [$timeout, \@headers, $urls]);
 }
 
-{
-    my %refs;
-    sub _ref_to {
-        my $key = shift;
-        return $refs{$key} || ($refs{$key} = \$key);
-    }
+# given a string, return a shared reference to that string.  to save
+# memory when lots of same string is stored.
+my %refs;
+sub _ref_to {
+    my $key = shift;
+    return $refs{$key} || ($refs{$key} = \$key);
 }
-
 
 1;
 
