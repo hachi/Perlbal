@@ -541,6 +541,7 @@ sub MANAGE_uptime {
 
     $mc->out("starttime $starttime");
     $mc->out("uptime " . (time() - $starttime));
+    $mc->out("version $Perlbal::VERSION");
     $mc->end;
 }
 
