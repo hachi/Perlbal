@@ -53,6 +53,11 @@ sub size {
     return $self->{size};
 }
 
+sub maxsize {
+    my Perlbal::Cache $self = shift;
+    return $self->{maxsize};
+}
+
 sub set_maxsize {
     my ($self, $maxsize) = @_;
     $self->{maxsize} = $maxsize;

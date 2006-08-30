@@ -1354,6 +1354,16 @@ sub stats_info
         if ($self->{reproxy_cache}) {
             my $hits     = $self->{_stat_cache_hits} || 0;
             my $hit_rate = sprintf("%0.02f%%", eval { $hits / ($self->{_stat_requests} || 0) * 100 } || 0);
+
+            my $size     = eval { $self->{reproxy_cache}->size };
+            $size = defined($size) ? $size : 'undef';
+
+            my $maxsize  = eval { $self->{reproxy_cache}->maxsize };
+            $maxsize = defined ($maxsize) ? $maxsize : 'undef';
+
+            my $sizepercent = eval { sprintf("%0.02f%%", $size / $maxsize) } || 'undef';
+
+            $out->("    cache size: $size/$maxsize ($sizepercent)");
             $out->("    cache hits: $hits");
             $out->("cache hit rate: $hit_rate");
         }
