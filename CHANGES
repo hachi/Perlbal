@@ -1,3 +1,7 @@
+1.49: 2006-08-30
+
+    -- Very basic help hints command, simply dumps all possible commands.
+
     -- Add another statistic for reproxy caches, the current size of a particular
        service's cache, maximum size, and fill percentage.
 

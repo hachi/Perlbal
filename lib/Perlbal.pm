@@ -24,7 +24,7 @@ You can use and redistribute Perlbal under the same terms as Perl itself.
 package Perlbal;
 
 use vars qw($VERSION);
-$VERSION = '1.48';
+$VERSION = '1.49';
 
 use constant DEBUG => $ENV{PERLBAL_DEBUG} || 0;
 use constant DEBUG_OBJ => $ENV{PERLBAL_DEBUG_OBJ} || 0;
@@ -545,6 +545,8 @@ sub MANAGE_uptime {
     $mc->end;
 }
 
+*MANAGE_version = \&MANAGE_uptime;
+
 sub MANAGE_track {
     my $mc = shift->no_opts;
 
@@ -989,6 +991,16 @@ sub MANAGE_plugins {
     foreach my $svc (values %service) {
         next unless @{$svc->{plugin_order}};
         $mc->out(join(' ', $svc->{name}, @{$svc->{plugin_order}}));
+    }
+    $mc->end;
+}
+
+sub MANAGE_help {
+    my $mc = shift->no_opts;
+    my @commands = sort map { m/^MANAGE_(\S+)$/ ? $1 : () }
+        keys %Perlbal::;
+    foreach my $command (@commands) {
+        $mc->out("$command");
     }
     $mc->end;
 }
