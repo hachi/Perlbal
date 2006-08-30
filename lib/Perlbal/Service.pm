@@ -1361,7 +1361,7 @@ sub stats_info
             my $maxsize  = eval { $self->{reproxy_cache}->maxsize };
             $maxsize = defined ($maxsize) ? $maxsize : 'undef';
 
-            my $sizepercent = eval { sprintf("%0.02f%%", $size / $maxsize) } || 'undef';
+            my $sizepercent = eval { sprintf("%0.02f%%", $size / $maxsize * 100) } || 'undef';
 
             $out->("    cache size: $size/$maxsize ($sizepercent)");
             $out->("    cache hits: $hits");
