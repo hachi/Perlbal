@@ -1,3 +1,6 @@
+    -- Add another statistic for reproxy caches, the current size of a particular
+       service's cache, maximum size, and fill percentage.
+
 1.48: 2006-08-18
 
     -- optionally cache in-process the results of X-Reproxy-URL reponses
