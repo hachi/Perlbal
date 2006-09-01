@@ -786,7 +786,8 @@ sub MANAGE_show {
     if ($mc->cmd =~ /^show service$/) {
         foreach my $name (sort keys %service) {
             my $svc = $service{$name};
-            $mc->out("$name $svc->{listen} " . ($svc->{enabled} ? "ENABLED" : "DISABLED"));
+            my $listen = $svc->{listen} || "not_listening";
+            $mc->out("$name $listen " . ($svc->{enabled} ? "ENABLED" : "DISABLED"));
         }
         return $mc->end;
     }
