@@ -456,18 +456,23 @@ sub MANAGE_fd {
 sub MANAGE_proc {
     my $mc = shift->no_opts;
 
-    return $mc->err('This command is not available unless BSD::Resource is installed') unless $Perlbal::BSD_RESOURCE_AVAILABLE;
-
-    my $ru = BSD::Resource::getrusage();
-    my ($ut, $st) = ($ru->utime, $ru->stime);
-    my ($udelta, $sdelta) = ($ut - $lastutime, $st - $laststime);
-    my $rdelta = $reqs - $lastreqs;
     $mc->out('time: ' . time());
     $mc->out('pid: ' . $$);
-    $mc->out("utime: $ut (+$udelta)");
-    $mc->out("stime: $st (+$sdelta)");
+
+
+    if ($Perlbal::BSD_RESOURCE_AVAILABLE) {
+        my $ru = BSD::Resource::getrusage();
+        my ($ut, $st) = ($ru->utime, $ru->stime);
+        my ($udelta, $sdelta) = ($ut - $lastutime, $st - $laststime);
+        $mc->out("utime: $ut (+$udelta)");
+        $mc->out("stime: $st (+$sdelta)");
+        ($lastutime, $laststime, $lastreqs) = ($ut, $st, $reqs);
+    }
+
+    my $rdelta = $reqs - $lastreqs;
     $mc->out("reqs: $reqs (+$rdelta)");
-    ($lastutime, $laststime, $lastreqs) = ($ut, $st, $reqs);
+    $lastreqs = $reqs;
+
     $mc->end;
 }
 
