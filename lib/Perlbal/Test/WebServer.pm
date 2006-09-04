@@ -17,12 +17,13 @@ use vars qw(@ISA @EXPORT);
 
 our @webserver_pids;
 
+my $testpid; # of the test suite's main program, the one running the HTTP client
+
 END {
     # ensure we kill off the webserver
-    kill 9, @webserver_pids;
+    kill 9, @webserver_pids if $testpid == $$;
 }
 
-my $testpid; # of the test suite's main program, the one running the HTTP client
 
 sub start_webserver {
     my $port = new_port();
