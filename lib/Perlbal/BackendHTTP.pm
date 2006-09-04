@@ -39,7 +39,7 @@ use fields ('client',  # Perlbal::ClientProxy connection, or undef
             'generation', # int; counts what generation we were spawned in
             'buffered_upload_mode', # bool; if on, we're doing a buffered upload transmit
             );
-use Socket qw(PF_INET IPPROTO_TCP SOCK_STREAM);
+use Socket qw(PF_INET IPPROTO_TCP SOCK_STREAM SOL_SOCKET SO_ERROR);
 
 use Perlbal::ClientProxy;
 
@@ -119,6 +119,14 @@ sub new {
 
 sub close {
     my Perlbal::BackendHTTP $self = shift;
+
+    # OSX Gives EPIPE on bad connects, and doesn't fail the connect
+    # so lets treat EPIPE as a event_err so the logic there does
+    # the right thing
+    if ($_[0] eq 'EPIPE') {
+        $self->event_err;
+        return;
+    }
 
     # don't close twice
     return if $self->{closed};
@@ -257,6 +265,14 @@ sub event_write {
         $self->watch_write(0);
         $NodeStats{$self->{ipport}}->{connects}++;
         $NodeStats{$self->{ipport}}->{lastconnect} = $now;
+
+        # OSX returns writeable even if the connect fails
+        # so explicitly check for the error
+        # TODO: make a smaller test case and show to the world
+        if (my $error = unpack('i', getsockopt($self->{sock}, SOL_SOCKET, SO_ERROR))) {
+            $self->event_err;
+            return;
+        }
 
         if (defined $self->{service} && $self->{service}->{verify_backend} &&
             !$self->{has_attention} && !defined $NoVerify{$self->{ipport}}) {
