@@ -123,7 +123,7 @@ sub close {
     # OSX Gives EPIPE on bad connects, and doesn't fail the connect
     # so lets treat EPIPE as a event_err so the logic there does
     # the right thing
-    if ($_[0] eq 'EPIPE') {
+    if (defined $_[0] && $_[0] eq 'EPIPE') {
         $self->event_err;
         return;
     }
