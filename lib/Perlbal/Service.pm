@@ -55,6 +55,7 @@ use fields (
             # Internal state:
             'waiting_clients',         # arrayref of clients waiting for backendhttp conns
             'waiting_clients_highpri', # arrayref of high-priority clients waiting for backendhttp conns
+            'waiting_clients_lowpri',  # arrayref of low-priority clients waiting for backendhttp conns
             'waiting_client_count',    # number of clients waiting for backendds
             'waiting_client_map'  ,    # map of clientproxy fd -> 1 (if they're waiting for a conn)
             'pending_connects',        # hashref of "ip:port" -> $time (only one pending connect to backend at a time)
@@ -511,6 +512,7 @@ sub new {
     # waiting clients
     $self->{waiting_clients} = [];
     $self->{waiting_clients_highpri} = [];
+    $self->{waiting_clients_lowpri}  = [];
     $self->{waiting_client_count} = 0;
     $self->{waiting_client_map} = {};
 
@@ -916,17 +918,26 @@ sub get_client {
     # find a high-priority client, or a regular one
     my Perlbal::ClientProxy $cp;
     while ($hp_first && ($cp = shift @{$self->{waiting_clients_highpri}})) {
+        next if $cp->{closed};
         if (Perlbal::DEBUG >= 2) {
             my $backlog = scalar @{$self->{waiting_clients}};
             print "Got from fast queue, in front of $backlog others\n";
         }
-        return $ret->($cp) if ! $cp->{closed};
+        return $ret->($cp);
     }
+
+    # regular clients:
     while ($cp = shift @{$self->{waiting_clients}}) {
-        if (Perlbal::DEBUG >= 2) {
-            print "Backend requesting client, got normal = $cp->{fd}.\n" unless $cp->{closed};
-        }
-        return $ret->($cp) if ! $cp->{closed};
+        next if $cp->{closed};
+        print "Backend requesting client, got normal = $cp->{fd}.\n" if Perlbal::DEBUG >= 2;
+        return $ret->($cp);
+    }
+
+    # low-priority (batch/idle) clients.
+    while ($cp = shift @{$self->{waiting_clients_lowpri}}) {
+        next if $cp->{closed};
+        print "Backend requesting client, got low priority = $cp->{fd}.\n" if Perlbal::DEBUG >= 2;
+        return $ret->($cp);
     }
 
     return undef;
@@ -1035,7 +1046,8 @@ sub request_backend_connection { # : void
 
     return unless $cp && ! $cp->{closed};
 
-    my $hi_pri = 0;  # by default, low priority
+    my $hi_pri = 0;  # by default, regular priority
+    my $low_pri = 0;  # FIXME: way for hooks to set this
 
     # is there a defined high-priority cookie?
     if (my $cname = $self->{high_priority_cookie}) {
@@ -1053,7 +1065,9 @@ sub request_backend_connection { # : void
     # now, call hook to see if this should be high priority
     $hi_pri = $self->run_hook('make_high_priority', $cp)
         unless $hi_pri; # only if it's not already
+
     $cp->{high_priority} = 1 if $hi_pri;
+    $cp->{low_priority} = 1 if $low_pri;
 
     # before we even consider spawning backends, let's see if we have
     # some bored (pre-connected) backends that'd take this client
@@ -1092,6 +1106,8 @@ sub request_backend_connection { # : void
 
     if ($hi_pri) {
         push @{$self->{waiting_clients_highpri}}, $cp;
+    } elsif ($low_pri) {
+        push @{$self->{waiting_clients_lowpri}}, $cp;
     } else {
         push @{$self->{waiting_clients}}, $cp;
     }

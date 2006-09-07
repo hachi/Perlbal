@@ -15,6 +15,7 @@ use fields (
             'backend_requested',   # true if we've requested a backend for this request
             'reconnect_count',     # number of times we've tried to reconnect to backend
             'high_priority',       # boolean; 1 if we are or were in the high priority queue
+            'low_priority',        # boolean; 1 if we are or were in the low priority queue
             'reproxy_uris',        # arrayref; URIs to reproxy to, in order
             'reproxy_expected_size', # int: size of response we expect to get back for reproxy
             'currently_reproxying',  # arrayref; the host info and URI we're reproxying right now
@@ -1092,6 +1093,7 @@ sub as_string {
             if $self->{write_buf_size} > 0;
     }
     $ret .= "; highpri" if $self->{high_priority};
+    $ret .= "; lowpri" if $self->{low_priority};
     $ret .= "; responded" if $self->{responded};
     $ret .= "; waiting_for=" . $self->{content_length_remain}
         if defined $self->{content_length_remain};
