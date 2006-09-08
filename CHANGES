@@ -1,3 +1,9 @@
+1.50: 2006-09-08
+
+    -- add in optional Devel::Gladiator usage for memory tracking
+
+    -- fix memory leaks in concatenanted GETs on error cases
+
     -- fixes to run / run better on OS X (Artur Bergman)
 
 1.49: 2006-08-30

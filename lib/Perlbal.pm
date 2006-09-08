@@ -23,8 +23,17 @@ You can use and redistribute Perlbal under the same terms as Perl itself.
 
 package Perlbal;
 
+BEGIN {
+    # keep track of anonymous subs' origins:
+    $^P = 0x200;
+}
+
+my $has_gladiator  = eval "use Devel::Gladiator; 1;";
+my $has_cycle      = eval "use Devel::Cycle; 1;";
+use Devel::Peek;
+
 use vars qw($VERSION);
-$VERSION = '1.49';
+$VERSION = '1.50';
 
 use constant DEBUG => $ENV{PERLBAL_DEBUG} || 0;
 use constant DEBUG_OBJ => $ENV{PERLBAL_DEBUG_OBJ} || 0;
@@ -34,6 +43,7 @@ use strict;
 use warnings;
 no  warnings qw(deprecated);
 
+use Storable ();
 use IO::Socket;
 use IO::Handle;
 use IO::File;
@@ -287,6 +297,44 @@ sub run_manage_command {
     }
 
     return $mc->err("unknown command: $basecmd");
+}
+
+sub arena_ref_counts {
+    my $all = Devel::Gladiator::walk_arena();
+    my %ct;
+
+    my %run_cycle;
+    foreach my $it (@$all) {
+        $ct{ref $it}++;
+        if (ref $it eq "CODE") {
+            my $name = Devel::Peek::CvGV($it);
+            $ct{$name}++ if $name =~ /ANON/;
+        }
+    }
+    $all = undef;
+    return \%ct;
+}
+
+my %last_gladiator;
+sub MANAGE_gladiator {
+    my $mc = shift->no_opts;
+    unless ($has_gladiator) {
+        $mc->end;
+        return;
+    }
+
+    my $ct = arena_ref_counts();
+    my $ret;
+    $ret .= "ARENA COUNTS:\n";
+    foreach my $k (sort {$ct->{$b} <=> $ct->{$a}} keys %$ct) {
+        my $delta = $ct->{$k} - ($last_gladiator{$k} || 0);
+        $last_gladiator{$k} = $ct->{$k};
+        next unless $ct->{$k} > 1;
+        $ret .= sprintf(" %4d %-4d $k\n", $ct->{$k}, $delta);
+    }
+
+    $mc->out($ret);
+    $mc->end;
 }
 
 sub MANAGE_varsize {
