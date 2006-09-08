@@ -524,7 +524,6 @@ sub _serve_request_multiple {
 
     @multiple_files = split(/,/, $list);
 
-    # TODO: don't allow this if multiple files aren't enabled
     return $self->_simple_response(403, "Multiple file serving isn't enabled") unless $svc->{enable_concatenate_get};
     return $self->_simple_response(403, "Too many files requested") if @multiple_files > 100;
 
