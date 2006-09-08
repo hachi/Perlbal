@@ -609,8 +609,7 @@ sub _serve_request_multiple_poststat {
 
     # gotta send all files, one by one...
     my @remain = @$filelist;
-    my $do_next;
-    $do_next = sub {
+    $self->{post_sendfile_cb} = sub {
         unless (@remain) {
             $self->write(sub { $self->http_response_sent; });
             return;
@@ -637,11 +636,10 @@ sub _serve_request_multiple_poststat {
             }
 
             $self->{reproxy_file}     = $file;
-            $self->{post_sendfile_cb} = $do_next;
             $self->reproxy_fh($rp_fh, $size);
         });
     };
-    $do_next->();
+    $self->{post_sendfile_cb}->();
 }
 
 sub try_index_files {
