@@ -223,6 +223,9 @@ sub use_reproxy_backend {
     if (my $range = $self->{req_headers}->header("Range")) {
         $extra_hdr .= "Range: $range\r\n";
     }
+    if (my $host = $self->{req_headers}->header("Host")) {
+        $extra_hdr .= "Host: $host\r\n";
+    }
 
     my $headers = "GET $datref->[2] HTTP/1.0\r\nConnection: keep-alive\r\n${extra_hdr}\r\n";
 

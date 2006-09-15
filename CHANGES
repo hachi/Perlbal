@@ -1,3 +1,6 @@
+    -- include Host header to reproxy backends
+           patch by Jonty Wareing <jonty.wareing@gmail.com>
+
 1.50: 2006-09-08
 
     -- add in optional Devel::Gladiator usage for memory tracking
