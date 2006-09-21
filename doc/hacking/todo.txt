@@ -1,1 +1,36 @@
-auto-generated file
+* perlbal idea: X-Pick-Backend header (fwd)
+  http://rt.livejournal.org/Ticket/Display.html?id=326
+
+* stats plugin leaks memory
+  http://rt.livejournal.org/Ticket/Display.html?id=341
+
+* Perlbal rate limiting patch (fwd)
+  http://rt.livejournal.org/Ticket/Display.html?id=342
+
+* Perlbal hook to modify response headers before getting sent to client
+  http://rt.livejournal.org/Ticket/Display.html?id=589
+
+* sendmail from perlbal?
+  http://rt.livejournal.org/Ticket/Display.html?id=686
+
+* Perlbal's SSL blocks during connect?
+  http://rt.livejournal.org/Ticket/Display.html?id=729
+
+* window sizes, so_recvbuf
+  http://rt.livejournal.org/Ticket/Display.html?id=1225
+
+* can't insert headers on selector pool in perlbal
+  http://rt.livejournal.org/Ticket/Display.html?id=1250
+
+* perlbal memory leaks --- need to add watches
+  http://rt.livejournal.org/Ticket/Display.html?id=1693
+
+* Perlbal memory leak / spin on no servers in pool
+  http://rt.livejournal.org/Ticket/Display.html?id=1698
+
+* non-blocking SSL from DJabberd
+  http://rt.livejournal.org/Ticket/Display.html?id=1995
+
+* Perlbal with Danga::Socket and IO::KQueue
+  http://rt.livejournal.org/Ticket/Display.html?id=2761
+
