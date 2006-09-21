@@ -276,6 +276,7 @@ sub drain_read_buf_to {
     return unless $self->{read_ahead};
 
     while (my $bref = shift @{$self->{read_buf}}) {
+        print "draining readbuf from $self to $dest: [$$bref]\n" if Perlbal::DEBUG >= 3;
         $dest->write($bref);
         $self->{read_ahead} -= length($$bref);
     }
