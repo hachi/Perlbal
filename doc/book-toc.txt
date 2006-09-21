@@ -1,0 +1,98 @@
+Potential book outline....
+
+What is Perlbal?
+
+  -- reverse proxy / load balancer
+
+  -- web server
+
+  -- pluggable
+
+  -- event based
+     * connection cheap
+     * scalable w/ epoll, kqueue
+
+  -- introspective
+
+Perlbal tricks  (teaser overviews to get excited, forward refs to more details in later sections)
+
+  -- internal (client-transparent) redirects, to pass req between backend HTTP servers,
+     or pass to static webserver mode in perlbal itself.
+
+  -- smart load balancing
+
+  -- runtime config changes
+
+  -- buffered uploads
+
+  -- verified backends (why it helps so much with loaded apaches)
+
+
+Configuring
+
+  * About config
+
+    -- config file format.
+    -- config file is just a bunch of line-based commands,
+       also work in mgmt port.
+       * explain implicit command context
+    -- change all config at runtime
+
+  * global commands (max fds, etc)
+
+  * Services, service roles
+
+    -- general service options
+    -- service role types
+
+  * Configuring a static webserver service
+
+    -- example configs and drawings/explanations
+
+    -- service options
+
+  * Configuring reverse proxy service
+
+    -- example configs and drawings/explanations
+
+    -- service options
+
+  * Selector services
+
+    -- example configs and drawings/explanations
+
+    -- map onto other services based on criteria.
+
+    -- vhosts.
+
+  * Hybrid modes:
+
+    -- selectors & x-reproxy-url & x-reproxy-file & x-reproxy-service
+
+    -- crazy examples:
+
+        * typepad/mogilefs crazy setup/selector
+
+
+Monitoring Perlbal
+
+  * all the introspection admin commands
+
+Hacking on Perlbal
+
+  * class hierarchy.  roles of each object.
+
+  * explain hook system, document all hooks
+
+  * walk through minimal vhost plugin code, as example of how
+    to write a service selector.
+
+  * tips for debugging memory leaks:
+
+     -- easy to introduce circular loops w/ safaris 
+     -- $^P = 0x200;
+     -- Devel::Gladiator,
+     -- Devel::Cycle
+
+
+
