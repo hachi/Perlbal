@@ -5,7 +5,47 @@
 
 package Perlbal::AIO;
 
-use Fcntl qw(SEEK_CUR SEEK_SET SEEK_END);
+use POSIX qw(ENOENT EACCES EBADF);
+use Fcntl qw(SEEK_CUR SEEK_SET SEEK_END O_RDWR O_CREAT O_TRUNC);
+
+# Try and use IO::AIO or Linux::AIO, if it's around.
+BEGIN {
+    $Perlbal::OPTMOD_IO_AIO        = eval "use IO::AIO 1.6 (); 1;";
+    $Perlbal::OPTMOD_LINUX_AIO     = eval "use Linux::AIO 1.71 (); 1;";
+
+    # let's test if their Linux::AIO works on their platform.  common for it not to.
+    if ($Perlbal::OPTMOD_LINUX_AIO) {
+        my $good = 0;
+        Linux::AIO::aio_open("/tmp/$$-" . rand() . "-bogusdir/bogusfile-$$", O_RDWR|O_CREAT|O_TRUNC, 0, sub {
+            $good = 1 if $_[0] < 0 && $! == ENOENT;
+        });
+        while (Linux::AIO::nreqs()) {
+            my $rfd = "";
+            vec ($rfd, Linux::AIO::poll_fileno(), 1) = 1;
+            select $rfd, undef, undef, undef;
+            Linux::AIO::poll_cb();
+        }
+        unless ($good) {
+            # pretend that they don't have Linux::AIO, but only bitch at them if they don't have IO::AIO ...
+            unless ($Perlbal::OPTMOD_IO_AIO) {
+                warn "Your Linux::AIO doesn't work on your platform.  You seem to have done 'make install' without 'make test'.  Or you ignored the failing tests.  I'm going to ignore that you have it.  If you're going to be using webserver mode, go install the newer IO::AIO instead of Linux::AIO.\n";
+            }
+            $Perlbal::OPTMOD_LINUX_AIO = 0;
+        }
+    }
+}
+
+END {
+    Linux::AIO::max_parallel(0)
+        if $Perlbal::OPTMOD_LINUX_AIO;
+    IO::AIO::max_parallel(0)
+        if $Perlbal::OPTMOD_IO_AIO;
+}
+
+$Perlbal::AIO_MODE = "none";
+$Perlbal::AIO_MODE = "ioaio" if $Perlbal::OPTMOD_IO_AIO;
+$Perlbal::AIO_MODE = "linux" if $Perlbal::OPTMOD_LINUX_AIO;
+
 
 sub aio_readahead {
     my ($fh, $offset, $length, $cb) = @_;
