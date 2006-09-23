@@ -78,7 +78,8 @@ if ($opt_config && ! Perlbal::load_config($opt_config, sub { print STDOUT "$_[0]
 if ($Perlbal::AIO_MODE eq "none") {
     print STDERR "WARNING:  AIO mode disabled or not available.  \n".
                  "          Perlbal will run slowly under load if you're doing any\n".
-                 "          disk operations. (e.g. web_server mode).\n";
+                 "          disk operations. (e.g. web_server mode).\n".
+                 "          Install IO::AIO for better performance.\n";
 }
 
 unless (Perlbal::Socket->WatchedSockets() > 0) {
