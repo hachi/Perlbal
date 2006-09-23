@@ -28,7 +28,11 @@ BEGIN {
         unless ($good) {
             # pretend that they don't have Linux::AIO, but only bitch at them if they don't have IO::AIO ...
             unless ($Perlbal::OPTMOD_IO_AIO) {
-                warn "Your Linux::AIO doesn't work on your platform.  You seem to have done 'make install' without 'make test'.  Or you ignored the failing tests.  I'm going to ignore that you have it.  If you're going to be using webserver mode, go install the newer IO::AIO instead of Linux::AIO.\n";
+                warn("WARNING:  Your installation of Linux::AIO doesn't work.\n".
+                     "          You seem to have installed it without 'make test',\n".
+                     "          or you ignored the failing tests.  I'm going to ignore\n".
+                     "          that you have it and proceed without async IO.  The\n".
+                     "          modern replacement to Linux::AIO is IO::AIO.\n");
             }
             $Perlbal::OPTMOD_LINUX_AIO = 0;
         }
