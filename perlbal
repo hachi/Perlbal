@@ -75,8 +75,6 @@ if ($opt_config && ! Perlbal::load_config($opt_config, sub { print STDOUT "$_[0]
 }
 
 # FIXME: warn harder if web_server services are enabled
-# warn a little less about reproxying --- or, make reproxying support explicit?  yes!  security!
-
 if ($Perlbal::AIO_MODE eq "none") {
     print STDERR "WARNING:  AIO mode disabled or not available.  \n".
                  "          Perlbal will run slowly under load if you're doing any\n".
