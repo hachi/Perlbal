@@ -584,13 +584,12 @@ sub event_read {
     # (see: Danga::Socket::read)
     return $self->client_disconnected unless defined $bref;
 
-    # if we got data that we weren't expecting, something's bogus with
-    # our state machine (internal error)
-    if (defined $remain && ! $remain) {
-        my $blen = length($$bref);
-        my $content = substr($$bref, 0, 80 < $blen ? 80 : $blen);
-        Carp::cluck("INTERNAL ERROR: event_read called on when we're expecting no more bytes.  len=$blen, content=[$content]\n");
-        $self->close;
+    # if they didn't declare a content body length and we just got a
+    # readable event that's not a disconnect, something's messed up.
+    # they're overflowing us.  disconnect!
+    if (! $remain) {
+        $self->_simple_response(400, "Can't pipeline to HTTP/1.0");
+        $self->close("pipelining_to_http10");
         return;
     }
 

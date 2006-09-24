@@ -1,3 +1,5 @@
+    -- pipelining HTTP injection fix.
+
     -- include Host header to reproxy backends
            patch by Jonty Wareing <jonty.wareing@gmail.com>
 

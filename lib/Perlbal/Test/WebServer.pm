@@ -175,13 +175,13 @@ sub serve_client {
 
             if ($cmd =~ /^sleep:([\d\.]+)$/i) {
                 my $sleeptime = $1;
-                print "I, $$, should sleep for $sleeptime.\n";
+                #print "I, $$, should sleep for $sleeptime.\n";
                 use Time::HiRes;
                 my $t1 = Time::HiRes::time();
                 select undef, undef, undef, $1;
                 my $t2 = Time::HiRes::time();
                 my $td = $t2 - $t1;
-                print "I, $$, slept for $td\n";
+                #print "I, $$, slept for $td\n";
             }
 
             if ($cmd =~ /^keepalive:([01])$/i) {
@@ -198,6 +198,10 @@ sub serve_client {
 
             if ($cmd eq "reqdecr") {
                 $req_num--;
+            }
+
+            if ($cmd =~ /^kill:(\d+):(\w+)$/) {
+                kill $2, $1;
             }
 
             if ($cmd =~ /^reproxy_url:(.+)/i) {
