@@ -292,3 +292,77 @@ sub new_png_palette
 ####### PALETTEMODIFY END ######################################################################
 
 1;
+
+__END__
+
+=head1 NAME
+
+Perlbal::Plugin::Palimg -  plugin that allows Perlbal to serve palette altered images
+
+=head1 VERSION
+
+This documentation refers to C<Perlbal::Plugin::Palimg> that ships with Perlbal 1.50
+
+=head1 DESCRIPTION
+
+Palimg is a perlbal plugin that allows you to modify C<GIF> and C<PNG> on the fly.  Put the images you want to be able to modify into the C<DOCROOT/palimg/> directory.  You modify them by adding C</pSPEC> to the end of the url, where SPEC is one of the below defined commands (gradient, tint, etc).
+
+=head1 CONFIGURING PERLBAL
+
+To configure your Perlbal installation to use Palimg you'll need to C<LOAD> the plugin then add a service parameter to a C<web_server> service to activate it.
+
+Example C<perlbal.conf>: 
+	
+    LOAD palimg
+
+    CREATE SERVICE palex
+       SET listen         = ${ip:eth0}:80
+       SET role           = web_server
+       SET plugins        = palimg
+       SET docroot        = /usr/share/doc/
+       SET dirindexing    = 0
+    ENABLE palex
+
+=head1 GRADIENTS
+
+You can change the gradient of the image by adding C</pg0011111164ffffff> to the end of the url.  C<00> is the index where the gradient starts and C<111111> is the color (in hex) of the begining of the gradient.  C<64> is the index of the end of the gradient and C<ffffff> is the color of the end of the gradient.  Note that all colors specified in hex should be lowercase.
+
+Example:
+
+	http://192.168.0.1/palimg/logo.gif/pg01aaaaaa99cccccc
+
+=head1 TINTING 
+
+You can tint the image by adding C</pt000000aaaaaa> to the end of the url.  C<000000> should be replaced with the color to tint towards.  C<aaaaaa> is optional and defines the "dark" tint color.  Both colors should be specified as lowercase hex numbers.  
+
+Example: 
+
+	http://192.168.0.1/palimg/logo.gif/pt1c1c1c22dba1
+
+=head1 PALETTE REPLACEMENT
+
+You can specify a palette to replace the palette of the image.  Do this by adding up to six sets of seven hex lowercase numbers prefixed with C</p> to the end of the URL.
+
+Example: 
+
+	http://192.168.0.1/palimg/logo.gif/p01234567890abcfffffffcccccccddddddd
+
+=head1 BUGS AND LIMITATIONS
+
+There are no known bugs in this module.
+
+Please report problems to the Perlbal mailing list, http://lists.danga.com/mailman/listinfo/perlbal/
+
+Patches are welcome.
+
+=head1 AUTHORS
+
+Brad Fitzpatrick <brad@danga.com>
+Mark Smith       <junior@danga.com>
+
+=head1 LICENSE AND COPYRIGHT
+
+Artistic/GPLv2, at your choosing.
+
+Copyright 2004, Danga Interactive
+Copyright 2005-2006, Six Apart Ltd
