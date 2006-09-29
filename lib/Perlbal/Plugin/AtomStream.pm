@@ -1,11 +1,13 @@
 package Perlbal::Plugin::AtomStream;
 
+use URI;
+
 use Perlbal;
 use strict;
 use warnings;
 
 our @subs;    # subscribers
-our @recent;  # recent items in format [$epoch, $atom_ref]
+our @recent;  # recent items in format [$epoch, $atom_ref, $path_segments_arrayref]
 
 our $last_timestamp = 0;
 
@@ -13,11 +15,12 @@ use constant MAX_LAG => 262144;
 
 sub InjectFeed {
     my $class = shift;
-    my $atomref = shift;
+    my ($atomref, $path) = @_;
 
     # maintain queue of last 60 seconds worth of posts
     my $now = time();
-    push @recent, [ $now, $atomref ];
+    my @put_segments = URI->new($path)->path_segments;
+    push @recent, [ $now, $atomref, \@put_segments ];
     shift @recent while @recent && $recent[0][0] <= $now - 60;
 
     emit_timestamp($now) if $now > $last_timestamp;
@@ -29,6 +32,8 @@ sub InjectFeed {
             next;
         }
 
+        next unless filter(\@put_segments, $s->{scratch}{get_segments});
+        
         my $lag = $s->{write_buf_size};
 
         if ($lag > MAX_LAG) {
@@ -57,6 +62,15 @@ sub emit_timestamp {
     }
 }
 
+sub filter {
+    my ($put, $get) = @_;
+    return 0 if scalar @$put < scalar @$get;
+    for( my $i = 0 ; $i < scalar @$get ; $i++) {
+        return 0 if $put->[$i] ne $get->[$i];
+    }
+    return 1;
+}
+
 # called when we're being added to a service
 sub register {
     my ($class, $svc) = @_;
@@ -71,9 +85,12 @@ sub register {
         my Perlbal::ClientProxy $self = shift;
         my Perlbal::HTTPHeaders $hds = $self->{req_headers};
         return 0 unless $hds;
-        my $uri = $hds->request_uri;
-        return 0 unless $uri =~ m!^/atom-stream\.xml(?:\?since=(\d+))?$!;
-        my $since = $1 || 0;
+        my $uri = URI->new($hds->request_uri);
+        my @get_segments = $uri->path_segments;
+        $self->{scratch}{get_segments} = \@get_segments;
+        return 0 unless pop @get_segments eq 'atom-stream.xml';
+        my %params = $uri->query_form;
+        my $since = $params{since} =~ /\d+/ ? $params{since} : 0;
 
         my $res = $self->{res_headers} = Perlbal::HTTPHeaders->new_response(200);
         $res->header("Content-Type", "text/xml");
@@ -89,6 +106,7 @@ sub register {
         if ($since) {
             foreach my $item (@recent) {
                 next if $item->[0] < $since;
+                next unless filter($item->[2], \@get_segments);
                 $last_rv = $self->write($item->[1]);
             }
         }

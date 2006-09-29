@@ -21,8 +21,9 @@ sub register {
             unless $hds->request_method eq "PUT";
 
         my $uri = $hds->request_uri;
-        return $self->send_response(400, "Invalid uri") unless $uri eq "/";
-
+        return $self->send_response(400, "Invalid uri") unless $uri =~ /^\//;
+        $self->{scratch}{path} = $uri;
+        
         # now abort the normal handle_put processing...
         return 1;
     });
@@ -37,7 +38,7 @@ sub register {
         $self->{read_buf}   = [];
         $self->{read_ahead} = 0;
 
-        my $rv = eval { Perlbal::Plugin::AtomStream->InjectFeed(\$data); };
+        my $rv = eval { Perlbal::Plugin::AtomStream->InjectFeed(\$data, $self->{scratch}{path}); };
         return $self->send_response(200);
     });
 
