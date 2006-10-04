@@ -53,6 +53,7 @@ t/20-put.t
 t/30-reverseproxy.t
 t/31-realworld.t
 t/32-selector.t
+t/32-pipelining.t
 t/35-reproxy.t
 t/40-ranges.t
 t/45-buffereduploads.t
