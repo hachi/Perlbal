@@ -88,6 +88,3 @@
 * perlbal needs "SERVER" command to drop root and change to another user
   http://rt.livejournal.org/Ticket/Display.html?id=2827
 
-* perlbal upload idle timeout not reset during PUTs
-  http://rt.livejournal.org/Ticket/Display.html?id=2869
-
