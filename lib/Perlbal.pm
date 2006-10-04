@@ -51,6 +51,9 @@ use IO::File;
 $Perlbal::SYSLOG_AVAILABLE = eval { require Sys::Syslog; 1; };
 $Perlbal::BSD_RESOURCE_AVAILABLE = eval { require BSD::Resource; 1; };
 
+# incremented every second by a timer:
+$Perlbal::tick_time = time();
+
 use Getopt::Long;
 use Carp qw(cluck croak);
 use Errno qw(EBADF);
@@ -1115,6 +1118,7 @@ sub run {
 
     Danga::Socket->SetLoopTimeout(1000);
     Danga::Socket->SetPostLoopCallback(sub {
+        $Perlbal::tick_time = time();
         Perlbal::Socket::run_callbacks();
         return 1;
     });

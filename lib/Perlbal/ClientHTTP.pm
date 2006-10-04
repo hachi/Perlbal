@@ -71,6 +71,7 @@ sub close {
 
 sub event_read {
     my Perlbal::ClientHTTP $self = shift;
+    $self->{alive_time} = $Perlbal::tick_time;
 
     # see if we have headers?
     if ($self->{req_headers}) {

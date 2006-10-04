@@ -324,10 +324,10 @@ sub event_write_reproxy_fh {
 sub event_write {
     my Perlbal::ClientHTTPBase $self = shift;
 
-    # Any HTTP client is considered alive if it's writable
+    # Any HTTP client is considered alive if it's writable.
     # if it's not writable for 30 seconds, we kill it.
     # subclasses can decide what's appropriate for timeout.
-    $self->{alive_time} = time;
+    $self->{alive_time} = $Perlbal::tick_time;
 
     # if we're sending a filehandle, go do some more sendfile:
     if ($self->{reproxy_fh}) {
