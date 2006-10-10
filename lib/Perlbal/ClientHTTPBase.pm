@@ -387,7 +387,8 @@ sub _serve_request {
         return if $self->{closed};
         return $self->_simple_response(404) unless -e _;
 
-        my $lastmod = HTTP::Date::time2str((stat(_))[9]);
+        my $mtime   = (stat(_))[9];
+        my $lastmod = HTTP::Date::time2str($mtime);
         my $ims     = $hd->header("If-Modified-Since") || "";
 
         # IE sends a request header like "If-Modified-Since: <DATE>; length=<length>"
@@ -420,6 +421,7 @@ sub _serve_request {
             # partial content
             $res = $self->{res_headers} = Perlbal::HTTPHeaders->new_response(206);
         } else {
+            return if $self->{service}->run_hook('static_get_poststat_pre_send', $self, $mtime);
             $res = $self->{res_headers} = Perlbal::HTTPHeaders->new_response(200);
         }
 
