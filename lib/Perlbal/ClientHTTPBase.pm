@@ -577,11 +577,14 @@ sub _serve_request_multiple_poststat {
         $ims_len = $1;
     }
 
+    # What is -f _ doing here? don't we detect the existance of all files above in the loop?
     my $not_mod = $ims eq $lastmod && -f _;
+
     my $res;
     if ($not_mod) {
         $res = $self->{res_headers} = Perlbal::HTTPHeaders->new_response(304);
     } else {
+        return if $self->{service}->run_hook('concat_get_poststat_pre_send', $self, $most_recent_mod);
         $res = $self->{res_headers} = Perlbal::HTTPHeaders->new_response(200);
         $res->header("Content-Length", $sum_length);
     }
