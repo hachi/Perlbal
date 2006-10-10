@@ -1,5 +1,6 @@
 package Perlbal::Plugin::LazyCDN;
 
+use IO::Socket::INET;
 use Perlbal;
 use Perlbal::ClientHTTPBase;
 use strict;
@@ -40,6 +41,8 @@ sub unload {
 sub register {
     my ($class, $svc) = @_;
 
+    my $socket;
+
     my $hook = sub {
         my Perlbal::ClientHTTPBase $client = shift;
         my $last_modified = shift; # unix timestamp for last modified of the concatenated files
@@ -59,6 +62,11 @@ sub register {
         return unless $v;
         return 0 unless $v > $last_modified;
 
+        if (my $fallback_ping_addr = $client->{service}->{extra_config}->{fallback_udp_ping_addr}) {
+            $socket ||= _ping_socket($fallback_ping_addr);
+            $socket->write($uri);
+        }
+
         $fallback_service->adopt_base_client( $client );
 
         return 1;
@@ -74,6 +82,17 @@ sub register {
 sub unregister {
     my ($class, $svc) = @_;
     return 1;
+}
+
+sub _ping_socket {
+    my $hostspec = shift;
+    my $socket = IO::Socket::INET->new(
+            PeerAddr  => $hostspec,
+            Proto     => 'udp',
+            Broadcast => 1,
+            ReuseAddr => 1)
+        or warn "Can't bind udp ping socket: $!\n";
+    return $socket;
 }
 
 1;
