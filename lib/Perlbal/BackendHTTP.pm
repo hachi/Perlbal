@@ -430,6 +430,7 @@ sub handle_response { # : void
         $thd->header('X-REPROXY-FILE', undef);
         $thd->header('X-REPROXY-URL', undef);
         $thd->header('X-REPROXY-EXPECTED-SIZE', undef);
+        $thd->header('X-REPROXY-CACHE-FOR', undef);
 
         # also update the response code, in case of 206 partial content
         my $rescode = $hd->response_code;
