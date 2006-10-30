@@ -385,7 +385,10 @@ sub _serve_request {
     Perlbal::AIO::aio_stat($file, sub {
         # client's gone anyway
         return if $self->{closed};
-        return $self->_simple_response(404) unless -e _;
+        unless (-e _) {
+            return if $serf->{service}->run_hook('static_get_poststat_file_missing');
+            return $self->_simple_response(404);
+        }
 
         my $mtime   = (stat(_))[9];
         my $lastmod = HTTP::Date::time2str($mtime);
@@ -557,6 +560,7 @@ sub _serve_request_multiple_poststat {
     foreach my $f (@$filelist) {
         my $stat = $stats->{$f};
         unless (S_ISREG($stat->[2] || 0)) {
+            return if $serf->{service}->run_hook('concat_get_poststat_file_missing');
             return $self->_simple_response(404, "One or more file does not exist");
         }
         if (!$mime && $f =~ /\.(\w+)$/ && $MimeType->{$1}) {

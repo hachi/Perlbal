@@ -59,8 +59,10 @@ sub register {
 
         my ($v) = $uri =~ m/\bv=(\d+)\b/;
 
-        return unless $v;
-        return 0 unless $v > $last_modified;
+        if (defined $last_modified) {
+            return unless $v;
+            return 0 unless $v > $last_modified;
+        }
 
         if (my $fallback_ping_addr = $client->{service}->{extra_config}->{fallback_udp_ping_addr}) {
             $socket ||= _ping_socket($fallback_ping_addr);
@@ -74,6 +76,9 @@ sub register {
 
     $svc->register_hook('LazyCDN', 'static_get_poststat_pre_send', $hook);
     $svc->register_hook('LazyCDN', 'concat_get_poststat_pre_send', $hook);
+
+    $svc->register_hook('LazyCDN', 'static_get_poststat_file_missing', $hook);
+    $svc->register_hook('LazyCDN', 'concat_get_poststat_file_missing', $hook);
 
     return 1;
 }
