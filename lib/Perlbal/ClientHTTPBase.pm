@@ -386,7 +386,7 @@ sub _serve_request {
         # client's gone anyway
         return if $self->{closed};
         unless (-e _) {
-            return if $self->{service}->run_hook('static_get_poststat_file_missing');
+            return if $self->{service}->run_hook('static_get_poststat_file_missing', $self);
             return $self->_simple_response(404);
         }
 
@@ -560,7 +560,7 @@ sub _serve_request_multiple_poststat {
     foreach my $f (@$filelist) {
         my $stat = $stats->{$f};
         unless (S_ISREG($stat->[2] || 0)) {
-            return if $self->{service}->run_hook('concat_get_poststat_file_missing');
+            return if $self->{service}->run_hook('concat_get_poststat_file_missing', $self);
             return $self->_simple_response(404, "One or more file does not exist");
         }
         if (!$mime && $f =~ /\.(\w+)$/ && $MimeType->{$1}) {
