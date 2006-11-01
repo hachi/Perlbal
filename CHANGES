@@ -1,3 +1,5 @@
+    -- allow setting of SO_SNDBUF on a per-service level
+
 1.51: 2006-10-04
 
     -- set alive_time during slow PUTs.  was causing problems

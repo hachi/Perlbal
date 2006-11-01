@@ -12,7 +12,7 @@ no  warnings qw(deprecated);
 
 use base "Perlbal::Socket";
 use fields qw(service hostport);
-use Socket qw(IPPROTO_TCP);
+use Socket qw(IPPROTO_TCP SOL_SOCKET SO_SNDBUF);
 
 # TCPListener
 sub new {
@@ -68,6 +68,10 @@ sub event_read {
         }
 
         IO::Handle::blocking($psock, 0);
+
+        if (my $sndbuf = $self->{service}->{client_sndbuf_size}) {
+            my $rv = setsockopt($psock, SOL_SOCKET, SO_SNDBUF, pack("L", $sndbuf));
+        }
 
         if ($service_role eq "reverse_proxy") {
             Perlbal::ClientProxy->new($self->{service}, $psock);

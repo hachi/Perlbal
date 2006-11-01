@@ -51,6 +51,7 @@ use fields (
             'always_trusted', # bool; if true, always trust upstreams
             'enable_reproxy', # bool; if true, advertise that server will reproxy files and/or URLs
             'reproxy_cache_maxsize', # int; maximum number of reproxy results to be cached. (0 is disabled and default)
+            'client_sndbuf_size',    # int: bytes for SO_SNDBUF
 
             # Internal state:
             'waiting_clients',         # arrayref of clients waiting for backendhttp conns
@@ -481,6 +482,13 @@ our $tunables = {
         des => 'String of comma-separated seconds (full or partial) to delay between retries.  For example "0,2" would mean do at most two retries, the first zero seconds after the first failure, and the second 2 seconds after the 2nd failure.  You probably don\'t need to modify the default value',
         default => '0,.25,.50,1,1,1,1,1',
         check_role => "reverse_proxy",
+    },
+
+    'client_sndbuf_size' => {
+        des => "How large to set the client's socket SNDBUF.",
+        default => 0,
+        check_type => "size",
+        check_role => '*',
     },
 
 
