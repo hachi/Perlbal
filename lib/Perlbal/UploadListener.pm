@@ -1,7 +1,7 @@
 ######################################################################
 # Listen for UDP upload status packets
 #
-# Copyright 2005, Six Apart, Ltd.
+# Copyright 2005-2006, Six Apart, Ltd.
 
 
 package Perlbal::UploadListener;
