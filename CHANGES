@@ -1,3 +1,10 @@
+    -- AIO channels.  from the code:
+
+       "prevents all AIO threads from being consumed by requests for same
+        failing/overloaded disk by isolating them into separate 'channels' in
+        parent process and not dispatching more than the max in-flight count
+        allows.  think of a channel as a named queue.  or in reality, a disk."
+
     -- allow setting of SO_SNDBUF on a per-service level
 
 1.51: 2006-10-04
