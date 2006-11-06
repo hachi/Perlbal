@@ -15,6 +15,7 @@ use base "Perlbal::ClientHTTPBase";
 
 use fields ('put_in_progress', # 1 when we're currently waiting for an async job to return
             'put_fh',          # file handle to use for writing data
+            'put_fh_filename', # filename of put_fh
             'put_pos',         # file offset to write next data at
 
             'content_length',  # length of document being transferred
@@ -303,8 +304,10 @@ sub start_put_open {
             }
         }
 
-        $self->{put_fh} = $fh;
-        $self->{put_pos} = 0;
+        $self->{put_fh}          = $fh;
+        $self->{put_pos}         = 0;
+        $self->{put_fh_filename} = "$path/$file";
+
         $self->put_writeout;
     });
 }
@@ -329,6 +332,7 @@ sub put_writeout {
     # okay, file is open, write some data
     $self->{put_in_progress} = 1;
 
+    Perlbal::AIO::set_file_for_channel($self->{put_fh_filename});
     Perlbal::AIO::aio_write($self->{put_fh}, $self->{put_pos}, $count, $data, sub {
         return if $self->{closed};
 

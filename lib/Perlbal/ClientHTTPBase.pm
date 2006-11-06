@@ -316,6 +316,7 @@ sub event_write_reproxy_fh {
         return;
     }
 
+    Perlbal::AIO::set_file_for_channel($self->{reproxy_file});
     Perlbal::AIO::aio_readahead($self->{reproxy_fh},
                                 $self->{reproxy_file_offset},
                                 $to_send, $postread);

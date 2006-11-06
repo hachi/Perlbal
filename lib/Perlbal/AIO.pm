@@ -179,8 +179,34 @@ sub aio_read {
 
 my %chan_outstanding;  # $channel_name -> $num_in_flight
 my %chan_pending;      # $channel_name -> [ [$subref, $cb], .... ]
+my %chan_hitmaxdepth;  # $channel_name -> $times_enqueued
 my $use_aio_chans = 0; # keep them off for now, until mogstored code is ready to use them
+my $file_to_chan_hook; # coderef that returns $chan_name given a $filename
 
+sub get_aio_stats {
+    my $ret = {};
+    foreach my $c (keys %chan_outstanding) {
+        $ret->{$c} = {
+            in_flight    => $chan_outstanding{$c},
+            ctr_too_deep => $chan_hitmaxdepth{$c} || 0,
+        };
+    }
+
+    foreach my $c (keys %chan_pending) {
+        my $rec = $ret->{$c} ||= {};
+        $rec->{delayed} = scalar @{$chan_pending{$c}};
+    }
+
+    return $ret;
+}
+
+# (external API).  set trans hook, but also enables AIO channels.
+sub set_file_to_chan_hook {
+    $file_to_chan_hook = shift;   # coderef that returns $chan_name given a $filename
+    $use_aio_chans     = 1;
+}
+
+# internal API:
 sub aio_channel_push {
     my ($chan, $user_cb, $action) = @_;
 
@@ -203,9 +229,17 @@ sub aio_channel_push {
     my $chanlist = ($chan_pending{$chan} ||= []);
     $chan_outstanding{$chan} ||= 0;
 
-    # push a record representing the action to take later, then kick off queues
-    push @$chanlist, [$action, $wrapped_cb];
-    aio_channel_cond_run($chan);
+    my $max_out  = aio_chan_max_concurrent($chan);
+
+    if ($chan_outstanding{$chan} < $max_out) {
+        $chan_outstanding{$chan}++;
+        $action->($wrapped_cb);
+        return;
+    } else {
+        # too deep.  enqueue.
+        $chan_hitmaxdepth{$chan}++;
+        push @$chanlist, [$action, $wrapped_cb];
+    }
 }
 
 sub aio_chan_max_concurrent {
@@ -227,13 +261,33 @@ sub aio_channel_cond_run {
     }
 }
 
+my $next_chan;
+sub set_channel {
+    $next_chan = shift;
+}
+
+sub set_file_for_channel {
+    my ($file) = @_;
+    if ($file_to_chan_hook) {
+        $next_chan = $file_to_chan_hook->($file);
+    } else {
+        $next_chan = undef;
+    }
+}
+
 # gets currently-set channel, then clears it.  or if none set,
 # lets registered hook set the channel name from the optional
 # $file parameter.  the default channel, '[default]' has no limits
 sub get_chan {
     return undef unless $use_aio_chans;
     my ($file) = @_;
-    # TODO: pass to hook
+    set_file_for_channel($file) if $file;
+
+    if (my $chan = $next_chan) {
+        $next_chan = undef;
+        return $chan;
+    }
+
     return "[default]";
 }
 
