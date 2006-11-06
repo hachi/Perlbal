@@ -311,8 +311,8 @@ Palimg is a perlbal plugin that allows you to modify C<GIF> and C<PNG> on the fl
 
 To configure your Perlbal installation to use Palimg you'll need to C<LOAD> the plugin then add a service parameter to a C<web_server> service to activate it.
 
-Example C<perlbal.conf>: 
-	
+Example C<perlbal.conf>:
+
     LOAD palimg
 
     CREATE SERVICE palex
@@ -329,23 +329,23 @@ You can change the gradient of the image by adding C</pg0011111164ffffff> to the
 
 Example:
 
-	http://192.168.0.1/palimg/logo.gif/pg01aaaaaa99cccccc
+        http://192.168.0.1/palimg/logo.gif/pg01aaaaaa99cccccc
 
-=head1 TINTING 
+=head1 TINTING
 
-You can tint the image by adding C</pt000000aaaaaa> to the end of the url.  C<000000> should be replaced with the color to tint towards.  C<aaaaaa> is optional and defines the "dark" tint color.  Both colors should be specified as lowercase hex numbers.  
+You can tint the image by adding C</pt000000aaaaaa> to the end of the url.  C<000000> should be replaced with the color to tint towards.  C<aaaaaa> is optional and defines the "dark" tint color.  Both colors should be specified as lowercase hex numbers.
 
-Example: 
+Example:
 
-	http://192.168.0.1/palimg/logo.gif/pt1c1c1c22dba1
+        http://192.168.0.1/palimg/logo.gif/pt1c1c1c22dba1
 
 =head1 PALETTE REPLACEMENT
 
 You can specify a palette to replace the palette of the image.  Do this by adding up to six sets of seven hex lowercase numbers prefixed with C</p> to the end of the URL.
 
-Example: 
+Example:
 
-	http://192.168.0.1/palimg/logo.gif/p01234567890abcfffffffcccccccddddddd
+        http://192.168.0.1/palimg/logo.gif/p01234567890abcfffffffcccccccddddddd
 
 =head1 BUGS AND LIMITATIONS
 
