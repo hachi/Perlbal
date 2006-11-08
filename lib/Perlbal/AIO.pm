@@ -184,6 +184,9 @@ my %chan_submitct;     # $channel_name -> $times_submitted  (total AIO requests 
 my $use_aio_chans = 0; # keep them off for now, until mogstored code is ready to use them
 my $file_to_chan_hook; # coderef that returns $chan_name given a $filename
 
+my %chan_concurrency;  # $channel_name -> concurrency per channel
+                       #  (cache. definitive version via function call)
+
 sub get_aio_stats {
     my $ret = {};
     foreach my $c (keys %chan_outstanding) {
@@ -228,11 +231,11 @@ sub aio_channel_push {
     };
 
     # in case this is the first time this queue has been used, init stuff:
-    my $chanlist = ($chan_pending{$chan} ||= []);
+    my $chanpend = ($chan_pending{$chan} ||= []);
     $chan_outstanding{$chan} ||= 0;
     $chan_submitct{$chan}++;
 
-    my $max_out  = aio_chan_max_concurrent($chan);
+    my $max_out  = $chan_concurrency{$chan} ||= aio_chan_max_concurrent($chan);
 
     if ($chan_outstanding{$chan} < $max_out) {
         $chan_outstanding{$chan}++;
@@ -241,7 +244,7 @@ sub aio_channel_push {
     } else {
         # too deep.  enqueue.
         $chan_hitmaxdepth{$chan}++;
-        push @$chanlist, [$action, $wrapped_cb];
+        push @$chanpend, [$action, $wrapped_cb];
     }
 }
 
@@ -254,11 +257,11 @@ sub aio_chan_max_concurrent {
 sub aio_channel_cond_run {
     my ($chan) = @_;
 
-    my $chanlist = $chan_pending{$chan} or return;
-    my $max_out  = aio_chan_max_concurrent($chan);
+    my $chanpend = $chan_pending{$chan} or return;
+    my $max_out  = $chan_concurrency{$chan} ||= aio_chan_max_concurrent($chan);
 
     my $job;
-    while ($chan_outstanding{$chan} < $max_out && ($job = shift @$chanlist)) {
+    while ($chan_outstanding{$chan} < $max_out && ($job = shift @$chanpend)) {
         $chan_outstanding{$chan}++;
         $job->[0]->($job->[1]);
     }
