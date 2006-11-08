@@ -179,7 +179,8 @@ sub aio_read {
 
 my %chan_outstanding;  # $channel_name -> $num_in_flight
 my %chan_pending;      # $channel_name -> [ [$subref, $cb], .... ]
-my %chan_hitmaxdepth;  # $channel_name -> $times_enqueued
+my %chan_hitmaxdepth;  # $channel_name -> $times_enqueued   (not dispatched immediately)
+my %chan_submitct;     # $channel_name -> $times_submitted  (total AIO requests for this channel)
 my $use_aio_chans = 0; # keep them off for now, until mogstored code is ready to use them
 my $file_to_chan_hook; # coderef that returns $chan_name given a $filename
 
@@ -187,14 +188,15 @@ sub get_aio_stats {
     my $ret = {};
     foreach my $c (keys %chan_outstanding) {
         $ret->{$c} = {
-            in_flight    => $chan_outstanding{$c},
-            ctr_too_deep => $chan_hitmaxdepth{$c} || 0,
+            cur_running  => $chan_outstanding{$c},
+            ctr_queued   => $chan_hitmaxdepth{$c} || 0,
+            ctr_total    => $chan_submitct{$c},
         };
     }
 
     foreach my $c (keys %chan_pending) {
         my $rec = $ret->{$c} ||= {};
-        $rec->{delayed} = scalar @{$chan_pending{$c}};
+        $rec->{cur_queued} = scalar @{$chan_pending{$c}};
     }
 
     return $ret;
@@ -228,6 +230,7 @@ sub aio_channel_push {
     # in case this is the first time this queue has been used, init stuff:
     my $chanlist = ($chan_pending{$chan} ||= []);
     $chan_outstanding{$chan} ||= 0;
+    $chan_submitct{$chan}++;
 
     my $max_out  = aio_chan_max_concurrent($chan);
 
