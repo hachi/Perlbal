@@ -1008,7 +1008,7 @@ sub buffered_upload_update {
         # written out and update as appropriate.
         if ($bytes < $len) {
             my $diff = $len - $bytes;
-            unshift @{$self->{read_buf}}, substr($$bref, $bytes, $diff);
+            unshift @{$self->{read_buf}}, \ substr($$bref, $bytes, $diff);
             $self->{read_ahead} += $diff;
         }
 

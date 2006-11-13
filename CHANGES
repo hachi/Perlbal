@@ -1,3 +1,9 @@
+1.52: 2006-11-13
+
+    -- fix crash in buffered uploads when *::AIO doesn't write everything
+       to disk that's requested of it.  we were unshifting back onto the
+       write queue a scalar, not a scalarref.
+
     -- AIO channels.  from the code:
 
        "prevents all AIO threads from being consumed by requests for same
