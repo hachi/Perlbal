@@ -262,7 +262,8 @@ sub run_manage_command {
     if ($basecmd eq "crash") { die "Intentional crash." };
 
     no strict 'refs';
-    if (my $handler = *{"MANAGE_$basecmd"}{CODE}) {
+    my $handler;
+    if ($Perlbal::{"MANAGE_$basecmd"} && ($handler = *{"MANAGE_$basecmd"}{CODE})) {
         my $rv = eval { $handler->($mc); };
         return $mc->err($@) if $@;
         return $rv;
