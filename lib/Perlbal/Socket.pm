@@ -137,7 +137,9 @@ sub _do_cleanup {
         my Perlbal::Socket $v = $sf->{$k};
         my $ref = ref $v;
         unless (defined $max_age{$ref}) {
-            $max_age{$ref} = $ref->max_idle_time || 0;
+            # eval because not all Danga::Socket connections in Perlbal
+            # must be Perlbal::Socket-derived
+            $max_age{$ref} = eval { $ref->max_idle_time } || 0;
         }
         next unless $max_age{$ref};
         if ($v->{alive_time} < $now - $max_age{$ref}) {

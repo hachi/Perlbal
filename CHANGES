@@ -1,3 +1,7 @@
+    -- let non-Perlbal::Socket Danga::Socket objects exist without
+       crashing in cleanup handler (allows use of Gearman::Client::Async
+       in plugins)
+
 1.52: 2006-11-13
 
     -- fix crash in buffered uploads when *::AIO doesn't write everything
