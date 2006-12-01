@@ -435,6 +435,7 @@ sub handle_response { # : void
         # also update the response code, in case of 206 partial content
         my $rescode = $hd->response_code;
         $thd->code($rescode) if $rescode == 206 || $rescode == 416;
+        $thd->code(200) if $thd->response_code == 204;  # upgrade HTTP No Content (204) to 200 OK.
     }
 
     print "  writing response headers to client\n" if Perlbal::DEBUG >= 3;

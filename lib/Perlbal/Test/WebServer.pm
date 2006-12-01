@@ -205,6 +205,12 @@ sub serve_client {
             }
 
             if ($cmd =~ /^reproxy_url:(.+)/i) {
+                $to_send = $response->(headers => "X-Reproxy-URL: $1\r\n",
+                                       code => 204,
+                                       );
+            }
+
+            if ($cmd =~ /^reproxy_url204:(.+)/i) {
                 $to_send = $response->(headers => "X-Reproxy-URL: $1\r\n");
             }
 

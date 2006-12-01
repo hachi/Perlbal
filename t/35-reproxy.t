@@ -85,6 +85,10 @@ ok_reproxy_url();
 ok_reproxy_url();
 ok($wc->reqdone >= 4, "4 on same conn");
 
+# reproxy URL support, w/ 204s from backend
+ok_reproxy_url_204();
+ok_reproxy_url_204();
+
 # reproxy cache support
 {
     my $sig_counter = 0;
@@ -97,7 +101,7 @@ ok($wc->reqdone >= 4, "4 on same conn");
     is($sig_counter, 1, "Second hit should be cached.");
     sleep 2;
     is($sig_counter, 1, "Prior to third hit, counter should still be 1.");
-    ok_reproxy_url_cached("Three"); 
+    ok_reproxy_url_cached("Three");
     is($sig_counter, 2, "Third hit isn't cached, now 2.");
     ok_reproxy_url_cached("Four");
     is($sig_counter, 2, "Forth hit should be cached again, still 2.");
@@ -147,6 +151,13 @@ sub ok_reproxy_file {
 sub ok_reproxy_url {
     my $resp = $wc->request("reproxy_url:http://127.0.0.1:$webport/foo.txt");
     ok($resp->content eq $file_content, "reproxy URL") or diag(dump_res($resp));
+    is($resp->code, 200, "response code is 200");
+}
+
+sub ok_reproxy_url_204 {
+    my $resp = $wc->request("reproxy_url204:http://127.0.0.1:$webport/foo.txt");
+    ok($resp->content eq $file_content, "reproxy URL") or diag(dump_res($resp));
+    is($resp->code, 200, "204 response code is 200");
 }
 
 sub ok_status {
