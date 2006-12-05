@@ -444,9 +444,13 @@ sub http_response_sent {
 
     print "ClientProxy::http_response_sent -- resetting state\n" if Perlbal::DEBUG >= 3;
 
+    if (my $be = $self->{backend}) {
+        $self->{backend} = undef;
+        $be->forget_client;
+    }
+
     # if we get here we're being persistent, reset our state
     $self->{backend_requested} = 0;
-    $self->{backend} = undef;
     $self->{high_priority} = 0;
     $self->{reproxy_uris} = undef;
     $self->{reproxy_expected_size} = undef;

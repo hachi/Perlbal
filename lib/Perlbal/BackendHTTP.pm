@@ -161,6 +161,12 @@ sub ipport {
     return $self->{ipport};
 }
 
+# called to tell backend that the client has gone on to do something else now.
+sub forget_client {
+    my Perlbal::BackendHTTP $self = $_[0];
+    $self->{client} = undef;
+}
+
 # called by service when it's got a client for us, or by ourselves
 # when we asked for a client.
 # returns true if client assignment was accepted.

@@ -1,3 +1,8 @@
+    -- fix a crash as reported on mailing lists, with backends not
+       releasing references to clientproxies when coming through
+       service selectors, and backends then timing out, crashing
+       the server.
+
     -- if backend sends x-reproxy-url and HTTP 204 No Content, upgrade
        that to a 200 when sending to the client.
 
