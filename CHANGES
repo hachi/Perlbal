@@ -1,3 +1,5 @@
+1.53: 2006-12-05
+
     -- fix a crash as reported on mailing lists, with backends not
        releasing references to clientproxies when coming through
        service selectors, and backends then timing out, crashing
