@@ -1136,6 +1136,8 @@ sub run {
         return 1;
     });
 
+    run_global_hook("pre_event_loop");
+
     # begin the overall loop to try to capture if Perlbal dies at some point
     # so we can have a log of it
     eval {
