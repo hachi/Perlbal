@@ -1,3 +1,6 @@
+* Re: TCP resets in response to HEAD requests
+  http://rt.livejournal.org/Ticket/Display.html?id=261
+
 * perlbal idea: X-Pick-Backend header (fwd)
   http://rt.livejournal.org/Ticket/Display.html?id=326
 
