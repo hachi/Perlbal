@@ -783,7 +783,6 @@ sub handle_chunked_upload {
 
     $req_hd->header("Transfer-Encoding", undef); # remove it (won't go to backend)
 
-    # TODO: return false if we don't have buffered upload dir configured
     my $eh = $req_hd->header("Expect");
     if ($eh && $eh =~ /\b100-continue\b/) {
         $self->write(\ "HTTP/1.1 100 Continue\r\n\r\n");
