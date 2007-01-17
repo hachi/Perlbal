@@ -10,6 +10,8 @@ use warnings;
 use base "Perlbal::ClientHTTPBase";
 no  warnings qw(deprecated);
 
+use Perlbal::ChunkedUploadState;
+
 use fields (
             'backend',             # Perlbal::BackendHTTP object (or undef if disconnected)
             'backend_requested',   # true if we've requested a backend for this request
@@ -35,6 +37,9 @@ use fields (
             'buoutpos',            # int; buffered output position
             'backend_stalled',   # boolean:  if backend has shut off its reads because we're too slow.
             'unread_data_waiting',  # boolean:  if we shut off reads while we know data is yet to be read from client
+            'chunked_upload_state', # bool/obj:  if processing a chunked upload, Perlbal::ChunkedUploadState object, else undef
+            'request_body_length',  # integer:  request's body length, either as-declared,
+                                    #           or calculated after chunked upload is complete
 
             # for perlbal sending out UDP packets related to upload status (for xmlhttprequest upload bar)
             'last_upload_packet',  # unixtime we last sent a UDP upload packet
@@ -98,6 +103,8 @@ sub init {
     $self->{bufilename} = undef;
     $self->{buoutpos} = 0;
     $self->{bureason} = undef;
+    $self->{chunked_upload_state} = undef;
+    $self->{request_body_length} = undef;
 
     $self->{reproxy_uris} = undef;
     $self->{reproxy_expected_size} = undef;
@@ -466,6 +473,8 @@ sub http_response_sent {
     $self->{buoutpos} = 0;
     $self->{bureason} = undef;
     $self->{upload_session} = undef;
+    $self->{chunked_upload_state} = undef;
+    $self->{request_body_length} = undef;
     return 1;
 }
 
@@ -568,6 +577,18 @@ sub event_read {
         # our buffer is full, so turn off reads for now
         print "  disabling reads.\n" if Perlbal::DEBUG >= 3;
         $self->watch_read(0);
+        return;
+    }
+
+    # deal with chunked uploads
+    if (my $cus = $self->{chunked_upload_state}) {
+        $cus->on_readable($self);
+
+        # if we got more than 1MB not flushed to disk,
+        # stop reading for a bit until disk catches up
+        if ($self->{read_ahead} > 1024*1024) {
+            $self->watch_read(0);
+        }
         return;
     }
 
@@ -712,11 +733,17 @@ sub handle_request {
     return if $svc->run_hook('start_proxy_request', $self);
     return if $svc->run_hook('start_http_request',  $self);
 
-    # if defined we're waiting on some amount of data.  also, we have to
-    # subtract out read_size, which is the amount of data that was
-    # extra in the packet with the header that's part of the body.
-    $self->{content_length_remain} = $req_hd->content_length;
-    $self->{unread_data_waiting} = 1 if $self->{content_length_remain};
+    if ($self->handle_chunked_upload) {
+        # handled in method.
+    } else {
+        # if defined we're waiting on some amount of data.  also, we have to
+        # subtract out read_size, which is the amount of data that was
+        # extra in the packet with the header that's part of the body.
+        $self->{request_body_length} =
+            $self->{content_length_remain} =
+            $req_hd->content_length;
+        $self->{unread_data_waiting} = 1 if $self->{content_length_remain};
+    }
 
     # upload-tracking stuff.  both starting a new upload track session,
     # and checking on status of ongoing one
@@ -728,7 +755,12 @@ sub handle_request {
 
     # either start buffering some of the request to memory, or
     # immediately request a backend connection.
-    if ($self->{content_length_remain} && $self->{service}->{buffer_backend_connect}) {
+    if ($self->{chunked_upload_state}) {
+        $self->{request_body_length} = 0;
+        $self->{is_buffering} = 1;
+        $self->{bureason} = 'chunked';
+        $self->buffered_upload_update;
+    } elsif ($self->{content_length_remain} && $self->{service}->{buffer_backend_connect}) {
         # the deeper path
         $self->start_buffering_request;
     } else {
@@ -740,6 +772,44 @@ sub handle_request {
 
         $self->request_backend;
     }
+}
+
+sub handle_chunked_upload {
+    my Perlbal::ClientProxy $self = shift;
+    my $req_hd = $self->{req_headers};
+    my $te = $req_hd->header("Transfer-Encoding");
+    return unless $te && $te eq "chunked";
+    return unless $self->{service}->{buffer_uploads};
+
+    $req_hd->header("Transfer-Encoding", undef); # remove it (won't go to backend)
+
+    # TODO: return false if we don't have buffered upload dir configured
+    my $eh = $req_hd->header("Expect");
+    if ($eh && $eh =~ /\b100-continue\b/) {
+        $self->write(\ "HTTP/1.1 100 Continue\r\n\r\n");
+        $req_hd->header("Expect", undef); # remove it (won't go to backend)
+    }
+
+    my $args = {
+        on_new_chunk => sub {
+            my $cref = shift;
+            my $len = length($$cref);
+            push @{$self->{read_buf}}, $cref;
+            $self->{read_ahead}          += $len;
+            $self->{request_body_length} += $len;
+            # TODO: if too large, disconnect?
+            $self->buffered_upload_update;
+        },
+        on_disconnect => sub {
+            $self->client_disconnected;
+        },
+        on_zero_chunk => sub {
+            $self->send_buffered_upload;
+        },
+    };
+
+    $self->{chunked_upload_state} = Perlbal::ChunkedUploadState->new(%$args);
+    return 1;
 }
 
 sub satisfy_request_from_cache {
@@ -914,6 +984,13 @@ sub send_buffered_upload {
     my Perlbal::ClientProxy $self = shift;
 
     # make sure our buoutpos is the same as the content length...
+    return if $self->{is_writing};
+
+    # set the content-length that goes to the backend...
+    if ($self->{chunked_upload_state}) {
+        $self->{req_headers}->header("Content-Length", $self->{request_body_length});
+    }
+
     my $clen = $self->{req_headers}->content_length;
     if ($clen != $self->{buoutpos}) {
         Perlbal::log('critical', "Content length of $clen declared but $self->{buoutpos} bytes written to disk");
@@ -934,7 +1011,8 @@ sub continue_buffered_upload {
     return unless $self && $be;
 
     # now send the data
-    my $clen = $self->{req_headers}->content_length;
+    my $clen = $self->{request_body_length};
+
     my $sent = Perlbal::Socket::sendfile($be->{fd}, fileno($self->{bufh}), $clen - $self->{buoutpos});
     if ($sent < 0) {
         return $self->close("epipe") if $! == EPIPE;
@@ -1016,8 +1094,23 @@ sub buffered_upload_update {
             $self->{read_ahead} += $diff;
         }
 
+        # if we're processing a chunked upload, ...
+        if ($self->{chunked_upload_state}) {
+            # turn reads back on, if we haven't hit the end yet.
+            if ($self->{unread_data_waiting} && $self->{read_ahead} < 1024*1024) {
+                $self->watch_read(1);
+                $self->{unread_data_waiting} = 0;
+            }
+
+            if ($self->{read_ahead} == 0 && $self->{chunked_upload_state}->hit_zero_chunk) {
+                $self->watch_read(0);
+                $self->send_buffered_upload;
+                return;
+            }
+        }
+
         # if we're done (no clr and no read ahead!) then send it
-        if ($self->{read_ahead} <= 0 && $self->{content_length_remain} <= 0) {
+        elsif ($self->{read_ahead} <= 0 && $self->{content_length_remain} <= 0) {
             $self->send_buffered_upload;
             return;
         }

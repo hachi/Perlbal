@@ -1,0 +1,23 @@
+Perlbal for the most part only speaks HTTP/1.0 both to clients and to
+backend webservers.  It happily takes requests advertising HTTP/1.1
+and downgrading them to HTTP/1.0 when speaking to backend serves.
+
+It knows all about persistent connections (in both 1.0 and 1.1) and
+will reply with HTTP/1.0 Connection: keep-alive the request was only
+implicitly keep-alive with HTTP/1.1.  etc, etc.
+
+Perlbal is now also starting to speak more of 1.1.  For instance,
+Perlbal does support receiving transfer-encoding "chunked" requests
+from clients (a feature of HTTP/1.1), will send a "100 Continue" in
+response to "Expect: 100-continue", and will parse the chunked
+requests, writing the request-of-unknown-length to disk (only if
+buffered_uploads is enabled), and then will send an HTTP/1.0 request
+to the backends, with the actual Content-Length (now known) filled in.
+
+When more of 1.1 is supported, it will become an option, and later
+become the default.  However, after several years of usage, there just
+hasn't been that much of a reason.  The chunked requests (common from
+mobile phones uploading large images) has been the most annoying
+shortcoming but now that it's solved, it's questionable whether or not
+more of HTTP/1.1 will be supported.
+
