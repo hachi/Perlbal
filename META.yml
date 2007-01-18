@@ -3,6 +3,7 @@
 name:         Perlbal
 version:      1.53
 version_from: lib/Perlbal.pm
+license: perl
 installdirs:  site
 requires:
     BSD::Resource:                 0
