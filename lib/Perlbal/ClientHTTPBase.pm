@@ -362,7 +362,7 @@ sub _serve_request {
     return 1 if $self->{service}->run_hook('start_serve_request', $self, \$uri);
 
     # don't allow directory traversal
-    if ($uri =~ /\.\./ || $uri !~ m!^/!) {
+    if ($uri =~ m!/\.\./! || $uri !~ m!^/!) {
         return $self->_simple_response(403, "Bogus URL");
     }
 

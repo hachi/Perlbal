@@ -3,7 +3,7 @@
 use strict;
 use Perlbal::Test;
 
-use Test::More tests => 11;
+use Test::More tests => 13;
 require HTTP::Request;
 
 my $port = new_port();
@@ -90,6 +90,16 @@ ok(! get("$url/404.txt"), "missing file");
     manage("SET test.index_files = blah.txt");
     $diridx = get($dirurl);
     like($diridx, qr/Directory listing disabled/, "no dirlist again");
+}
+
+# directory traversal should fail
+ok(! get("$url/../foo/bar.txt"), "directory traversal");
+
+# files with '..' in the names should succeed
+{
+    set_path("/foo/foo..123.txt");
+    write_file();
+    ok(get($url) eq $contents, "File with .. in name");
 }
 
 1;
