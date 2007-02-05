@@ -31,6 +31,7 @@ use fields (
             'enable_concatenate_get',   # bool:  if user can request concatenated files
             'enable_put', # bool: whether PUT is supported
             'max_put_size', # int: max size in bytes of a put file
+            'max_chunked_request_size',  # int: max size in bytes of a chunked request (to be written to disk first)
             'min_put_directory', # int: number of directories required to exist at beginning of URIs in put
             'enable_delete', # bool: whether DELETE is supported
             'high_priority_cookie',          # cookie name to check if client can 'cut in line' and get backends faster
@@ -180,6 +181,13 @@ our $tunables = {
         des => "The maximum content-length that will be accepted for a PUT request, if enable_put is on.  Default value of 0 means no limit.",
         check_type => "size",
         check_role => "web_server",
+    },
+
+    'max_chunked_request_size' => {
+        default => 209715200,  # 200 MB.  (0: no limit)
+        des => "The maximum size that will be accepted for a chunked request.  Default is 200MB (which is written to disk, buffered uploads must be on).  A value of 0 means no limit.",
+        check_type => "size",
+        check_role => "*",
     },
 
     'buffer_size' => {

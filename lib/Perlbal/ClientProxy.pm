@@ -789,6 +789,8 @@ sub handle_chunked_upload {
         $req_hd->header("Expect", undef); # remove it (won't go to backend)
     }
 
+    my $max_size = $self->{service}{max_chunked_request_size};
+
     my $args = {
         on_new_chunk => sub {
             my $cref = shift;
@@ -796,7 +798,13 @@ sub handle_chunked_upload {
             push @{$self->{read_buf}}, $cref;
             $self->{read_ahead}          += $len;
             $self->{request_body_length} += $len;
-            # TODO: if too large, disconnect?
+
+            # if too large, disconnect them...
+            if ($max_size && $self->{request_body_length} > $max_size) {
+                $self->purge_buffered_upload;
+                $self->close;
+                return;
+            }
             $self->buffered_upload_update;
         },
         on_disconnect => sub {
