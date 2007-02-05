@@ -1,3 +1,5 @@
+1.54: 2007-02-05
+
     -- supported for "Transfer-Encoding: chunked" requests (HTTP/1.1 feature)
        as well as the "Expect: 100-continue", which generally accompany
        chunked requests.  requires "buffered_uploads" be enabled.  see
