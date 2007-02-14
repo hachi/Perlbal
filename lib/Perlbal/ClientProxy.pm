@@ -1071,6 +1071,16 @@ sub buffered_upload_update {
         return;
     }
 
+    # can't proceed if we have no disk file to async write to
+    # people reported seeing this crash rarely in production...
+    # must be a race between previously in-flight's write
+    # re-invoking a write immediately after something triggered
+    # a buffered upload purge.
+    unless ($self->{bufh}) {
+        $self->close;
+        return;
+    }
+
     # at this point, we want to do some writing
     my $bref = shift(@{$self->{read_buf}});
     my $len = length $$bref;
