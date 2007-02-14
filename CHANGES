@@ -1,3 +1,6 @@
+    -- do HEAD to reproxied hosts, if client did a HEAD (Radu Greab
+       <radu@yx.ro>)
+
     -- fix race+crash in buffered upload writing/purging
 
 1.54: 2007-02-05

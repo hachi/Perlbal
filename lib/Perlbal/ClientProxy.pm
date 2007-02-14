@@ -234,7 +234,8 @@ sub use_reproxy_backend {
         $extra_hdr .= "Host: $host\r\n";
     }
 
-    my $headers = "GET $datref->[2] HTTP/1.0\r\nConnection: keep-alive\r\n${extra_hdr}\r\n";
+    my $req_method = $self->{req_headers}->request_method eq 'HEAD' ? 'HEAD' : 'GET';
+    my $headers = "$req_method $datref->[2] HTTP/1.0\r\nConnection: keep-alive\r\n${extra_hdr}\r\n";
 
     $be->{req_headers} = Perlbal::HTTPHeaders->new(\$headers);
     $be->state('sending_req');

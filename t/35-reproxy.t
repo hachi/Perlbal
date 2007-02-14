@@ -133,6 +133,17 @@ foreach_aio {
 # try to reproxy to a list of URLs, where the first one is bogus, and last one is good
 ok_reproxy_url_list();
 
+# responses to HEAD requests should not have a body
+{
+    $wc->keepalive(0);
+    my $resp = $wc->request({
+        method => "HEAD",
+    }, "reproxy_url:http://127.0.0.1:$webport/foo.txt");
+    ok($resp && $resp->content eq '', "no response body when req method is HEAD");
+    $wc->keepalive(1);
+}
+
+
 sub ok_reproxy_url_cached {
     my $resp = $wc->request("reproxy_url_cached:1:http://127.0.0.1:$webport/foo.txt");
     ok($resp && $resp->content eq $file_content, "reproxy with cache: $_[0]");

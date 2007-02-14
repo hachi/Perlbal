@@ -190,6 +190,8 @@ sub resp_from_sock {
     if (defined $cl && $cl > 0) {
         my $content = '';
         while (($cl -= read($sock, $content, $cl)) > 0) {
+            # assume an error means connection closed
+            last if $!;
             # don't do anything, the loop is it
         }
         $resp->content($content);
