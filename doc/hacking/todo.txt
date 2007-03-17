@@ -91,3 +91,6 @@
 * perlbal needs "SERVER" command to drop root and change to another user
   http://rt.livejournal.org/Ticket/Display.html?id=2827
 
+* in SSL mode, when role is web_server, you can't sendfile()!
+  http://rt.livejournal.org/Ticket/Display.html?id=3666
+
