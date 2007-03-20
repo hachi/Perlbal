@@ -33,7 +33,6 @@ sub register {
         my $uri = $hds->request_uri;
 
         return 0 unless $uri;
-        return 0 unless $uri =~ m!/!;
 
         my $host = $hds->header("Host");
 
@@ -43,9 +42,13 @@ sub register {
         my $ims = $hds->header("If-Modified-Since");
 
         return 0 unless $ims;
-        return 0 unless $ims =~ m!:!;
 
-        $client->send_response(304, "Not Modified.");
+        my $res = $client->{res_headers} = Perlbal::HTTPHeaders->new_response(304);
+        $client->setup_keepalive($res);
+        $client->tcp_cork(1);  # cork writes to self
+        $client->write($res->to_string_ref);
+        $client->write(sub { $client->http_response_sent; });
+
         return 1;
     };
 
