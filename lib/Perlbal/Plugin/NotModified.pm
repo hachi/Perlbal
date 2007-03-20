@@ -43,11 +43,7 @@ sub register {
 
         return 0 unless $ims;
 
-        my $res = $client->{res_headers} = Perlbal::HTTPHeaders->new_response(304);
-        $client->setup_keepalive($res);
-        $client->tcp_cork(1);  # cork writes to self
-        $client->write($res->to_string_ref);
-        $client->write(sub { $client->http_response_sent; });
+        $client->send_response(304, "Not Modified");
 
         return 1;
     };

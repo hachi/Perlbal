@@ -715,10 +715,10 @@ sub _simple_response {
     my ($code, $msg) = @_;  # or bodyref
 
     my $res = $self->{res_headers} = Perlbal::HTTPHeaders->new_response($code);
-    $res->header("Content-Type", "text/html");
 
     my $body;
-    unless ($code == 204) {
+    if ($code != 204 && $code != 304) {
+        $res->header("Content-Type", "text/html");
         my $en = $res->http_code_english;
         $body = "<h1>$code" . ($en ? " - $en" : "") . "</h1>\n";
         $body .= $msg if $msg;
