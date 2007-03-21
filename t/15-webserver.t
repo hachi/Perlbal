@@ -3,8 +3,9 @@
 use strict;
 use Perlbal::Test;
 
-use Test::More tests => 13;
+use Test::More tests => 15;
 require HTTP::Request;
+require HTTP::Date;
 
 my $port = new_port();
 my $dir = tempdir();
@@ -61,6 +62,14 @@ ok(get($url) eq $contents, "GET request");
 
 # a get with URL parameters
 ok(get("$url?foo=bar") eq $contents, "GET request");
+
+{
+    my $req = HTTP::Request->new(GET => $url, [ 'If-Modified-Since' => HTTP::Date::time2str() ]);
+    my $res = $ua->request($req);
+
+    is($res->code, 304, "Got not modified");
+    is($res->header("Content-Length"), undef, "Shouldn't get a Content-Length header");
+}
 
 # 404 path
 ok(! get("$url/404.txt"), "missing file");
