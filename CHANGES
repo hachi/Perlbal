@@ -1,6 +1,8 @@
     -- add plugin that returns 304 automatically on incoming requests
-       with If-Modified-Since header, and matches a regular expression
-       on the Host header.
+       with If-Modified-Since header and matching a regular expression
+       on the Host header. (for hostnames serving immutable resources,
+       where if client has ANY version, it's the correct one.)  see:
+       example conf at conf/not-modified-plugin.conf
 
     -- do HEAD to reproxied hosts, if client did a HEAD (Radu Greab
        <radu@yx.ro>)
