@@ -5,6 +5,7 @@ conf/nodelist.dat
 conf/ssl.conf
 conf/virtual-hosts.conf
 conf/webserver.conf
+conf/not-modified-plugin.conf
 devtools/gendocs.pl
 doc/config-guide.txt
 doc/hacking/classes.txt
