@@ -1,3 +1,5 @@
+1.55: 2007-03-21
+
     -- add plugin that returns 304 automatically on incoming requests
        with If-Modified-Since header and matching a regular expression
        on the Host header. (for hostnames serving immutable resources,
