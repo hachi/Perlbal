@@ -1,3 +1,9 @@
+perlbal (1.55-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Jonathan Steinert <debian@hachi.kuiki.net>  Tue, 20 Mar 2007 13:59:10 -0800
+
 perlbal (1.41-1) unstable; urgency=low
 
   * Upstream fix: IE header santizing

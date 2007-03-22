@@ -1,86 +1,82 @@
 #!/usr/bin/make -f
-# Sample debian/rules that uses debhelper.
-# GNU copyright 1997 to 1999 by Joey Hess.
+# This debian/rules file is provided as a template for normal perl
+# packages. It was created by Marc Brockschmidt <marc@dch-faq.de> for
+# the Debian Perl Group (http://pkg-perl.alioth.debian.org/) but may
+# be used freely wherever it is useful.
 
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
-# This is the debhelper compatibility version to use.
-# export DH_COMPAT=4
+# If set to a true value then MakeMaker's prompt function will
+# always return the default without waiting for user input.
+export PERL_MM_USE_DEFAULT=1
 
-#PACKAGE=`pwd | sed -e "s/.*\/\\(.*\\)-.*/\\1/"`
-ENV=/usr/bin/env
-PERL=/usr/bin/perl
-MODULESPACKAGE=libperlbal-perl
-DAEMONPACKAGE=perlbal
-DOCPACKAGE=perlbal-doc
-SBIN=$(CURDIR)/debian/$(DAEMONPACKAGE)/usr/sbin
-CONFDIR=$(CURDIR)/debian/$(DAEMONPACKAGE)/etc/perlbal
+ifndef PERL
+PERL = /usr/bin/perl
+endif
 
-BM=blib.modules
-BD=blib.daemon
+TMP     =$(CURDIR)/debian/tmp
 
-build:
+build: build-stamp
+build-stamp:
 	dh_testdir
-	# Add here commands to compile the package.
-	$(ENV) DANGABUILD_MODULESONLY=1 $(PERL) Makefile.PL verbose INSTALLDIRS=vendor INST_LIB=$(BM)
-	cp Makefile Makefile.modules
-	$(ENV) DANGABUILD_DAEMONONLY=1 $(PERL) Makefile.PL verbose INSTALLSCRIPT=$(SBIN) INSTALLDIRS=vendor INST_LIB=$(BD) INST_SCRIPT=$(BD) 
-	cp Makefile Makefile.daemon
+
+	# Add commands to compile the package here
+	$(PERL) Makefile.PL verbose INSTALLDIRS=vendor
+	$(MAKE)
+
+	touch build-stamp
 
 clean:
 	dh_testdir
 	dh_testroot
 
-	-$(MAKE) -f Makefile.modules clean
-	-$(MAKE) -f Makefile.daemon clean
-	rm -f Makefile.old Makefile.modules Makefile.daemon
-	rm -rf $(BD) $(BM)
-	dh_clean
+	# Add commands to clean up after the build process here
+	-$(MAKE) distclean
 
-install:
+	dh_clean build-stamp install-stamp
+
+install: build install-stamp
+install-stamp:
 	dh_testdir
 	dh_testroot
 	dh_clean -k
-	dh_installdirs
 
-	$(MAKE) -f Makefile.modules PREFIX=$(CURDIR)/debian/$(MODULESPACKAGE)/usr OPTIMIZE="-O2 -g -Wall" test install
-	$(MAKE) -f Makefile.daemon PREFIX=$(CURDIR)/debian/$(DAEMONPACKAGE)/usr INSTALLSCRIPT=$(SBIN) OPTIMIZE="-O2 -g -Wall" install
-	-find $(CURDIR)/debian -type d | xargs rmdir -p --ignore-fail-on-non-empty
+	dh_installdirs -A
 
-	# Install configs
-	install -d $(CONFDIR)
-	install -m 644 conf/perlbal.conf $(CONFDIR)/perlbal.conf
-	install -m 644 conf/nodelist.dat $(CONFDIR)/nodelist.dat
+#	$(MAKE) test
+	$(MAKE) pure_install DESTDIR=$(TMP) PREFIX=/usr
 
-	# Bring doc/*.txt's up to date
-	$(PERL) $(CURDIR)/devtools/gendocs.pl
+	find $(TMP) -name .packlist -exec rm '{}' \;
+	find $(TMP) -depth -type d -empty -exec rmdir '{}' \;
 
-	# Remove man3 from main binary package
-	rm -rf $(CURDIR)/debian/$(DAEMONPACKAGE)/usr/share/man/man3
-	
-binary-arch:;
+	dh_install --sourcedir=$(TMP)
+
+	touch install-stamp
+
+binary-arch:
+# We have nothing to do by default.
+
 binary-indep: build install
 	dh_testdir
 	dh_testroot
-	dh_installdocs
-	dh_installexamples
-	dh_installman
-	dh_installinit
+#	dh_installcron
+#	dh_installmenu
+#	dh_installexamples
+	dh_installdocs doc/hacking/todo.txt
 	dh_installchangelogs CHANGES
-
-	# Weed out cvs files prior to packaging
-	find $(CURDIR)/debian/$(MODULESPACKAGE) $(CURDIR)/debian/$(DAEMONPACKAGE) $(CURDIR)/debian/$(DOCPACKAGE) | grep -f $(CURDIR)/debian/cvs.excludes | xargs rm -rf
-
+	dh_perl
 	dh_link
 	dh_strip
 	dh_compress
 	dh_fixperms
 	dh_installdeb
-	dh_perl
 	dh_gencontrol
 	dh_md5sums
 	dh_builddeb
 
+source diff:                                                                  
+	@echo >&2 'source and diff are obsolete - use dpkg-source -b'; false
+
 binary: binary-indep binary-arch
-.PHONY: build clean binary-indep binary-arch binary install configure
+.PHONY: build clean binary-indep binary-arch binary
