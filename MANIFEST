@@ -64,3 +64,4 @@ t/40-ranges.t
 t/45-buffereduploads.t
 t/50-plugins.t
 t/52-chunked-upload.t
+t/60-child-httpd.t

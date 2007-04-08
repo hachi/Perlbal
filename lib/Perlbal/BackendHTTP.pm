@@ -39,7 +39,10 @@ use fields ('client',  # Perlbal::ClientProxy connection, or undef
             'generation', # int; counts what generation we were spawned in
             'buffered_upload_mode', # bool; if on, we're doing a buffered upload transmit
             );
-use Socket qw(PF_INET IPPROTO_TCP SOCK_STREAM SOL_SOCKET SO_ERROR);
+use Socket qw(PF_INET IPPROTO_TCP SOCK_STREAM SOL_SOCKET SO_ERROR
+              AF_UNIX PF_UNSPEC
+              );
+use IO::Handle;
 
 use Perlbal::ClientProxy;
 
@@ -99,9 +102,19 @@ sub new {
     });
 
     # for header reading:
+    $self->init;
+
+    bless $self, ref $class || $class;
+    $self->watch_write(1);
+    return $self;
+}
+
+sub init {
+    my $self = shift;
     $self->{req_headers} = undef;
     $self->{res_headers} = undef;  # defined w/ headers object once all headers in
     $self->{headers_string} = "";  # blank to start
+    $self->{generation}    = $self->{service}->{generation};
     $self->{read_size} = 0;        # total bytes read from client
 
     $self->{client}   = undef;     # Perlbal::ClientProxy object, initially empty
@@ -109,9 +122,50 @@ sub new {
 
     $self->{has_attention} = 0;
     $self->{use_count}     = 0;
-    $self->{generation}    = $opts->{generation};
     $self->{buffered_upload_mode} = 0;
+}
 
+
+sub new_process {
+    my ($class, $svc, $prog) = @_;
+
+    my ($psock, $csock);
+    socketpair($csock, $psock, AF_UNIX, SOCK_STREAM, PF_UNSPEC)
+        or  die "socketpair: $!";
+
+    $csock->autoflush(1);
+    $psock->autoflush(1);
+
+    my $pid = fork;
+    unless (defined $pid) {
+        warn "fork failed: $!\n";
+        return undef;
+    }
+
+    # child process
+    unless ($pid) {
+        close(STDIN);
+        close(STDOUT);
+        #close(STDERR);
+        open(STDIN, '<&', $psock);
+        open(STDOUT, '>&', $psock);
+        #open(STDERR, ">/dev/null");
+        exec $prog;
+    }
+
+    close($psock);
+    my $sock = $csock;
+
+    my $self = fields::new($class);
+    $self->SUPER::new($sock);
+    Perlbal::objctor($self);
+
+    $self->{ipport}   = $prog; # often used as key
+    $self->{service}  = $svc; # the service we're serving for
+    $self->{reportto} = $svc; # reportto interface (same as service)
+    $self->state("connecting");
+
+    $self->init;
     bless $self, ref $class || $class;
     $self->watch_write(1);
     return $self;
@@ -660,6 +714,12 @@ sub die_gracefully {
 sub DESTROY {
     Perlbal::objdtor($_[0]);
     $_[0]->SUPER::DESTROY;
+}
+
+sub state {
+    my ($self, $state) = @_;
+    print "$self state = $state\n";
+    $self->SUPER::state($state);
 }
 
 1;

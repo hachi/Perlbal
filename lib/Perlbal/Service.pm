@@ -53,6 +53,7 @@ use fields (
             'enable_reproxy', # bool; if true, advertise that server will reproxy files and/or URLs
             'reproxy_cache_maxsize', # int; maximum number of reproxy results to be cached. (0 is disabled and default)
             'client_sndbuf_size',    # int: bytes for SO_SNDBUF
+            'server_process' ,       # scalar: path to server process (executable)
 
             # Internal state:
             'waiting_clients',         # arrayref of clients waiting for backendhttp conns
@@ -400,6 +401,18 @@ our $tunables = {
             # stringified name of the pool, but we already set it in
             # the type-checking phase.  instead, we do nothing here.
             return $mc->ok;
+        },
+    },
+
+    'server_process' => {
+        des => "Executable which will be the HTTP server on stdin/stdout.",
+        check_role => "reverse_proxy",
+        check_type => sub {
+            my ($self, $val, $errref) = @_;
+            #FIXME: require absolute paths?
+            return 1 if $val && -x $val;
+            $$errref = "Server process ($val) not executable.";
+            return 0;
         },
     },
 
@@ -1138,9 +1151,6 @@ sub request_backend_connection { # : void
 sub spawn_backends {
     my Perlbal::Service $self = shift;
 
-    # to spawn we must have a pool
-    return unless $self->{pool};
-
     # check our lock and set it if we can
     return if $self->{spawn_lock};
     $self->{spawn_lock} = 1;
@@ -1158,8 +1168,10 @@ sub spawn_backends {
     my $backends_needed = $self->{waiting_client_count} + $self->{connect_ahead};
     my $to_create = $backends_needed - $backends_created;
 
+    my $pool = $self->{pool};
+
     # can't create more than this, assuming one pending connect per node
-    my $max_creatable = $self->{pool}->node_count - $self->{pending_connect_count};
+    my $max_creatable = $pool ? ($self->{pool}->node_count - $self->{pending_connect_count}) : 1;
     $to_create = $max_creatable if $to_create > $max_creatable;
 
     # cap number of attempted connects at once
@@ -1169,6 +1181,19 @@ sub spawn_backends {
 
     while ($to_create > 0) {
         $to_create--;
+
+        # spawn processes if not a pool, else whine.
+        unless ($pool) {
+            if (my $sp = $self->{server_process}) {
+                warn "To create = $to_create...\n";
+                warn "  spawing $sp\n";
+                my $be = Perlbal::BackendHTTP->new_process($self, $sp);
+                return;
+            }
+            warn "No pool! Can't spawn backends.\n";
+            return;
+        }
+
         my ($ip, $port) = $self->{pool}->get_backend_endpoint;
         unless ($ip) {
             Perlbal::log('crit', "No backend IP for service $self->{name}");
@@ -1194,8 +1219,7 @@ sub spawn_backends {
         }
 
         # now actually spawn a backend and add it to our pending list
-        if (my $be = Perlbal::BackendHTTP->new($self, $ip, $port, { pool => $self->{pool},
-                                                                    generation => $self->{generation} })) {
+        if (my $be = Perlbal::BackendHTTP->new($self, $ip, $port, { pool => $self->{pool} })) {
             $self->add_pending_connect($be);
         }
     }
@@ -1477,7 +1501,6 @@ sub _ref_to {
 }
 
 1;
-
 
 # Local Variables:
 # mode: perl
