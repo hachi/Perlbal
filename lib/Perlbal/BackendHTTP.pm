@@ -716,12 +716,6 @@ sub DESTROY {
     $_[0]->SUPER::DESTROY;
 }
 
-sub state {
-    my ($self, $state) = @_;
-    print "$self state = $state\n";
-    $self->SUPER::state($state);
-}
-
 1;
 
 # Local Variables:
