@@ -90,6 +90,7 @@ sub init {
 
     $self->{backend} = undef;
     $self->{high_priority} = 0;
+    $self->{low_priority} = 0;
 
     $self->{responded} = 0;
     $self->{unread_data_waiting} = 0;
@@ -1217,6 +1218,22 @@ sub as_string {
     $ret .= "; reproxying" if $self->{currently_reproxying};
 
     return $ret;
+}
+
+sub set_queue {
+    my Perlbal::ClientProxy $self = shift;
+    my $queue = lc(shift);
+
+    warn "Setting queue\n";
+
+    if ($queue eq 'high') {
+        $self->{high_priority} = 1;
+    } elsif( $queue eq 'low') {
+        $self->{low_priority} = 1;
+    } else {
+        warn "Unknown queue to assign to '$queue'";
+    }
+    return;
 }
 
 sub DESTROY {

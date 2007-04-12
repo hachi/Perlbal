@@ -1075,8 +1075,8 @@ sub request_backend_connection { # : void
 
     return unless $cp && ! $cp->{closed};
 
-    my $hi_pri = 0;  # by default, regular priority
-    my $low_pri = 0;  # FIXME: way for hooks to set this
+    my $hi_pri = $cp->{high_priority};  # load values from the client proxy object
+    my $low_pri = $cp->{low_priority};  # they are initialized as 0 during object creation, but hooks can override them
 
     # is there a defined high-priority cookie?
     if (my $cname = $self->{high_priority_cookie}) {
