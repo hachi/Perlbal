@@ -1220,21 +1220,18 @@ sub as_string {
     return $ret;
 }
 
-sub set_queue {
+sub set_queue_low {
     my Perlbal::ClientProxy $self = shift;
-    my $queue = lc(shift);
-
-    warn "Setting queue\n";
-
-    if ($queue eq 'high') {
-        $self->{high_priority} = 1;
-    } elsif( $queue eq 'low') {
-        $self->{low_priority} = 1;
-    } else {
-        warn "Unknown queue to assign to '$queue'";
-    }
+    $self->{low_priority} = 1;
     return;
 }
+
+sub set_queue_high {
+    my Perlbal::ClientProxy $self = shift;
+    $self->{high_priority} = 1;
+    return;
+}
+
 
 sub DESTROY {
     Perlbal::objdtor($_[0]);

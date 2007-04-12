@@ -105,7 +105,7 @@ sub register {
         };
 
         my $queue_low = sub {
-            $client->set_queue("low");
+            $client->set_queue_low;
             return 0;
         };
 
