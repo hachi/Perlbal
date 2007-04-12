@@ -1095,6 +1095,10 @@ sub request_backend_connection { # : void
     $hi_pri = $self->run_hook('make_high_priority', $cp)
         unless $hi_pri; # only if it's not already
 
+    # and then, call hook to see about low priority
+    $low_pri = $self->run_hook('make_low_priority', $cp)
+        unless $hi_pri || $low_pri; # only if it's not high or low already
+
     $cp->{high_priority} = 1 if $hi_pri;
     $cp->{low_priority} = 1 if $low_pri;
 
