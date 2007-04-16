@@ -4,8 +4,14 @@ use strict;
 use Perlbal::Test;
 use Perlbal::Test::WebServer;
 use Perlbal::Test::WebClient;
-use Test::More tests => 4;
+use Test::More;
 use FindBin qw($Bin);
+
+unless ($ENV{PERLBAL_TEST_ALPHA}) {
+    plan skip_all => 'Alpha feature; test skipped without $ENV{PERLBAL_TEST_ALPHA}';
+} else {
+    plan tests => 4;
+}
 
 # setup a simple perlbal that uses the above server
 my $pb_port = new_port();

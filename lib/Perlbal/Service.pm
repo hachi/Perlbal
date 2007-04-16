@@ -405,7 +405,7 @@ our $tunables = {
     },
 
     'server_process' => {
-        des => "Executable which will be the HTTP server on stdin/stdout.",
+        des => "Executable which will be the HTTP server on stdin/stdout. (ALPHA, EXPERIMENTAL!)",
         check_role => "reverse_proxy",
         check_type => sub {
             my ($self, $val, $errref) = @_;
