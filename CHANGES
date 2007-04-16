@@ -1,3 +1,6 @@
+    -- make HTML proper in ClientManage interface Jacques Marneweck
+       <jacques@powertrip.co.za>
+
     -- fix "make test" on OS X.  Radu Greab <radu@yx.ro> and
        Chuck Remes <cremes.devlist@mac.com> fixed & confirmed.
 

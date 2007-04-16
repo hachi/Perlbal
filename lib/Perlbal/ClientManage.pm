@@ -99,6 +99,10 @@ sub handle_http {
 
     };
 
+    $body .= "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">\n";
+    $body .= "<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\" lang=\"en-ZA\">\n";
+    $body .= "<head><title>perlbal management interface</title><meta name=\"generator\" content=\"perlbal\" /></head><body>";
+
     if ($uri eq "/") {
         $body .= "<h1>perlbal management interface</h1><ul>";
         $body .= "<li><a href='/socks'>Sockets</a></li>";
@@ -127,7 +131,7 @@ sub handle_http {
         $body .= "<h1>$code</h1>";
     }
 
-    $body .= "<hr style='margin-top: 10px' /><a href='/'>Perlbal management</a>.\n";
+    $body .= "<hr style='margin-top: 10px' /><p><a href='/'>Perlbal management</a>.</p></body></html>\n";
     $self->write("HTTP/1.0 $code\r\nContent-type: text/html\r\nContent-Length: " . length($body) .
                  "\r\n\r\n$body");
     $self->write(sub { $self->close; });
