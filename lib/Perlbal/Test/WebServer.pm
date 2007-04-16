@@ -21,7 +21,7 @@ my $testpid; # of the test suite's main program, the one running the HTTP client
 
 END {
     # ensure we kill off the webserver
-    kill 9, @webserver_pids if $testpid == $$;
+    kill 9, @webserver_pids if $testpid && $testpid == $$;
 }
 
 

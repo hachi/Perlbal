@@ -9,6 +9,7 @@ use FindBin qw($Bin);
 
 unless ($ENV{PERLBAL_TEST_ALPHA}) {
     plan skip_all => 'Alpha feature; test skipped without $ENV{PERLBAL_TEST_ALPHA}';
+    exit 0;
 } else {
     plan tests => 4;
 }
