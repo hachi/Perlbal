@@ -1,3 +1,5 @@
+    -- fix "make test" on OS X.  Radu Greab <radu@yx.ro> and
+       Chuck Remes <cremes.devlist@mac.com> fixed & confirmed.
 
     -- let accesscontrol plugin have a new match action, "queue_low",
        to make a match force a request onto the low-priotity queue.
