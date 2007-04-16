@@ -14,6 +14,8 @@ no  warnings qw(deprecated);
 #
 #     ACCESS {ALLOW,DENY} netmask 127.0.0.1/8
 #     ACCESS {ALLOW,DENY} ip 127.0.0.1
+# also can make a match set the request to go into the low-priority perlbal queue:
+#     ACCESS QUEUE_LOW ip 127.0.0.1
 
 # reset the rule chain and policy:  (policy is allow by default)
 #     ACCESS RESET
