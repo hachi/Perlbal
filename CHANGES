@@ -1,3 +1,16 @@
+
+    -- let accesscontrol plugin have a new match action, "queue_low",
+       to make a match force a request onto the low-priotity queue.
+       this match action is in addition to the two previous ones
+       (allow and deny).
+
+    -- start of work on making BackendHTTPs be abstract, dispatching
+       to a child process over a socketpair which speaks HTTP on
+       stdin/stdout.  Unfinished.  To be polished in future.
+
+    -- new hook "make_low_priority", like "make_high_priority"
+
+
 1.55: 2007-03-21
 
     -- add plugin that returns 304 automatically on incoming requests
