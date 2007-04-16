@@ -65,3 +65,5 @@ t/45-buffereduploads.t
 t/50-plugins.t
 t/52-chunked-upload.t
 t/60-child-httpd.t
+t/helper/child-httpd.pl
+lib/Perlbal/Plugin/AutoRemoveLeadingDir.pm
