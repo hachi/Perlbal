@@ -269,6 +269,10 @@ sub assign_client {
         $hds->header("X-Host", undef);
         $hds->header("X-Forwarded-Host", undef);
     }
+    else {
+        my @ips = split /,\s*/, ($hds->header("X-Forwarded-For") || '');
+        $hds->header("X-Forwarded-For", join ", ", @ips, $client_ip);
+    }
 
     $self->tcp_cork(1);
     $client->state('backend_req_sent');
