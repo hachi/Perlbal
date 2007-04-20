@@ -725,6 +725,8 @@ sub _simple_response {
         $res->header('Content-Length', length($body));
     }
 
+    $res->header('Server', 'Perlbal');
+
     $self->setup_keepalive($res);
 
     $self->state('xfer_resp');
