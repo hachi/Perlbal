@@ -308,7 +308,6 @@ sub event_read_put {
 
     if (my $cus = $self->{chunked_upload_state}) {
         $cus->on_readable($self);
-        # Do I need to check for an overfull buffer here?
         return;
     }
 
