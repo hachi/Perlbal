@@ -1,3 +1,8 @@
+    -- make ClientHTTP (webserver mode) support transfer-encoding
+       "chunked" PUTs, when PUTs are already enabled.  useful
+       for things like MogileFS, where writing clients may not
+       know the final length ahead of time to predeclare in the
+       Content-Length request header.
 
     -- Add the client_ip to the X-Forwarded-For header when the
        upstream is "trusted" (Ask Bjoern Hansen).

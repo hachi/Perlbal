@@ -4,7 +4,7 @@ use strict;
 sub new {
     my ($pkg, %args) = @_;
     my $self = bless {
-        'rawbuf' => '',
+        'buf' => '',
         'bytes_remain' => 0,  # remaining in chunk (ignoring final 2 byte CRLF)
     }, $pkg;
     foreach my $k (qw(on_new_chunk on_disconnect on_zero_chunk)) {
