@@ -1,3 +1,5 @@
+1.57: 2007-04-26
+
     -- make ClientHTTP (webserver mode) support transfer-encoding
        "chunked" PUTs, when PUTs are already enabled.  useful
        for things like MogileFS, where writing clients may not

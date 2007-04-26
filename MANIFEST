@@ -55,6 +55,7 @@ t/12-headers.t
 t/15-webserver.t
 t/17-webserver-concat.t
 t/20-put.t
+t/22-chunked-put.t
 t/30-reverseproxy.t
 t/31-realworld.t
 t/32-pipelining.t
