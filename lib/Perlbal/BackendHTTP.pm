@@ -260,18 +260,19 @@ sub assign_client {
         $hds->header("X-Proxy-Capabilities", "reproxy-file");
     }
 
-    # decide whether we trust the upstream or not
-    my $trust = $svc->trusted_ip($client_ip);
-
-    # if we're not going to trust the upstream, reset these for security reasons
-    unless ($trust) {
+    # decide whether we trust the upstream or not, to give us useful
+    # forwarding info headers
+    if ($svc->trusted_ip($client_ip)) {
+        # yes, we trust our upstream, so just append our client's IP
+        # to the existing list of forwarded IPs
+        my @ips = split /,\s*/, ($hds->header("X-Forwarded-For") || '');
+        $hds->header("X-Forwarded-For", join ", ", @ips, $client_ip);
+    } else {
+        # no, don't trust upstream (untrusted client), so remove all their
+        # forwarding headers and tag their IP as the x-forwarded-for
         $hds->header("X-Forwarded-For", $client_ip);
         $hds->header("X-Host", undef);
         $hds->header("X-Forwarded-Host", undef);
-    }
-    else {
-        my @ips = split /,\s*/, ($hds->header("X-Forwarded-For") || '');
-        $hds->header("X-Forwarded-For", join ", ", @ips, $client_ip);
     }
 
     $self->tcp_cork(1);
