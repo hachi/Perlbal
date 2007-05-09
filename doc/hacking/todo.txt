@@ -94,3 +94,6 @@
 * in SSL mode, when role is web_server, you can't sendfile()!
   http://rt.livejournal.org/Ticket/Display.html?id=3666
 
+* provide a way to introspect the low queue in perlbal
+  http://rt.livejournal.org/Ticket/Display.html?id=3880
+
