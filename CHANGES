@@ -1,3 +1,13 @@
+1.58: 2007-05-11
+
+    -- plugin reload support, if plugin supports it.  plugin must implement
+           sub can_reload { 1 }
+       and optionally:
+           sub pre_reload_unload { ... }
+       (which is called before the ->unload, module reload, and ->load)
+       new management command is:
+           reload <plugin_name>
+
 1.57: 2007-04-26
 
     -- make ClientHTTP (webserver mode) support transfer-encoding

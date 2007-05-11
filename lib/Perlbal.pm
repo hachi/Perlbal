@@ -33,7 +33,7 @@ my $has_cycle      = eval "use Devel::Cycle; 1;";
 use Devel::Peek;
 
 use vars qw($VERSION);
-$VERSION = '1.57';
+$VERSION = '1.58';
 
 use constant DEBUG => $ENV{PERLBAL_DEBUG} || 0;
 use constant DEBUG_OBJ => $ENV{PERLBAL_DEBUG_OBJ} || 0;
@@ -998,6 +998,7 @@ sub MANAGE_unload {
     return $mc->ok;
 }
 
+
 sub MANAGE_load {
     my $mc = shift->parse(qr/^load \w+$/);
 
@@ -1005,11 +1006,13 @@ sub MANAGE_load {
     $fn = $1 if $mc->orig =~ /^load (\w+)$/i;
 
     my $last_case;
+    my $last_class;
 
     my $load = sub {
         my $name = shift;
         $last_case = $name;
-        my $rv = eval "use Perlbal::Plugin::$name; Perlbal::Plugin::$name->load; 1;";
+        my $class = $last_class = "Perlbal::Plugin::$name";
+        my $rv = eval "use $class; $class->load; 1;";
         return $mc->err($@) if ! $rv && $@ !~ /^Can\'t locate/;
         return $rv;
     };
@@ -1018,7 +1021,39 @@ sub MANAGE_load {
     return $mc->err($@) unless $rv;
 
     $PluginCase{lc $fn} = $last_case;
-    $plugins{$last_case} = 1;
+    $plugins{$last_case} = $last_class;
+
+    return $mc->ok;
+}
+
+sub MANAGE_reload {
+    my $mc = shift->parse(qr/^reload (\w+)$/);
+    my ($fn) = $mc->args;
+
+    my $class = $PluginCase{lc $fn} or
+        return $mc->err("Unknown/unloaded plugin '$fn'");
+    $class = "Perlbal::Plugin::$class";
+
+    eval "$class->can_reload" or
+        return $mc->err("Plugin $class doesn't support reloading");
+
+    if ($class->can("pre_reload_unload")) {
+        eval "$class->pre_reload_unload; 1" or
+            return $mc->err("Error running $class->pre_reload_unload: $@");
+    }
+
+    eval "$class->unload; 1;" or
+        return $mc->err("Failed to unload $class: $@");
+
+    my $file = $class . ".pm";
+    $file =~ s!::!/!g;
+
+    delete $INC{$file} or
+        die $mc->err("Didn't find $file in %INC");
+
+    no warnings 'redefine';
+    eval "use $class; $class->load; 1;" or
+        return $mc->err("Failed to reload: $@");
 
     return $mc->ok;
 }

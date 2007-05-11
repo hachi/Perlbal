@@ -7,6 +7,7 @@ conf/ljdev.conf
 conf/perlbal.conf
 lib/Perlbal/Plugin/AtomInject.pm
 lib/Perlbal/Plugin/AtomStream.pm
+lib/Perlbal/Plugin/pRuleLJ.pm
 Perlbal.spec
 .shipit
 
