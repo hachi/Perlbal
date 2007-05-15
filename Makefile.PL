@@ -32,13 +32,7 @@ WriteMakefile(
         'Test::More'    => 0,
         'File::Find'    => 0,
         'Time::HiRes'   => 0,
-    },
-    dist                    => {
-        CI                      => "cvs commit",
-        RCS_LABEL               => 'cvs tag RELEASE_$(VERSION_SYM)',
-        SUFFIX                  => ".gz",
-        DIST_DEFAULT            => 'all tardist',
-        COMPRESS                => "gzip",
+        #'IO::AIO'  => 1.6,     # recommened.
     },
 
     (

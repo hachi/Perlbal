@@ -1,3 +1,6 @@
+    -- WARNING:  removed Linux::AIO support.  go get IO::AIO 1.6 at least if
+       you use webserver mode or reproxy files or do buffered uploads.
+
 1.58: 2007-05-11
 
     -- plugin reload support, if plugin supports it.  plugin must implement

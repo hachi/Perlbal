@@ -4,7 +4,7 @@ use strict;
 use Perlbal::Test;
 use Perlbal::Test::WebServer;
 use Perlbal::Test::WebClient;
-use Test::More tests => 47;
+use Test::More tests => 35;
 
 my ($back_port) = start_webserver();
 
@@ -90,7 +90,7 @@ foreach my $meth (qw(http rp_file rp_url)) {
 
     my @aios = ("-");
     if ($meth eq "rp_file" || $meth eq "http") {
-        @aios = qw(none linux ioaio);
+        @aios = qw(none ioaio);
     }
 
     foreach my $aio (@aios) {
