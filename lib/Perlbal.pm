@@ -394,7 +394,7 @@ sub MANAGE_shutdown {
     my $sf = Perlbal::Socket->get_sock_ref;
     foreach my $k (keys %$sf) {
         my Perlbal::Socket $v = $sf->{$k};
-        $v->die_gracefully;
+        $v->die_gracefully if $v->can("die_gracefully");
     }
 
     # register a post loop callback that will end the event loop when we only have

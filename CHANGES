@@ -1,3 +1,7 @@
+    -- only call die_gracefully on a socket if it CAN die_graceully.  fixes
+       shutdown graceful on mogstored, which has things betsides subclasses
+       of Perlbal::Socket in its Danga::Socket event loop
+
     -- WARNING:  removed Linux::AIO support.  go get IO::AIO 1.6 at least if
        you use webserver mode or reproxy files or do buffered uploads.
 
