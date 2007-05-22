@@ -1,3 +1,5 @@
+1.59: 2007-05-22
+
     -- only call die_gracefully on a socket if it CAN die_graceully.  fixes
        shutdown graceful on mogstored, which has things betsides subclasses
        of Perlbal::Socket in its Danga::Socket event loop
