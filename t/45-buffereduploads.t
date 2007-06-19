@@ -83,10 +83,13 @@ request("clean_on_early_close", 500_000,
         );
 
 # rate tests
-buffer_rules(rate => 700_000);
-request("buffer_on_rate", 500_000,
+buffer_rules(rate => 200_000);
+request("buffer_on_rate", 1_000_000,
         50_000,
-        "sleep:0.6",
+        "sleep:1",
+        "empty",
+        300_000,
+        "sleep:1",
         300_000,
         "exists",
         "finish",

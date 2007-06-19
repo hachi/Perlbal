@@ -1,3 +1,6 @@
+    -- the buffered upload rate test should pass more reliably now.  some
+       people reported it sporadically (or often) failing before
+
 1.59: 2007-05-22
 
     -- only call die_gracefully on a socket if it CAN die_graceully.  fixes
