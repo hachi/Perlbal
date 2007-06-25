@@ -106,3 +106,6 @@
 * IP scoring to assist throttling IPs
   http://rt.livejournal.org/Ticket/Display.html?id=4047
 
+* header counting and display perlbal plugin
+  http://rt.livejournal.org/Ticket/Display.html?id=4048
+
