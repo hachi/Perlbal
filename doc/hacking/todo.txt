@@ -97,3 +97,12 @@
 * provide a way to introspect the low queue in perlbal
   http://rt.livejournal.org/Ticket/Display.html?id=3880
 
+* cacheable header perlbal plugin
+  http://rt.livejournal.org/Ticket/Display.html?id=4045
+
+* content caching perlbal plugin
+  http://rt.livejournal.org/Ticket/Display.html?id=4046
+
+* IP scoring to assist throttling IPs
+  http://rt.livejournal.org/Ticket/Display.html?id=4047
+
