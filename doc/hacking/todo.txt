@@ -109,6 +109,6 @@
 * header counting and display perlbal plugin
   http://rt.livejournal.org/Ticket/Display.html?id=4048
 
-* perlbal request: max conns to backend limit
+* max conns to backend limit
   http://rt.livejournal.org/Ticket/Display.html?id=4052
 
