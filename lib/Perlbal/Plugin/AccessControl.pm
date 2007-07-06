@@ -86,7 +86,7 @@ sub load {
 # unload our global commands, clear our service object
 sub unload {
     my $class = shift;
-    Perlbal::unregister_global_hook('manage_command.vhost');
+    Perlbal::unregister_global_hook('manage_command.access');
     return 1;
 }
 
