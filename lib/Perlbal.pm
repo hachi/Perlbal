@@ -734,17 +734,20 @@ sub MANAGE_queues {
     foreach my $svc (values %service) {
         next unless $svc->{role} eq 'reverse_proxy';
 
-        my ($age, $count) = (0, scalar(@{$svc->{waiting_clients}}));
-        my Perlbal::ClientProxy $oldest = $svc->{waiting_clients}->[0];
-        $age = $now - $oldest->{last_request_time} if defined $oldest;
-        $mc->out("$svc->{name}-normal.age $age");
-        $mc->out("$svc->{name}-normal.count $count");
+        my %queues = (
+            normal  => 'waiting_clients',
+            highpri => 'waiting_clients_highpri',
+            lowpri  => 'waiting_clients_lowpri',
+        );
 
-        ($age, $count) = (0, scalar(@{$svc->{waiting_clients_highpri}}));
-        $oldest = $svc->{waiting_clients_highpri}->[0];
-        $age = $now - $oldest->{last_request_time} if defined $oldest;
-        $mc->out("$svc->{name}-highpri.age $age");
-        $mc->out("$svc->{name}-highpri.count $count");
+        while (my ($queue_name, $clients_key) = each %queues) {
+            my $age = 0;
+            my $count = @{$svc->{$clients_key}};
+            my Perlbal::ClientProxy $oldest = $svc->{$clients_key}->[0];
+            $age = $now - $oldest->{last_request_time} if defined $oldest;
+            $mc->out("$svc->{name}-$queue_name.age $age");
+            $mc->out("$svc->{name}-$queue_name.count $count");
+        }
     }
     $mc->end;
 }

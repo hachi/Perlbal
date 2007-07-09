@@ -1,3 +1,6 @@
+    -- Update 'queues' management command to output information about low
+       priority queue, now that we use it.
+
     -- the buffered upload rate test should pass more reliably now.  some
        people reported it sporadically (or often) failing before
 
