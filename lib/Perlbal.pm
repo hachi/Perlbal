@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 #
-# Copyright 2004, Danga Interactice, Inc.
-# Copyright 2005-2006, Six Apart, Ltd.
+# Copyright 2004, Danga Interactive, Inc.
+# Copyright 2005-2007, Six Apart, Ltd.
 #
 
 =head1 NAME
@@ -14,8 +14,8 @@ Perlbal - Reverse-proxy load balancer and webserver
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright 2004, Danga Interactice, Inc.
-Copyright 2005-2006, Six Apart, Ltd.
+Copyright 2004, Danga Interactive, Inc.
+Copyright 2005-2007, Six Apart, Ltd.
 
 You can use and redistribute Perlbal under the same terms as Perl itself.
 

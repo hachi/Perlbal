@@ -1,7 +1,7 @@
 # keep track of the surrounding context for a ManageCommand, so commands
 # can be less verbose when in config files
 #
-# Copyright 2005-2006, Six Apart, Ltd.
+# Copyright 2005-2007, Six Apart, Ltd.
 #
 
 package Perlbal::CommandContext;

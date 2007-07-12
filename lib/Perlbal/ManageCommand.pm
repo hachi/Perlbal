@@ -1,7 +1,7 @@
 # class representing a one-liner management command.  all the responses
 # to a command should be done through this instance (out, err, ok, etc)
 #
-# Copyright 2005-2006, Six Apart, Ltd.
+# Copyright 2005-2007, Six Apart, Ltd.
 #
 
 package Perlbal::ManageCommand;

@@ -1,8 +1,8 @@
 ######################################################################
 # HTTP header class (both request and response)
 #
-# Copyright 2004, Danga Interactice, Inc.
-# Copyright 2005-2006, Six Apart, Ltd.
+# Copyright 2004, Danga Interactive, Inc.
+# Copyright 2005-2007, Six Apart, Ltd.
 #
 
 package Perlbal::HTTPHeaders;
