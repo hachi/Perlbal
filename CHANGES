@@ -1,3 +1,6 @@
+    -- Fix handling of a proxy response that doesn't have a Reason-Phrase
+       on the HTTP status line.
+
     -- Update 'queues' management command to output information about low
        priority queue, now that we use it.
 
