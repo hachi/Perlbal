@@ -64,7 +64,8 @@ ok(get($url) eq $contents, "GET request");
 ok(get("$url?foo=bar") eq $contents, "GET request");
 
 {
-    my $req = HTTP::Request->new(GET => $url, [ 'If-Modified-Since' => HTTP::Date::time2str() ]);
+    my $file_time = (stat($disk_file))[9];
+    my $req = HTTP::Request->new(GET => $url, [ 'If-Modified-Since' => HTTP::Date::time2str($file_time) ]);
     my $res = $ua->request($req);
 
     is($res->code, 304, "Got not modified");
