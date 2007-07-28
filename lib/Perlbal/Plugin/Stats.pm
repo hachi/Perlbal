@@ -50,7 +50,7 @@ sub register {
     $svc->register_hook('Stats', 'backend_response_received', sub {
         my Perlbal::BackendHTTP $be = shift;
         my Perlbal::ClientProxy $obj = $be->{client};
-        my $ot = $sobj->{pending}->{"$obj"};
+        my $ot = delete $sobj->{pending}->{"$obj"};
         return 0 unless defined $ot;
 
         # now construct data to put in recent
