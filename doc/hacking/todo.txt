@@ -112,3 +112,6 @@
 * max conns to backend limit
   http://rt.livejournal.org/Ticket/Display.html?id=4052
 
+* make AccessControl plugin efficient with tons of rules
+  http://rt.livejournal.org/Ticket/Display.html?id=4134
+
