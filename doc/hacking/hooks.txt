@@ -113,3 +113,8 @@ if this request is high priority or not.  Return a true value to make the
 request high priority; false to leave it alone.  Note that this is only
 called when the request isn't already high priority due to cookie priority
 scheduling, which is done inside Perlbal's Service module.
+
+HANDLER     return_to_base              Perlbal::ClientHTTPBase
+Called when a request has been finished, and control of the Client* object is
+about to be transferred back to ownership by a service selector. Return a true
+value if the perlbal core action in this situation should be bypassed.
