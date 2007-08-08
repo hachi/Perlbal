@@ -1,3 +1,6 @@
+    -- add hook to attach when a service selector is getting a client
+       returned to it.
+
     -- fixed huge memory leak in Stats plugin
 
     -- Fix t/15-webserver.t to not fail once in a while (timing glitch)

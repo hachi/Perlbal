@@ -189,7 +189,9 @@ sub http_response_sent {
     $self->state('persist_wait');
 
     if (my $selector_svc = $self->{selector_svc}) {
-        $selector_svc->return_to_base($self);
+        if (! $selector_svc->run_hook('return_to_base', $self)){
+            $selector_svc->return_to_base($self);
+        }
     }
 
     # NOTE: because we only speak 1.0 to clients they can't have
