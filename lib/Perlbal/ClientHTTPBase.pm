@@ -124,7 +124,7 @@ sub setup_keepalive {
     my $do_keepalive = $persist_client && $rqhd->req_keep_alive($reshd);
     if ($do_keepalive) {
         print "  doing keep-alive to client\n" if Perlbal::DEBUG >= 3;
-        my $timeout = $self->max_idle_time;
+        my $timeout = $self->{service}->{max_idle_time};
         $reshd->header('Connection', 'keep-alive');
         $reshd->header('Keep-Alive', $timeout ? "timeout=$timeout, max=100" : undef);
     } else {
@@ -765,9 +765,6 @@ sub system_error {
     # and return a 500
     return $self->send_response(500, $msg);
 }
-
-# FIXME: let this be configurable?
-sub max_idle_time { 30; }
 
 sub event_err {  my $self = shift; $self->close('error'); }
 sub event_hup {  my $self = shift; $self->close('hup'); }

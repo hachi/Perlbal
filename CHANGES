@@ -13,6 +13,8 @@
 
     -- the buffered upload rate test should pass more reliably now.  some
        people reported it sporadically (or often) failing before
+       
+    -- make max_idle_time configurable (defaults to 30 seconds)
 
 1.59: 2007-05-22
 
