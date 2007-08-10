@@ -125,7 +125,6 @@ sub setup_keepalive {
     if ($do_keepalive) {
         print "  doing keep-alive to client\n" if Perlbal::DEBUG >= 3;
         my $timeout = $self->{service}->{persist_client_timeout};
-        warn "timeout is $timeout";
         $reshd->header('Connection', 'keep-alive');
         $reshd->header('Keep-Alive', $timeout ? "timeout=$timeout, max=100" : undef);
     } else {
