@@ -26,13 +26,13 @@ For all services:
    |                 |      |                       | non-listening         |
    |                 |      |                       | service.              |
    |-----------------+------+-----------------------+-----------------------|
-   |                 |      |                       | Timeout in secs for   |
-   | max_idle_time   | int  | 30                    | HTTP keep-alives to   |
-   |                 |      |                       | the end user.         |
-   |-----------------+------+-----------------------+-----------------------|
    |                 |      |                       | Whether to enable     |
    | persist_client  | bool | false                 | HTTP keep-alives to   |
    |                 |      |                       | the end user.         |
+   |-----------------+------+-----------------------+-----------------------|
+   |                 |      |                       | Timeout in secs for   |
+   | persist_client_ | int  | 30                    | HTTP keep-alives to   |
+   | timeout         |      |                       | the end user.         |
    |-----------------+------+-----------------------+-----------------------|
    |                 |      |                       | What type of service. |
    |                 |      |                       | One of                |

@@ -14,7 +14,9 @@
     -- the buffered upload rate test should pass more reliably now.  some
        people reported it sporadically (or often) failing before
        
-    -- make max_idle_time configurable (defaults to 30 seconds)
+    -- new per-service configuration value: persist_client_timeout -
+       timeout in seconds for HTTP keep-alives to the end user
+       (defaults to 30 seconds)
 
 1.59: 2007-05-22
 
