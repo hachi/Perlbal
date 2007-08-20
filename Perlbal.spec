@@ -3,14 +3,14 @@ summary:   Perlbal - High efficiency reverse proxy and web server.
 version:   1.56
 release:   1
 vendor:    Brad Fitzpatrick <brad@danga.com>
-packager:  Jonathan Steinert <hachi@cpan.org>
+packager:  Jonathan Steinert <rpm@hachi.kuiki.net>
 license:   Artistic
 group:     Applications/CPAN
 buildroot: %{_tmppath}/%{name}-%{version}-%(id -u -n)
 buildarch: noarch
 source:    Perlbal-%{version}.tar.gz
 buildrequires: perl-Danga-Socket >= 1.44, perl-Sys-Syscall, perl-BSD-Resource, perl-libwww-perl
-requires:  perl-Perlbal = %{version}-%{release}, perl-Danga-Socket >= 1.44, perl-Sys-Syscall, perl-BSD-Resource, perl-libwww-perl
+requires:  perl-Perlbal = %{version}-%{release}
 
 %description
 High efficiency reverse proxy and web server.
@@ -61,9 +61,11 @@ Documentation for Perlbal.
 %package -n perl-Perlbal
 summary:   perl-Perlbal - Perlbal libraries.
 group:     Applications/CPAN
+requires:  perl-Danga-Socket >= 1.44, perl-Sys-Syscall, perl-BSD-Resource, perl-libwww-perl
 %description -n perl-Perlbal
 Perlbal libraries.
 
 %files -n perl-Perlbal
+%defattr(-,root,root)
 %{_prefix}/lib/*
 %{_prefix}/share/man/man3
