@@ -1,4 +1,4 @@
-steps = FindVersion, ChangeVersion, CheckChangeLog, DistTest, Commit, Tag, MakeDist, UploadCPAN, AddToSVNDir
+steps = FindVersion, ChangeVersion, ChangeRPMVersion, CheckChangeLog, DistTest, Commit, Tag, MakeDist, UploadCPAN, AddToSVNDir
 svn.tagpattern = Perlbal-%v
 AddToSVNDir.dir = /home/lj/cvs/web-danga/dist/Perlbal/
 
