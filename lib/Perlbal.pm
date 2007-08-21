@@ -769,7 +769,7 @@ sub MANAGE_state {
 sub MANAGE_leaks {
     my $mc = shift->parse(qr/^leaks(?:\s+(.+))?$/);
     return $mc->err("command disabled without \$ENV{PERLBAL_DEBUG} set")
-        unless $ENV{PERBAL_DEBUG};
+        unless $ENV{PERLBAL_DEBUG};
 
     my $what = $mc->arg(1);
 
