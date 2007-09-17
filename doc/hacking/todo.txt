@@ -115,3 +115,9 @@
 * make AccessControl plugin efficient with tons of rules
   http://rt.livejournal.org/Ticket/Display.html?id=4134
 
+* perlbal: fix Undef client_ip errors
+  http://rt.livejournal.org/Ticket/Display.html?id=4345
+
+* perlbal: fix "Use of uninitialized value in (split|bitwise|string)"
+  http://rt.livejournal.org/Ticket/Display.html?id=4346
+
