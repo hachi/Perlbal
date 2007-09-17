@@ -94,6 +94,10 @@ our $foreground = 1; # default to foreground
 our $track_obj = 0;  # default to not track creation locations
 our $reqs = 0; # total number of requests we've done
 our $starttime = time(); # time we started
+our $pidfile = '';  # full path, default to not writing pidfile
+# used by pidfile (only makes sense before run started)
+# don't rely on this variable, it might change.
+our $run_started = 0;  
 our ($lastutime, $laststime, $lastreqs) = (0, 0, 0); # for deltas
 
 our %PluginCase = ();   # lowercase plugin name -> as file is named
@@ -893,6 +897,13 @@ sub MANAGE_server {
         return $mc->ok;
     }
 
+    if ($key eq "pidfile") {
+        return $mc->err("pidfile must be configured at startup, before Perlbal::run is called") if  $run_started;
+        return $mc->err("Expected full pathname to pidfile") unless $val;
+        $pidfile = $val;
+        return $mc->ok;
+    }
+
     return $mc->err("unknown server option '$val'");
 }
 
@@ -1142,9 +1153,13 @@ sub daemonize {
 }
 
 sub run {
+    $run_started = 1;
+
     # setup for logging
     Sys::Syslog::openlog('perlbal', 'pid', 'daemon') if $Perlbal::SYSLOG_AVAILABLE;
     Perlbal::log('info', 'beginning run');
+    my $pidfile_written = 0;
+    $pidfile_written = _write_pidfile( $pidfile ) if $pidfile;
 
     # number of AIO threads.  the number of outstanding requests isn't
     # affected by this
@@ -1181,6 +1196,12 @@ sub run {
         Perlbal::log('crit', "crash log: $_") foreach split(/\r?\n/, $@);
         $clean_exit = 0;
     }
+
+    # Note: This will only actually remove the pidfile on 'shutdown graceful'
+    # A more reliable approach might be to have a pidfile object which fires
+    # removal on DESTROY.
+    _remove_pidfile( $pidfile ) if $pidfile_written;
+
     Perlbal::log('info', 'ending run');
     Sys::Syslog::closelog() if $Perlbal::SYSLOG_AVAILABLE;
 
@@ -1198,6 +1219,32 @@ sub log {
         Sys::Syslog::syslog(@_) if $Perlbal::SYSLOG_AVAILABLE;
     }
 }
+
+
+sub _write_pidfile {
+    my $file = shift;
+
+    my $fh;
+    unless (open($fh, ">$file")) {
+        Perlbal::log('info', "couldn't create pidfile '$file': $!" );
+        return 0;
+    }
+    unless ((print $fh "$$\n") && close($fh)) {
+        Perlbal::log('info', "couldn't write into pidfile '$file': $!" );
+        _remove_pidfile($file);
+        return 0;
+    }
+    return 1;
+}
+
+
+sub _remove_pidfile {
+    my $file = shift;
+    
+    unlink $file;
+    return 1;
+}
+
 
 # Local Variables:
 # mode: perl

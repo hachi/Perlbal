@@ -52,6 +52,7 @@ server <param> = <value>   -- set a server parameter, where param is one of:
                              For purely reverse proxy or only reproxying URLs, none is fine.
    aio_threads             : number of child threads doing disk IO.  (use between 2-50)
    track_obj               : developer option to track objects
+   pidfile                 : filename to write pidfile (no pidfile if not specified)
 
 
 Diagnostic commands:

@@ -18,6 +18,9 @@
        timeout in seconds for HTTP keep-alives to the end user
        (defaults to 30 seconds)
 
+    -- new server configuration value: pidfile - for managing an internal
+       pidfile.
+
 1.59: 2007-05-22
 
     -- only call die_gracefully on a socket if it CAN die_graceully.  fixes
