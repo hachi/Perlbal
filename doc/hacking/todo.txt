@@ -4,9 +4,6 @@
 * perlbal idea: X-Pick-Backend header (fwd)
   http://rt.livejournal.org/Ticket/Display.html?id=326
 
-* stats plugin leaks memory
-  http://rt.livejournal.org/Ticket/Display.html?id=341
-
 * Perlbal rate limiting patch (fwd)
   http://rt.livejournal.org/Ticket/Display.html?id=342
 
