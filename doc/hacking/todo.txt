@@ -22,9 +22,6 @@
 * window sizes, so_recvbuf
   http://rt.livejournal.org/Ticket/Display.html?id=1225
 
-* can't insert headers on selector pool in perlbal
-  http://rt.livejournal.org/Ticket/Display.html?id=1250
-
 * perlbal memory leaks --- need to add watches
   http://rt.livejournal.org/Ticket/Display.html?id=1693
 
