@@ -1267,6 +1267,7 @@ sub header_management {
     my ($mode, $key, $val, $mc) = @_;
     return $mc->err("no header provided") unless $key;
     return $mc->err("no value provided")  unless $val || $mode eq 'remove';
+    return $mc->err("only valid on reverse_proxy services") unless $self->{role} eq 'reverse_proxy';
 
     if ($mode eq 'insert') {
         push @{$self->{extra_headers}->{insert}}, [ $key, $val ];
