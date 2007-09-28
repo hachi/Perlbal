@@ -422,6 +422,38 @@ sub MANAGE_shutdown {
     return $mc->ok;
 }
 
+sub MANAGE_mime {
+    my $mc = shift->parse(qr/^mime(?:\s+(\w+)(?:\s+(\w+))?(?:\s+(\S+))?)?$/);
+    my ($cmd, $arg1, $arg2) = ($mc->arg(1), $mc->arg(2), $mc->arg(3));
+
+    if (!$cmd || $cmd eq 'list') {
+        foreach my $key (sort keys %$Perlbal::ClientHTTPBase::MimeType) {
+            $mc->out("$key $Perlbal::ClientHTTPBase::MimeType->{$key}");
+        }
+        $mc->end;
+    } elsif ($cmd eq 'add') {
+        if (!$arg1 || !$arg2) {
+            return $mc->err("Usage: add <ext> <mime>");
+        }
+
+        $arg1 = lc $arg1;
+        if (exists $Perlbal::ClientHTTPBase::MimeType->{$arg1}) {
+            return $mc->err("$arg1 already a defined extension.");
+        } else {
+            $Perlbal::ClientHTTPBase::MimeType->{$arg1} = $arg2;
+            return $mc->out("$arg1 set to $arg2.");
+        }
+    } elsif ($cmd eq 'remove') {
+        if (delete $Perlbal::ClientHTTPBase::MimeType->{$arg1}) {
+            return $mc->out("$arg1 removed.");
+        } else {
+            return $mc->err("$arg1 not a defined extension.");
+        }
+    } else {
+        return $mc->err("Invalid command, must be: list, remove <ext>, add <ext> <mime>.");
+    }
+}
+
 sub MANAGE_xs {
     my $mc = shift->parse(qr/^xs(?:\s+(\w+)\s+(\w+))?$/);
     my ($cmd, $module) = ($mc->arg(1), $mc->arg(2));

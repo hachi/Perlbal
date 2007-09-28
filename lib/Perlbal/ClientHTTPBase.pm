@@ -54,6 +54,7 @@ our $MimeType = {qw(
                     js   application/x-javascript
                     mp3  audio/mpeg
                     mpg  video/mpeg
+                    pdf  application/pdf
                     png  image/png
                     tif   image/tiff
                     tiff  image/tiff
