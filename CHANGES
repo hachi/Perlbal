@@ -1,4 +1,4 @@
-    -- add MIME [ LIST | REMOVE <ext> | ADD <ext> <mime> ] command for
+    -- add MIME [ LIST | REMOVE <ext> | SET <ext> <mime> ] command for
        managing the internal list of mime-types
 
     -- return an error when trying to use HEADER command on a

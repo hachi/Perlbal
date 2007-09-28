@@ -42,8 +42,7 @@ use Fcntl ':mode';
 use Errno qw( EPIPE ECONNRESET );
 use POSIX ();
 
-# ghetto hard-coding.  should let siteadmin define or something.
-# maybe console/config command:  AddMime <ext> <mime-type>  (apache-style?)
+# hard-code defaults can be changed with MIME management command
 our $MimeType = {qw(
                     css  text/css
                     doc  application/msword

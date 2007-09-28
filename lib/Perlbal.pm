@@ -431,18 +431,13 @@ sub MANAGE_mime {
             $mc->out("$key $Perlbal::ClientHTTPBase::MimeType->{$key}");
         }
         $mc->end;
-    } elsif ($cmd eq 'add') {
+    } elsif ($cmd eq 'set') {
         if (!$arg1 || !$arg2) {
-            return $mc->err("Usage: add <ext> <mime>");
+            return $mc->err("Usage: set <ext> <mime>");
         }
 
-        $arg1 = lc $arg1;
-        if (exists $Perlbal::ClientHTTPBase::MimeType->{$arg1}) {
-            return $mc->err("$arg1 already a defined extension.");
-        } else {
-            $Perlbal::ClientHTTPBase::MimeType->{$arg1} = $arg2;
-            return $mc->out("$arg1 set to $arg2.");
-        }
+        $Perlbal::ClientHTTPBase::MimeType->{$arg1} = $arg2;
+        return $mc->out("$arg1 set to $arg2.");
     } elsif ($cmd eq 'remove') {
         if (delete $Perlbal::ClientHTTPBase::MimeType->{$arg1}) {
             return $mc->out("$arg1 removed.");
@@ -450,7 +445,7 @@ sub MANAGE_mime {
             return $mc->err("$arg1 not a defined extension.");
         }
     } else {
-        return $mc->err("Invalid command, must be: list, remove <ext>, add <ext> <mime>.");
+        return $mc->err("Usage: list, remove <ext>, add <ext> <mime>");
     }
 }
 
