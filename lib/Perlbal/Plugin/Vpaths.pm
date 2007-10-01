@@ -86,7 +86,6 @@ sub vpath_selector {
 
     # iterate down the list of paths, find any matches
     foreach my $row (@$maps) {
-        print STDERR "uri=$uri, $row->[0], $row->[1]\n";
         next unless $uri =~ /$row->[0]/;
 
         my $svc_name = $row->[1];
