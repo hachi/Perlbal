@@ -77,6 +77,7 @@ use fields (
             'backend_no_spawn', # { "ip:port" => 1 }; if on, spawn_backends will ignore this ip:port combo
             'buffer_backend_connect', # 0 for of, else, number of bytes to buffer before we ask for a backend
             'selector',    # CODE ref, or undef, for role 'selector' services
+            'default_service', # Perlbal::Service; name of a service a selector should default to
             'buffer_uploads', # bool; enable/disable the buffered uploads to disk system
             'buffer_uploads_path', # string; path to store buffered upload files
             'buffer_upload_threshold_time', # int; buffer uploads estimated to take longer than this
@@ -377,6 +378,27 @@ our $tunables = {
             my ($self, $val, $set, $mc) = @_;
             $self->{index_files} = [ split(/[\s,]+/, $val) ];
             return $mc->ok;
+        },
+    },
+
+    'default_service' => {
+        des => "Name of previously-created service to default requests that aren't matched by a selector plugin to.",
+        check_role => "selector",
+        check_type => sub {
+            my ($self, $val, $errref) = @_;
+
+            my $svc = Perlbal->service($val);
+            unless ($svc) {
+                $$errref = "Service '$svc' not found";
+                return 0;
+            }
+
+            $self->{default_service} = $svc;
+            return 1;
+        }, 
+        setter => sub {
+            # override default so we don't set it to the text
+            return $_[3]->ok;
         },
     },
 
@@ -1295,7 +1317,23 @@ sub munge_headers {
 # getter/setter
 sub selector {
     my Perlbal::Service $self = shift;
-    $self->{selector} = shift if @_;
+    if (@_) {
+        my $ref = shift;
+        $self->{selector} = sub {
+            my $cb = shift;
+
+            # try to give it to our defined selector
+            my $res = $ref->($cb);
+
+            # if that failed and we have a default, then give it to them
+            if (!$res && $self->{default_service}) {
+                $self->{default_service}->adopt_base_client($cb);
+                return 1;
+            }
+
+            return $res;
+        };
+    }
     return $self->{selector};
 }
 

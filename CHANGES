@@ -1,3 +1,9 @@
+    -- add Vpath plugin for selectors; can select on URI regex now
+
+    -- add ability to set default_service on selector services; any
+       request that is not caught by a selector plugin instead gets
+       routed to the defined default service
+
     -- add MIME [ LIST | REMOVE <ext> | SET <ext> <mime> ] command for
        managing the internal list of mime-types
 
