@@ -131,18 +131,14 @@ sub _do_cleanup {
 
     my $now = time;
 
-    my %max_age;  # classname -> max age (0 means forever)
     my @to_close;
     while (my $k = each %$sf) {
         my Perlbal::Socket $v = $sf->{$k};
-        my $ref = ref $v;
-        unless (defined $max_age{$ref}) {
-            # eval because not all Danga::Socket connections in Perlbal
-            # must be Perlbal::Socket-derived
-            $max_age{$ref} = eval { $ref->max_idle_time } || 0;
-        }
-        next unless $max_age{$ref};
-        if ($v->{alive_time} < $now - $max_age{$ref}) {
+
+        my $max_age = eval { $v->max_idle_time } || 0;
+        next unless $max_age;
+
+        if ($v->{alive_time} < $now - $max_age) {
             push @to_close, $v;
         }
     }

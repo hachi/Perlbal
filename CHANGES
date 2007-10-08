@@ -1,3 +1,6 @@
+    -- make persist_client_timeout service tunable apply to the max_idle_time
+       value used to kill sockets that are idle
+
     -- add Vpath plugin for selectors; can select on URI regex now
 
     -- add ability to set default_service on selector services; any

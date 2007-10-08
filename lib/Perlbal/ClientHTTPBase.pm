@@ -138,6 +138,11 @@ sub setup_keepalive {
     }
 }
 
+# overridden here from Perlbal::Socket to use the service value
+sub max_idle_time {
+    return $_[0]->{service}->{persist_client_timeout};
+}
+
 # called when we've finished writing everything to a client and we need
 # to reset our state for another request.  returns 1 to mean that we should
 # support persistence, 0 means we're discarding this connection.
