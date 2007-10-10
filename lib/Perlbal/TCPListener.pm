@@ -11,24 +11,21 @@ use warnings;
 no  warnings qw(deprecated);
 
 use base "Perlbal::Socket";
-use fields qw(service hostport);
+use fields qw(service hostport sslopts);
 use Socket qw(IPPROTO_TCP SOL_SOCKET SO_SNDBUF);
+use Perlbal::SocketSSL;
 
 # TCPListener
 sub new {
     my ($class, $hostport, $service, $opts) = @_;
     $opts ||= {};
 
-    my $sockclass = $opts->{ssl} ? "IO::Socket::SSL" : "IO::Socket::INET";
-    my $sock = eval {
-        $sockclass->new(
-                        LocalAddr => $hostport,
-                        Proto => IPPROTO_TCP,
-                        Listen => 1024,
-                        ReuseAddr => 1,
-                        ($opts->{ssl} ? %{$opts->{ssl}} : ()),
-                        );
-    };
+    my $sock = IO::Socket::INET->new(
+                                     LocalAddr => $hostport,
+                                     Proto => IPPROTO_TCP,
+                                     Listen => 1024,
+                                     ReuseAddr => 1,
+                                     );
 
     return Perlbal::error("Error creating listening socket: " . ($@ || $!))
         unless $sock;
@@ -48,6 +45,7 @@ sub new {
     my $self = $class->SUPER::new($sock);
     $self->{service} = $service;
     $self->{hostport} = $hostport;
+    $self->{sslopts} = $opts->{ssl};
     bless $self, ref $class || $class;
     $self->watch_read(1);
     return $self;
@@ -59,34 +57,64 @@ sub event_read {
 
     # accept as many connections as we can
     while (my ($psock, $peeraddr) = $self->{sock}->accept) {
-        my $service_role = $self->{service}->role;
-
-        if (Perlbal::DEBUG >= 1) {
-            my ($pport, $pipr) = Socket::sockaddr_in($peeraddr);
-            my $pip = Socket::inet_ntoa($pipr);
-            print "Got new conn: $psock ($pip:$pport) for $service_role\n";
-        }
-
         IO::Handle::blocking($psock, 0);
 
         if (my $sndbuf = $self->{service}->{client_sndbuf_size}) {
             my $rv = setsockopt($psock, SOL_SOCKET, SO_SNDBUF, pack("L", $sndbuf));
         }
 
-        if ($service_role eq "reverse_proxy") {
-            Perlbal::ClientProxy->new($self->{service}, $psock);
-        } elsif ($service_role eq "management") {
-            Perlbal::ClientManage->new($self->{service}, $psock);
-        } elsif ($service_role eq "web_server") {
-            Perlbal::ClientHTTP->new($self->{service}, $psock);
-        } elsif ($service_role eq "selector") {
-            # will be cast to a more specific class later...
-            Perlbal::ClientHTTPBase->new($self->{service}, $psock, $self->{service});
-        } elsif (my $creator = Perlbal::Service::get_role_creator($service_role)) {
-            # was defined by a plugin, so we want to return one of these
-            $creator->($self->{service}, $psock);
+        if (Perlbal::DEBUG >= 1) {
+            my ($pport, $pipr) = Socket::sockaddr_in($peeraddr);
+            my $pip = Socket::inet_ntoa($pipr);
+            print "Got new conn: $psock ($pip:$pport) for " . $self->{service}->role . "\n";
         }
 
+        # SSL promotion if necessary
+        if ($self->{sslopts}) {
+            # try to upgrade to SSL, this does no IO it just reblesses
+            # and prepares the SSL engine for handling us later
+            IO::Socket::SSL->start_SSL(
+                                       $psock,
+                                       SSL_server => 1,
+                                       SSL_startHandshake => 0,
+                                       %{ $self->{sslopts} },
+                                       );
+            print "  .. socket upgraded to SSL!\n" if Perlbal::DEBUG >= 1;
+
+            # safety checking to ensure we got upgraded
+            return $psock->close
+                unless ref $psock eq 'IO::Socket::SSL';
+
+            # class into new package and run with it
+            my $sslsock = new Perlbal::SocketSSL($psock, $self);
+            $sslsock->try_accept;
+
+            # all done from our point of view
+            next;
+        }
+
+        # puts this socket into the right class
+        $self->class_new_socket($psock);
+    }
+}
+
+sub class_new_socket {
+    my Perlbal::TCPListener $self = shift;
+    my $psock = shift;
+
+    my $service_role = $self->{service}->role;
+    if ($service_role eq "reverse_proxy") {
+        Perlbal::ClientProxy->new($self->{service}, $psock);
+    } elsif ($service_role eq "management") {
+        Perlbal::ClientManage->new($self->{service}, $psock);
+    } elsif ($service_role eq "web_server") {
+        Perlbal::ClientHTTP->new($self->{service}, $psock);
+    } elsif ($service_role eq "selector") {
+        # will be cast to a more specific class later...
+        Perlbal::ClientHTTPBase->new($self->{service}, $psock, $self->{service});
+    } elsif (my $creator = Perlbal::Service::get_role_creator($service_role)) {
+        # was defined by a plugin, so we want to return one of these
+        $creator->($self->{service}, $psock);
     }
 }
 
@@ -111,7 +139,6 @@ sub die_gracefully {
     my $self = shift;
     $self->close('graceful_death');
 }
-
 
 1;
 

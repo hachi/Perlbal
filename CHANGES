@@ -1,3 +1,5 @@
+    -- make SSL non-blocking
+
     -- make persist_client_timeout service tunable apply to the max_idle_time
        value used to kill sockets that are idle
 
