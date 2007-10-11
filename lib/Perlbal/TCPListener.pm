@@ -13,7 +13,10 @@ no  warnings qw(deprecated);
 use base "Perlbal::Socket";
 use fields qw(service hostport sslopts);
 use Socket qw(IPPROTO_TCP SOL_SOCKET SO_SNDBUF);
-use Perlbal::SocketSSL;
+BEGIN {
+    eval { require Perlbal::SocketSSL };
+    if ($@) { warn "SSL support not available: $@\n" }
+}
 
 # TCPListener
 sub new {
