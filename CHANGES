@@ -1,3 +1,6 @@
+    -- SHUTDOWN GRACEFUL [timeout] - now accepts optional timeout
+       parameter to force shutdown after that period in seconds
+
     -- make SSL non-blocking
 
     -- make persist_client_timeout service tunable apply to the max_idle_time

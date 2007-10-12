@@ -384,7 +384,7 @@ sub MANAGE_verbose {
 }
 
 sub MANAGE_shutdown {
-    my $mc = shift->parse(qr/^shutdown( graceful)?$/);
+    my $mc = shift->parse(qr/^shutdown(\s?graceful)?\s?(\d+)?$/);
 
     # immediate shutdown
     exit(0) unless $mc->arg(1);
@@ -417,6 +417,11 @@ sub MANAGE_shutdown {
         }
         return 0; # end the event loop and thus we exit perlbal
     });
+
+    # If requested, register a callback to kill the perlbal process after a specified number of seconds
+    if (my $timeout = $mc->arg(2)) {
+        Perlbal::Socket::register_callback($timeout, sub { exit(0); });
+    }
 
     # so they know something happened
     return $mc->ok;
