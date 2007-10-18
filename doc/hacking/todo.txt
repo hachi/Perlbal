@@ -115,3 +115,6 @@
 * perlbal: fix "Use of uninitialized value in (split|bitwise|string)"
   http://rt.livejournal.org/Ticket/Display.html?id=4346
 
+* Perlbal closes connection on some AJAX requests
+  http://rt.livejournal.org/Ticket/Display.html?id=4429
+
