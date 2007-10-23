@@ -19,7 +19,7 @@ use warnings;
 no  warnings qw(deprecated);
 
 use Danga::Socket 1.44;
-use IO::Socket::SSL;
+use IO::Socket::SSL 0.98;
 use Errno qw( EAGAIN );
 
 use base 'Danga::Socket';
