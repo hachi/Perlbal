@@ -39,6 +39,7 @@ lib/Perlbal/Pool.pm
 lib/Perlbal/ReproxyManager.pm
 lib/Perlbal/Service.pm
 lib/Perlbal/Socket.pm
+lib/Perlbal/SocketSSL.pm
 lib/Perlbal/TCPListener.pm
 lib/Perlbal/Test.pm
 lib/Perlbal/Test/WebClient.pm
