@@ -15,7 +15,7 @@ use fields qw(service hostport sslopts);
 use Socket qw(IPPROTO_TCP SOL_SOCKET SO_SNDBUF);
 BEGIN {
     eval { require Perlbal::SocketSSL };
-    if ($@) { warn "SSL support not available: $@\n" }
+    if (Perlbal::DEBUG > 0 && $@) { warn "SSL support failed on load: $@\n" }
 }
 
 # TCPListener
