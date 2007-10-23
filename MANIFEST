@@ -2,10 +2,10 @@ CHANGES
 conf/echoservice.conf
 conf/load-balancer.conf
 conf/nodelist.dat
+conf/not-modified-plugin.conf
 conf/ssl.conf
 conf/virtual-hosts.conf
 conf/webserver.conf
-conf/not-modified-plugin.conf
 devtools/gendocs.pl
 doc/config-guide.txt
 doc/hacking/classes.txt
@@ -27,6 +27,7 @@ lib/Perlbal/CommandContext.pm
 lib/Perlbal/HTTPHeaders.pm
 lib/Perlbal/ManageCommand.pm
 lib/Perlbal/Plugin/AccessControl.pm
+lib/Perlbal/Plugin/AutoRemoveLeadingDir.pm
 lib/Perlbal/Plugin/EchoService.pm
 lib/Perlbal/Plugin/Highpri.pm
 lib/Perlbal/Plugin/LazyCDN.pm
@@ -35,6 +36,7 @@ lib/Perlbal/Plugin/Palimg.pm
 lib/Perlbal/Plugin/Queues.pm
 lib/Perlbal/Plugin/Stats.pm
 lib/Perlbal/Plugin/Vhosts.pm
+lib/Perlbal/Plugin/Vpaths.pm
 lib/Perlbal/Pool.pm
 lib/Perlbal/ReproxyManager.pm
 lib/Perlbal/Service.pm
@@ -68,4 +70,3 @@ t/50-plugins.t
 t/52-chunked-upload.t
 t/60-child-httpd.t
 t/helper/child-httpd.pl
-lib/Perlbal/Plugin/AutoRemoveLeadingDir.pm
