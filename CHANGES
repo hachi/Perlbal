@@ -1,3 +1,5 @@
+    -- don't overwrite $^P, allows use of perl debugger on perlbal.
+
 1.60: 2007-10-23
 
     -- accept LFLF to end HTTP request headers, instead of just

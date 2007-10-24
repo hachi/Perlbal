@@ -25,7 +25,7 @@ package Perlbal;
 
 BEGIN {
     # keep track of anonymous subs' origins:
-    $^P = 0x200;
+    $^P |= 0x200;
 }
 
 my $has_gladiator  = eval "use Devel::Gladiator; 1;";
