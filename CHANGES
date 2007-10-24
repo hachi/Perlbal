@@ -1,3 +1,9 @@
+1.60: 2007-10-23
+
+    -- accept LFLF to end HTTP request headers, instead of just
+       CRLFCRLF.  easier monitoring with netcat & other popular
+       webservers accept LFLF anyway.  (Paul Baker)
+
     -- SHUTDOWN GRACEFUL [timeout] - now accepts optional timeout
        parameter to force shutdown after that period in seconds
 
@@ -33,7 +39,7 @@
 
     -- the buffered upload rate test should pass more reliably now.  some
        people reported it sporadically (or often) failing before
-       
+
     -- new per-service configuration value: persist_client_timeout -
        timeout in seconds for HTTP keep-alives to the end user
        (defaults to 30 seconds)

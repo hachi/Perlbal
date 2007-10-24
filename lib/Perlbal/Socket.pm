@@ -215,8 +215,14 @@ sub read_headers {
 
     $self->{headers_string} .= $$bref;
     my $idx = index($self->{headers_string}, "\r\n\r\n");
+    my $delim_len = 4;
 
-    # can't find the header delimiter?
+    # can't find the header delimiter? check for LFLF header delimiter.
+    if ($idx == -1) {
+        $idx = index($self->{headers_string}, "\n\n");
+        $delim_len = 2;
+    }
+    # still can't find the header delimiter?
     if ($idx == -1) {
 
         # usually we get the headers all in one packet (one event), so
@@ -239,7 +245,7 @@ sub read_headers {
     my $hstr = substr($self->{headers_string}, 0, $idx);
     print "  pre-parsed headers: [$hstr]\n" if Perlbal::DEBUG >= 3;
 
-    my $extra = substr($self->{headers_string}, $idx+4);
+    my $extra = substr($self->{headers_string}, $idx+$delim_len);
     if (my $len = length($extra)) {
         print "  pushing back $len bytes after header\n" if Perlbal::DEBUG >= 3;
         $self->push_back_read(\$extra);
