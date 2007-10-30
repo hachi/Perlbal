@@ -55,6 +55,8 @@ For all services:
    |-----------------+------+-----------------------+-----------------------|
    | ssl_cert_file   |      | certs/server-cert.pem | Path to certificate   |
    |                 |      |                       | PEM file for SSL.     |
+   |                 |      |                       | Include any needed    |
+   |                 |      |                       | chain PEMs here, too. | 
    |-----------------+------+-----------------------+-----------------------|
    | ssl_cipher_list |      | ALL:!LOW:!EXP         | OpenSSL-style cipher  |
    |                 |      |                       | list.                 |
