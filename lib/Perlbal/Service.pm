@@ -40,6 +40,7 @@ use fields (
             'persist_client',  # bool: persistent connections for clients
             'persist_backend', # bool: persistent connections for backends
             'verify_backend',  # bool: get attention of backend before giving it clients (using OPTIONS)
+            'verify_backend_path', # path to check with the OPTIONS request (default *)
             'max_backend_uses',  # max requests to send per kept-alive backend (default 0 = unlimited)
             'connect_ahead',           # scalar: number of spare backends to connect to in advance all the time
             'buffer_size', # int: specifies how much data a ClientProxy object should buffer from a backend
@@ -170,6 +171,12 @@ our $tunables = {
         des => "Whether Perlbal should send a quick OPTIONS request to the backends before sending an actual client request to them.  If your backend is Apache or some other process-based webserver, this is HIGHLY recommended.  All too often a loaded backend box will reply to new TCP connections, but it's the kernel's TCP stack Perlbal is talking to, not an actual Apache process yet.  Using this option reduces end-user latency a ton on loaded sites.",
         default => 0,
         check_type => "bool",
+        check_role => "reverse_proxy",
+    },
+    
+    'verify_backend_path' => {
+        des => "What path the OPTIONS request sent by verify_backend should use.  Default is '*'.",
+        default => '*',
         check_role => "reverse_proxy",
     },
 

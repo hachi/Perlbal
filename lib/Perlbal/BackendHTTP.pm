@@ -343,7 +343,7 @@ sub event_write {
             !$self->{has_attention} && !defined $NoVerify{$self->{ipport}}) {
 
             # the backend should be able to answer this incredibly quickly.
-            $self->write("OPTIONS * HTTP/1.0\r\nConnection: keep-alive\r\n\r\n");
+            $self->write("OPTIONS " . $self->{service}->{verify_backend_path} . " HTTP/1.0\r\nConnection: keep-alive\r\n\r\n");
             $self->watch_read(1);
             $self->{waiting_options} = 1;
             $self->{content_length_remain} = undef;

@@ -288,6 +288,9 @@ Only for 'reverse_proxy' services:
 |                             |    |                   |yet. Using this option     |
 |                             |    |                   |reduces end-user latency a |
 |                             |    |                   |ton on loaded sites.       |
+|-----------------------------+----+-------------------+---------------------------|
+|verify_backend_path          |    |*                  |Path in the OPTIONS request|
+|                             |    |                   |sent by verify_backend.    |
 +----------------------------------------------------------------------------------+
 
 Only for 'web_server' services:
