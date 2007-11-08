@@ -264,9 +264,12 @@ sub assign_client {
     # forwarding info headers
     if ($svc->trusted_ip($client_ip)) {
         # yes, we trust our upstream, so just append our client's IP
-        # to the existing list of forwarded IPs
-        my @ips = split /,\s*/, ($hds->header("X-Forwarded-For") || '');
-        $hds->header("X-Forwarded-For", join ", ", @ips, $client_ip);
+        # to the existing list of forwarded IPs, if we're a blind proxy
+        # then don't append our IP to the end of the list.
+        unless ($svc->{blind_proxy}) {
+            my @ips = split /,\s*/, ($hds->header("X-Forwarded-For") || '');
+            $hds->header("X-Forwarded-For", join ", ", @ips, $client_ip);
+        }
     } else {
         # no, don't trust upstream (untrusted client), so remove all their
         # forwarding headers and tag their IP as the x-forwarded-for

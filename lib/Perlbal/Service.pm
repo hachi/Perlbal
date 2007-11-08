@@ -51,6 +51,7 @@ use fields (
                                    # request when we're in pressure relief mode
             'trusted_upstream_proxies', # Net::Netmask object containing netmasks for trusted upstreams
             'always_trusted', # bool; if true, always trust upstreams
+            'blind_proxy', # bool: if true, do not modify X-Forwarded-For, X-Host, or X-Forwarded-Host headers
             'enable_reproxy', # bool; if true, advertise that server will reproxy files and/or URLs
             'reproxy_cache_maxsize', # int; maximum number of reproxy results to be cached. (0 is disabled and default)
             'client_sndbuf_size',    # int: bytes for SO_SNDBUF
@@ -345,6 +346,13 @@ our $tunables = {
 
     'always_trusted' => {
         des => "Whether to trust all incoming requests' X-Forwarded-For and related headers.  Set to true only if you know that all incoming requests from your own proxy servers that clean/set those headers.",
+        default => 0,
+        check_type => "bool",
+        check_role => "reverse_proxy",
+    },
+
+    'blind_proxy' => {
+        des => "Flag to disable any modification of X-Forwarded-For, X-Host, and X-Forwarded-Host headers.",
         default => 0,
         check_type => "bool",
         check_role => "reverse_proxy",
