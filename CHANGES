@@ -1,3 +1,15 @@
+    -- access control test
+
+    -- add option to AccessControl plugin to use observed_ip_string instead
+
+    -- add observed_ip_string method to perlbal sockets, allowing http
+       connections to set an observed ip string when an upstream proxy is
+       trusted.
+
+    -- add blind_proxy option, which disables appending to the end of the
+       X-Forwarded-For header when connections arrive from a trusted proxy.
+
+    -- make socket closing more verbose when Perlbal::DEBUG is set
 
     -- verify_backend_path configuration option
 

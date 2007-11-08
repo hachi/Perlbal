@@ -77,15 +77,6 @@ sub event_write {
 sub event_err {  my $self = shift; $self->close; }
 sub event_hup {  my $self = shift; $self->close; }
 
-sub die_gracefully {
-    my $self = shift;
-#    Danga::Socket->AddTimer(0, sub {
-#        $self->write(sub {
-#            $self->close("final command finished, shutting down");
-#        });
-#    });
-}
-
 # HTTP management support
 sub handle_http {
     my Perlbal::ClientManage $self = shift;
