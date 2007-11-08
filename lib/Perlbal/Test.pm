@@ -73,7 +73,16 @@ sub manage {
     my $cmd = shift;
     print $msock "$cmd\r\n";
     my $res = <$msock>;
-    return 0 if !$res || $res =~ /^ERR/;
+
+    if (!$res || $res =~ /^ERR/) {
+        # Make the result visible in failure cases, unless
+        # the command was 'shutdown'... cause that never
+        # returns anything.
+        warn "Manage command failed: '$cmd' '$res'\n"
+            unless $cmd eq 'shutdown';
+
+        return 0;
+    }
     return $res;
 }
 

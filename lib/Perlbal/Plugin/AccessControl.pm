@@ -34,7 +34,7 @@ sub load {
                               (?:\s+(\S+))?                  # arg1
                               (?:\s+(\S+))?                  # optional arg2
                               $/x,
-                              "usage: ACCESS [<service>] <cmd> <arg1> [<arg2>]");
+                              "usage: ACCESS <cmd> <arg1> [<arg2>]");
         my ($cmd, $arg1, $arg2) = $mc->args;
 
         my $svcname;
@@ -94,6 +94,8 @@ sub unload {
 sub register {
     my ($class, $svc) = @_;
 
+    my $ip_string_method = "peer_ip_string";
+
     $svc->register_hook('AccessControl', 'start_http_request', sub {
         my Perlbal::ClientHTTPBase $client = shift;
         my Perlbal::HTTPHeaders $hds = $client->{req_headers};
@@ -125,15 +127,14 @@ sub register {
         my $match = sub {
             my $rule = shift;
             if ($rule->[1] eq "ip") {
-                my $peer_ip = $client->peer_ip_string;
+                my $peer_ip = $client->$ip_string_method;
                 return $peer_ip eq $rule->[2];
             }
 
             if ($rule->[1] eq "netmask") {
-                my $peer_ip = $client->peer_ip_string;
+                my $peer_ip = $client->$ip_string_method;
                 return eval { $rule->[2]->match($peer_ip); };
             }
-
         };
 
         my $cfg = $svc->{extra_config}->{_access} ||= {};
@@ -146,6 +147,20 @@ sub register {
         return $deny->() if $cfg->{deny_default};
         return $allow->();
     });
+
+    # Allow AccessControl users to specify that they would like to use the observed IP as
+    # opposed to the real IP for ACL checking.
+    $svc->register_setter('AccessControl', 'use_observed_ip', sub {
+        my ($out, $what, $val) = @_;
+        return 0 unless $what;
+
+        $ip_string_method = $val ? "observed_ip_string" : "peer_ip_string";
+
+        $out->("OK") if $out;
+
+        return 1;
+    });
+
 
     return 1;
 }
