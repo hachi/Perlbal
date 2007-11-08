@@ -101,6 +101,8 @@ sub handle_request {
     my Perlbal::ClientHTTP $self = shift;
     my $hd = $self->{req_headers};
 
+    $self->check_req_headers;
+
     # fully formed request received
     $self->{requests}++;
 

@@ -741,6 +741,8 @@ sub handle_request {
         return;
     }
 
+    $self->check_req_headers;
+
     my $svc = $self->{service};
     # give plugins a chance to force us to bail
     return if $svc->run_hook('start_proxy_request', $self);

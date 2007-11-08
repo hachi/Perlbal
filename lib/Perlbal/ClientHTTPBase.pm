@@ -659,6 +659,18 @@ sub _serve_request_multiple_poststat {
     $self->{post_sendfile_cb}->();
 }
 
+sub check_req_headers {
+    my Perlbal::ClientHTTPBase $self = shift;
+    my Perlbal::HTTPHeaders $hds = $self->{req_headers};
+
+    if ($self->{service}->trusted_ip($self->peer_ip_string)) {
+        my @ips = split /,\s*/, ($hds->header("X-Forwarded-For") || '');
+        $self->observed_ip_string($ips[0]) if @ips;
+    }
+
+    return;
+}
+
 sub try_index_files {
     my Perlbal::ClientHTTPBase $self = shift;
     my ($hd, $res, $uri, $filepos) = @_;

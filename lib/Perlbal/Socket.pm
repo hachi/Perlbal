@@ -32,6 +32,10 @@ use fields (
             'read_size',       # total bytes read from client, ever
 
             'ditch_leading_rn', # if true, the next header parsing will ignore a leading \r\n
+
+            'observed_ip_string', # if defined, contains the observed IP string of the peer
+                                  # we're serving. this is intended for hoding the value of
+                                  # the X-Forwarded-For and using it to govern ACLs.
             );
 
 use constant MAX_HTTP_HEADER_LENGTH => 102400;  # 100k, arbitrary
@@ -313,6 +317,18 @@ sub state {
 
     push @{$state_changes{"$self"} ||= []}, $_[0] if Perlbal::TRACK_STATES;
     return $self->{state} = $_[0];
+}
+
+sub observed_ip_string {
+    my Perlbal::Socket $self = shift;
+
+    if (@_) {
+        return $self->{observed_ip_string} = $_[0];
+    } elsif (defined $self->{observed_ip_string}) {
+        return $self->{observed_ip_string};
+    } else {
+        return $self->peer_ip_string
+    }
 }
 
 sub as_string_html {
