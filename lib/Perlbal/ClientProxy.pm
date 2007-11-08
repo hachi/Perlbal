@@ -505,6 +505,12 @@ sub close {
     my Perlbal::ClientProxy $self = shift;
     my $reason = shift;
 
+    warn sprintf(
+                    "Perlbal::ClientProxy closed %s%s.\n",
+                    ( $self->{closed} ? "again " : "" ),
+                    (defined $reason ? "saying '$reason'" : "for an unknown reason")
+    ) if Perlbal::DEBUG >= 2;
+
     # don't close twice
     return if $self->{closed};
 
@@ -729,6 +735,11 @@ sub event_read {
 sub handle_request {
     my Perlbal::ClientProxy $self = shift;
     my $req_hd = $self->{req_headers};
+
+    unless ($req_hd) {
+        $self->close("handle_request without headers");
+        return;
+    }
 
     my $svc = $self->{service};
     # give plugins a chance to force us to bail
