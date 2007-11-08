@@ -348,7 +348,7 @@ our $tunables = {
         des => "Whether to trust all incoming requests' X-Forwarded-For and related headers.  Set to true only if you know that all incoming requests from your own proxy servers that clean/set those headers.",
         default => 0,
         check_type => "bool",
-        check_role => "reverse_proxy",
+        check_role => "*",
     },
 
     'blind_proxy' => {
@@ -370,7 +370,7 @@ our $tunables = {
 
     'trusted_upstream_proxies' => {
         des => "A Net::Netmask filter (e.g. 10.0.0.0/24, see Net::Netmask) that determines whether upstream clients are trusted or not, where trusted means their X-Forwarded-For/etc headers are not munged.",
-        check_role => "reverse_proxy",
+        check_role => "*",
         check_type => sub {
             my ($self, $val, $errref) = @_;
             unless (my $loaded = eval { require Net::Netmask; 1; }) {
