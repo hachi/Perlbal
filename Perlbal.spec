@@ -1,7 +1,7 @@
 name:      Perlbal
 summary:   Perlbal - High efficiency reverse proxy and web server.
 version:   1.60
-release:   1
+release:   2
 vendor:    Brad Fitzpatrick <brad@danga.com>
 packager:  Jonathan Steinert <rpm@hachi.kuiki.net>
 license:   Artistic
@@ -9,8 +9,16 @@ group:     Applications/CPAN
 buildroot: %{_tmppath}/%{name}-%{version}-%(id -u -n)
 buildarch: noarch
 source:    Perlbal-%{version}.tar.gz
-buildrequires: perl-Danga-Socket >= 1.44, perl-Sys-Syscall, perl-BSD-Resource, perl-libwww-perl
-requires:  perl-Perlbal = %{version}-%{release}
+
+buildrequires: perl(Danga::Socket) >= 1.44
+buildrequires: perl(BSD::Resource)
+buildrequires: perl(HTTP::Date)
+buildrequires: perl(HTTP::Response)
+buildrequires: perl(Test::More)
+buildrequires: perl(Time::HiRes)
+
+autoreq: no
+requires: perl(Perlbal) = %{version}-%{release}
 
 %description
 High efficiency reverse proxy and web server.
@@ -61,7 +69,14 @@ Documentation for Perlbal.
 %package -n perl-Perlbal
 summary:   perl-Perlbal - Perlbal libraries.
 group:     Applications/CPAN
-requires:  perl-Danga-Socket >= 1.44, perl-Sys-Syscall, perl-BSD-Resource, perl-libwww-perl
+
+autoreq: no
+requires: perl(Danga::Socket) >= 1.44
+requires: perl(BSD::Resource)
+requires: perl(HTTP::Date)
+requires: perl(HTTP::Response)
+requires: perl(Time::HiRes)
+
 %description -n perl-Perlbal
 Perlbal libraries.
 
