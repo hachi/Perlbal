@@ -1,3 +1,6 @@
+    -- add HTTPHeaders method set_request_uri so plugins can modify the uri
+       being requested
+
     -- access control test
 
     -- add option to AccessControl plugin to use observed_ip_string instead

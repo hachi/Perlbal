@@ -222,6 +222,11 @@ sub request_uri {
     return $self->{uri};
 }
 
+sub set_request_uri {
+    my Perlbal::HTTPHeaders $self = shift;
+    return $self->{uri} = shift;
+}
+
 sub version_number {
     my Perlbal::HTTPHeaders $self = $_[0];
     return $self->{vernum} unless $_[1];
