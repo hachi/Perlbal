@@ -1,3 +1,6 @@
+    -- add "cgilike" plugin which offers a simple API very loosely based on
+       mod_perl for handling responses
+
     -- add HTTPHeaders method set_request_uri so plugins can modify the uri
        being requested
 
