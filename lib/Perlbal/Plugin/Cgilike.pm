@@ -49,7 +49,7 @@ will recieve an object which allows interaction with the Perlbal service.
 	package MyPackage
 	sub handler {
 	    my ($r) = @_;
-		if ($r->uri == '/') {
+		if ($r->uri eq '/') {
 			print "<p>Hello, world</p>";
 			return Perlbal::Plugin::Cgilike::HANDLED;
 		}
