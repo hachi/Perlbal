@@ -10,6 +10,8 @@ use strict;
 use warnings;
 no  warnings qw(deprecated);
 
+use Perlbal;
+
 use fields (
             'headers',   # href; lowercase header -> comma-sep list of values
             'origcase',  # href; lowercase header -> provided case
