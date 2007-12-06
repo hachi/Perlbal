@@ -54,6 +54,9 @@ $Perlbal::BSD_RESOURCE_AVAILABLE = eval { require BSD::Resource; 1; };
 # incremented every second by a timer:
 $Perlbal::tick_time = time();
 
+# Set to 1 when we open syslog, and 0 when we close it
+$Perlbal::syslog_open = 0;
+
 use Getopt::Long;
 use Carp qw(cluck croak);
 use Errno qw(EBADF);
@@ -89,6 +92,7 @@ our(%service);   # servicename -> Perlbal::Service
 our(%pool);      # poolname => Perlbal::Pool
 our(%plugins);   # plugin => 1 (shows loaded plugins)
 our($last_error);
+our $service_autonumber = 1; # used to generate names for anonymous services created with Perlbal->create_service()
 our $vivify_pools = 1; # if on, allow automatic creation of pools
 our $foreground = 1; # default to foreground
 our $track_obj = 0;  # default to not track creation locations
@@ -189,6 +193,21 @@ sub service_names {
 sub service {
     my $class = shift;
     return $service{$_[0]};
+}
+
+sub create_service {
+    my $class = shift;
+    my $name = shift;
+    
+    unless (defined($name)) {
+        $name = "____auto_".($service_autonumber++);
+    }
+
+    croak("service '$name' already exists") if $service{$name};
+    croak("pool '$name' already exists") if $pool{$name};
+
+    # Create the new service and return it
+    return $service{$name} = Perlbal::Service->new($name);
 }
 
 sub pool {
@@ -953,7 +972,7 @@ sub MANAGE_create {
     if ($what eq "service") {
         return $mc->err("service '$name' already exists") if $service{$name};
         return $mc->err("pool '$name' already exists") if $pool{$name};
-        $service{$name} = Perlbal::Service->new($name);
+        Perlbal->create_service($name);
         $mc->{ctx}{last_created} = $name;
         return $mc->ok;
     }
@@ -1184,26 +1203,44 @@ sub daemonize {
     open(STDERR, "+>&STDIN");
 }
 
+# For other apps using Danga::Socket that want to embed Perlbal, this can be called
+# directly to start it up. You can call this as many times as you like; it'll
+# only actually do what it does the first time it's called.
+sub initialize {
+    unless ($run_started) {
+        $run_started = 1;
+
+        # number of AIO threads.  the number of outstanding requests isn't
+        # affected by this
+        IO::AIO::min_parallel(3)    if $Perlbal::OPTMOD_IO_AIO;
+
+        # register IO::AIO pipe which gets written to from threads
+        # doing blocking IO
+        if ($Perlbal::OPTMOD_IO_AIO) {
+            Perlbal::Socket->AddOtherFds(IO::AIO::poll_fileno() =>
+                                         \&IO::AIO::poll_cb);
+        }
+
+        # The fact that this only runs the first time someone calls initialize()
+        # means that some things which depend on it might be unreliable when
+        # used in an embedded perlbal if there is a race for multiple components
+        # to call initialize().
+        run_global_hook("pre_event_loop");
+    }
+}
+
+# This is the function to call if you want Perlbal to be in charge of the event loop.
+# It won't return until Perlbal is somehow told to exit.
 sub run {
-    $run_started = 1;
 
     # setup for logging
     Sys::Syslog::openlog('perlbal', 'pid', 'daemon') if $Perlbal::SYSLOG_AVAILABLE;
+    $Perlbal::syslog_open = 1;
     Perlbal::log('info', 'beginning run');
     my $pidfile_written = 0;
     $pidfile_written = _write_pidfile( $pidfile ) if $pidfile;
 
-    # number of AIO threads.  the number of outstanding requests isn't
-    # affected by this
-    IO::AIO::min_parallel(3)    if $Perlbal::OPTMOD_IO_AIO;
-
-    # register IO::AIO pipe which gets written to from threads
-    # doing blocking IO
-    if ($Perlbal::OPTMOD_IO_AIO) {
-        Perlbal::Socket->AddOtherFds(IO::AIO::poll_fileno() =>
-                                     \&IO::AIO::poll_cb);
-    }
-
+    Perlbal::initialize();
 
     Danga::Socket->SetLoopTimeout(1000);
     Danga::Socket->SetPostLoopCallback(sub {
@@ -1211,8 +1248,6 @@ sub run {
         Perlbal::Socket::run_callbacks();
         return 1;
     });
-
-    run_global_hook("pre_event_loop");
 
     # begin the overall loop to try to capture if Perlbal dies at some point
     # so we can have a log of it
@@ -1235,6 +1270,7 @@ sub run {
     _remove_pidfile( $pidfile ) if $pidfile_written;
 
     Perlbal::log('info', 'ending run');
+    $Perlbal::syslog_open = 0;
     Sys::Syslog::closelog() if $Perlbal::SYSLOG_AVAILABLE;
 
     return $clean_exit;
@@ -1248,7 +1284,7 @@ sub log {
         printf(shift(@_) . "\n", @_);
     } else {
         # just pass the parameters to syslog
-        Sys::Syslog::syslog(@_) if $Perlbal::SYSLOG_AVAILABLE;
+        Sys::Syslog::syslog(@_) if $Perlbal::syslog_open;
     }
 }
 

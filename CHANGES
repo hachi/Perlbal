@@ -1,3 +1,13 @@
+    -- Support for "anonymous services", for API callers that really don't
+       care what their service is called but just want to get hold of a
+       Service object. These aren't really anonymous, but they have suitably
+       ugly names that no sane human should ever conflict with them.
+
+    -- add some new methods that make it a little nicer to embed Perlbal
+       in another application that uses Danga::Socket. Some refactoring
+       was done to avoid duplicate code between the "end-user" way and the
+       API way.
+
     -- add "cgilike" plugin which offers a simple API very loosely based on
        mod_perl for handling responses
 

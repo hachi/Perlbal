@@ -611,6 +611,27 @@ sub new {
     return $self;
 }
 
+# handy instance method to run some manage commands in the context of this service,
+# without needing to worry about its name.
+# This is intended as an internal API thing, so any output that would have been
+# generated is just eaten.
+sub run_manage_commands {
+    my ($self, $cmd_block) = @_;
+
+    my $ctx = Perlbal::CommandContext->new;
+    $ctx->{last_created} = $self->name;
+    return Perlbal::run_manage_commands($cmd_block, undef, $ctx);
+}
+
+# here's an alternative version of the above that runs a single command
+sub run_manage_command {
+    my ($self, $cmd) = @_;
+
+    my $ctx = Perlbal::CommandContext->new;
+    $ctx->{last_created} = $self->name;
+    return Perlbal::run_manage_command($cmd, undef, $ctx);
+}
+
 # called once a role has been set
 sub init {
     my Perlbal::Service $self = shift;
