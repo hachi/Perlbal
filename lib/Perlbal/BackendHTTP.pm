@@ -71,9 +71,14 @@ sub new {
         Perlbal::log('crit', "Error creating socket: $!");
         return undef;
     }
+    my $inet_aton = Socket::inet_aton($ip);
+    unless ($inet_aton) {
+        Perlbal::log('crit', "inet_aton failed creating socket for $ip");
+        return undef;
+    }
 
     IO::Handle::blocking($sock, 0);
-    connect $sock, Socket::sockaddr_in($port, Socket::inet_aton($ip));
+    connect $sock, Socket::sockaddr_in($port, $inet_aton);
 
     my $self = fields::new($class);
     $self->SUPER::new($sock);
