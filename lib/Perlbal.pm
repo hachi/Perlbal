@@ -686,7 +686,11 @@ sub MANAGE_socks {
         $mc->out(sprintf("%5s %6s", "fd", "age"));
         foreach (sort { $a <=> $b } keys %$sf) {
             my $sock = $sf->{$_};
-            my $age = $now - $sock->{create_time};
+            my $age;
+            eval {
+                $age = $now - $sock->{create_time};
+            };
+            $age ||= 0;
             $mc->out(sprintf("%5d %5ds %s", $_, $age, $sock->as_string));
         }
     }
@@ -762,6 +766,7 @@ sub MANAGE_states {
 
     my %states; # { "Class" => { "State" => int count; } }
     foreach my $sock (values %$sf) {
+        next unless $sock->can('state');
         my $state = $sock->state;
         next unless defined $state;
         if (defined $svc) {
