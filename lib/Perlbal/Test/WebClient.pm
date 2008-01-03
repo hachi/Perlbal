@@ -28,6 +28,7 @@ sub new {
 sub server {
     my $self = shift;
     if (@_) {
+    	$self->{_sock} = undef;
         return $self->{server} = shift;
     } else {
         return $self->{server};
@@ -38,6 +39,7 @@ sub server {
 sub host {
     my $self = shift;
     if (@_) {
+        $self->{_sock} = undef;
         return $self->{host} = shift;
     } else {
         return $self->{host};
