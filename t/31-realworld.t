@@ -64,20 +64,20 @@ my $overall_count = 1;
 
 add_all();
 {
-# make first web client
-my $wc = Perlbal::Test::WebClient->new;
-$wc->server("127.0.0.1:$pb_port");
-$wc->keepalive(0);
-$wc->http_version('1.0');
-ok($wc, 'web client object created');
+    # make first web client
+    my $wc = Perlbal::Test::WebClient->new;
+    $wc->server("127.0.0.1:$pb_port");
+    $wc->keepalive(0);
+    $wc->http_version('1.0');
+    ok($wc, 'web client object created');
 
-# see if a single request works
-my $resp = $wc->request('status');
-ok($resp, 'status response ok');
-my $pid = pid_of_resp($resp);
-ok($pid, 'web server functioning');
-is($wc->reqdone, 0, "didn't persist to perlbal");
-is(reqnum($resp), $overall_count++, "Overall request count is correct");
+    # see if a single request works
+    my $resp = $wc->request('status');
+    ok($resp, 'status response ok');
+    my $pid = pid_of_resp($resp);
+    ok($pid, 'web server functioning');
+    is($wc->reqdone, 0, "didn't persist to perlbal");
+    is(reqnum($resp), $overall_count++, "Overall request count is correct");
 }
 
 my @combinations = (
