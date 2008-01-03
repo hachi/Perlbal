@@ -4,7 +4,7 @@ use strict;
 use Perlbal::Test;
 use Perlbal::Test::WebServer;
 use Perlbal::Test::WebClient;
-use Test::More tests => 106;
+use Test::More tests => 156;
 
 # option setup
 my $start_servers = 3; # web servers to start
@@ -17,6 +17,7 @@ ok(scalar(@web_ports) == $start_servers, 'web servers started');
 # setup a simple perlbal that uses the above server
 my $pb_port = new_port();
 my $pb_ss_port = new_port();
+my $pb_ss2_port = new_port();
 
 my $buffer_dir = tempdir();
 
@@ -46,6 +47,14 @@ CREATE SERVICE ss
    VHOST * = test
 ENABLE ss
 
+CREATE SERVICE ss2
+   SET role = selector
+   SET listen = 127.0.0.1:$pb_ss2_port
+   SET persist_client = on
+   SET plugins = vhosts
+   VHOST * = ss
+ENABLE ss2
+
 };
 
 my $msock = start_server($conf);
@@ -72,8 +81,8 @@ my $ct = 0;
 # persisent is on, so let's do some more and see if they're counting up
 $wc->keepalive(1);
 
-for my $dport ("regular", "selector") {
-    $wc->server("127.0.0.1:" . ($dport eq "regular" ? $pb_port : $pb_ss_port));
+for my $dport ("regular", "selector", "selector2") {
+    $wc->server("127.0.0.1:" . ($dport eq "regular" ? $pb_port : ($dport eq "selector" ? $pb_ss_port : $pb_ss2_port)));
 
     for my $type (qw(plain buffer_to_memory buffer_to_disk)) {
 
