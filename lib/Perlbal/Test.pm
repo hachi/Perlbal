@@ -62,7 +62,7 @@ sub filecontent {
 sub foreach_aio (&) {
     my $cb = shift;
 
-    foreach my $mode (qw(none linux ioaio)) {
+    foreach my $mode (qw(none ioaio)) {
         my $line = manage("SERVER aio_mode = $mode");
         next unless $line;
         $cb->($mode);
