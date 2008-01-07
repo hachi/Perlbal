@@ -382,7 +382,12 @@ our $tunables = {
             $$errref = "Error defining trusted upstream proxies: " . Net::Netmask::errstr();
             return 0;
         },
-
+        setter => sub {
+            my ($self, $val, $set, $mc) = @_;
+	    # Do nothing here, we don't want the default setter because we've
+	    # already set the value in the type_check step.
+            return $mc->ok;
+	},
     },
 
     'index_files' => {
