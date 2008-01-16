@@ -1159,14 +1159,14 @@ sub MANAGE_aio {
 
 sub load_config {
     my ($file, $writer) = @_;
-    open (F, $file) or die "Error opening config file ($file): $!\n";
+    open (my $fh, $file) or die "Error opening config file ($file): $!\n";
     my $ctx = Perlbal::CommandContext->new;
     $ctx->verbose(0);
-    while (my $line = <F>) {
+    while (my $line = <$fh>) {
         $line =~ s/\$(\w+)/$ENV{$1}/g;
         return 0 unless run_manage_command($line, $writer, $ctx);
     }
-    close(F);
+    close($fh);
     return 1;
 }
 
