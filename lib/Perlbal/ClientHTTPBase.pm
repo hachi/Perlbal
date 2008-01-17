@@ -539,6 +539,7 @@ sub _serve_request_multiple {
 
     return $self->_simple_response(403, "Multiple file serving isn't enabled") unless $svc->{enable_concatenate_get};
     return $self->_simple_response(403, "Too many files requested") if @multiple_files > 100;
+    return $self->_simple_response(403, "Bogus filenames") if grep { m!(?:\A|/)\.\./! } @multiple_files;
 
     my $remain = @multiple_files + 1;  # 1 for the base directory
     my $dirbase = $svc->{docroot} . $base;
