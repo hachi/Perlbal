@@ -43,8 +43,9 @@ sub register {
     # more complicated statistics
     $svc->register_hook('Stats', 'backend_client_assigned', sub {
         my Perlbal::BackendHTTP $be = shift;
-        $sobj->{pending}->{"$be->{client}"} = [ gettimeofday() ];
-        ($be->{client}->{high_priority} ? $sobj->{proxy_requests_highpri} : $sobj->{proxy_requests})++;
+        my Perlbal::ClientProxy $cp = $be->{client};
+        $sobj->{pending}->{"$cp"} = [ gettimeofday() ];
+        ($cp->{high_priority} ? $sobj->{proxy_requests_highpri} : $sobj->{proxy_requests})++;
         return 0;
     });
     $svc->register_hook('Stats', 'backend_response_received', sub {

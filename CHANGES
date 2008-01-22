@@ -1,7 +1,10 @@
     -- SECURITY - Previously a single upward directory traversal was possible
        when concat get was enabled. This behavior has been fixed in code to
        match with standard file serving.
-    
+
+    -- Fix 'No such pseudo-hash field "high_priority"' issue in Stats plugin
+       (Eamon Daly and Jonty Wareing)
+
     -- Support for "anonymous services", for API callers that really don't
        care what their service is called but just want to get hold of a
        Service object. These aren't really anonymous, but they have suitably
