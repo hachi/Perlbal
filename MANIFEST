@@ -30,6 +30,7 @@ lib/Perlbal/Plugin/AccessControl.pm
 lib/Perlbal/Plugin/AutoRemoveLeadingDir.pm
 lib/Perlbal/Plugin/EchoService.pm
 lib/Perlbal/Plugin/Highpri.pm
+lib/Perlbal/Plugin/Include.pm
 lib/Perlbal/Plugin/LazyCDN.pm
 lib/Perlbal/Plugin/NotModified.pm
 lib/Perlbal/Plugin/Palimg.pm
@@ -69,4 +70,5 @@ t/45-buffereduploads.t
 t/50-plugins.t
 t/52-chunked-upload.t
 t/60-child-httpd.t
+t/75-plugin-include.t
 t/helper/child-httpd.pl

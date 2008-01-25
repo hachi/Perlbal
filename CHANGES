@@ -1,3 +1,7 @@
+    -- Add Include plugin by Eamon Daly <edaly@nextwavemedia.com>; plugin
+       allows you to use "INCLUDE = /etc/conf.d/*" or "INCLUDE = /foo.conf"
+       to bring in more config; can be nested.
+
     -- SECURITY - Previously a single upward directory traversal was possible
        when concat get was enabled. This behavior has been fixed in code to
        match with standard file serving.
