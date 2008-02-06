@@ -668,7 +668,11 @@ sub check_req_headers {
 
     if ($self->{service}->trusted_ip($self->peer_ip_string)) {
         my @ips = split /,\s*/, ($hds->header("X-Forwarded-For") || '');
-        $self->observed_ip_string($ips[0]) if @ips;
+
+        # This list may be empty, and that's OK, in that case we should unset the
+        # observed_ip_string, so no matter what we'll use the 0th element, whether
+        # it happens to be an ip string, or undef.
+        $self->observed_ip_string($ips[0]);
     }
 
     return;
@@ -795,7 +799,9 @@ sub as_string {
     my $ret = $self->SUPER::as_string;
     my $name = $self->{sock} ? getsockname($self->{sock}) : undef;
     my $lport = $name ? (Socket::sockaddr_in($name))[0] : undef;
+    my $observed = $self->observed_ip;
     $ret .= ": localport=$lport" if $lport;
+    $ret .= "; observed_ip=$observed" if defined $observed;
     $ret .= "; reqs=$self->{requests}";
     $ret .= "; $self->{state}";
 

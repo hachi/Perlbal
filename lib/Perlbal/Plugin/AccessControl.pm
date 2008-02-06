@@ -94,7 +94,7 @@ sub unload {
 sub register {
     my ($class, $svc) = @_;
 
-    my $ip_string_method = "peer_ip_string";
+    my $use_observed_ip;
 
     $svc->register_hook('AccessControl', 'start_http_request', sub {
         my Perlbal::ClientHTTPBase $client = shift;
@@ -127,12 +127,18 @@ sub register {
         my $match = sub {
             my $rule = shift;
             if ($rule->[1] eq "ip") {
-                my $peer_ip = $client->$ip_string_method;
+                my $peer_ip;
+                $peer_ip = $client->observed_ip_string if $use_observed_ip;
+                $peer_ip ||= $client->peer_ip_string;
+
                 return $peer_ip eq $rule->[2];
             }
 
             if ($rule->[1] eq "netmask") {
-                my $peer_ip = $client->$ip_string_method;
+                my $peer_ip;
+                $peer_ip = $client->observed_ip_string if $use_observed_ip;
+                $peer_ip ||= $client->peer_ip_string;
+
                 return eval { $rule->[2]->match($peer_ip); };
             }
         };
@@ -154,7 +160,7 @@ sub register {
         my ($out, $what, $val) = @_;
         return 0 unless $what;
 
-        $ip_string_method = $val ? "observed_ip_string" : "peer_ip_string";
+        $use_observed_ip = $val;
 
         $out->("OK") if $out;
 

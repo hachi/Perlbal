@@ -324,10 +324,8 @@ sub observed_ip_string {
 
     if (@_) {
         return $self->{observed_ip_string} = $_[0];
-    } elsif (defined $self->{observed_ip_string}) {
-        return $self->{observed_ip_string};
     } else {
-        return $self->peer_ip_string
+        return $self->{observed_ip_string};
     }
 }
 
