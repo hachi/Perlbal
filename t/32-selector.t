@@ -140,11 +140,13 @@ ok($resp && $resp->code =~ /^2/, "bob - good");
 $resp = $wc->request({ host => "manage" }, 'foo');
 ok($resp && $resp->code =~ /^5/, "mapping to invalid service");
 
-# test some management commands
-ok(! manage("VHOST ss * ws"), "missing equals");
-ok(! manage("VHOST bad_service * = ws"), "bad service");
-ok(! manage("VHOST ss *!sdfsdf = ws"), "bad hostname");
-ok(! manage("VHOST ss * = ws!!sdf"), "bad target");
+
+# test some management commands (quiet_failure makes the test framework not warn when
+# these commands fail, since we expect them to)
+ok(! manage("VHOST ss * ws", quiet_failure => 1), "missing equals");
+ok(! manage("VHOST bad_service * = ws", quiet_failure => 1), "bad service");
+ok(! manage("VHOST ss *!sdfsdf = ws", quiet_failure => 1), "bad hostname");
+ok(! manage("VHOST ss * = ws!!sdf", quiet_failure => 1), "bad target");
 
 
 sub okay_status {

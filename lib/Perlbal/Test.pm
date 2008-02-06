@@ -71,6 +71,8 @@ sub foreach_aio (&) {
 
 sub manage {
     my $cmd = shift;
+    my %opts = @_;
+
     print $msock "$cmd\r\n";
     my $res = <$msock>;
 
@@ -79,7 +81,7 @@ sub manage {
         # the command was 'shutdown'... cause that never
         # returns anything.
         warn "Manage command failed: '$cmd' '$res'\n"
-            unless $cmd eq 'shutdown';
+            unless($opts{quiet_failure} || $cmd eq 'shutdown');
 
         return 0;
     }
