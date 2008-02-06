@@ -229,6 +229,8 @@ sub reproxy_fh {
 sub event_read {
     my Perlbal::ClientHTTPBase $self = shift;
 
+    $self->{alive_time} = $Perlbal::tick_time;
+
     # see if we have headers?
     die "Shouldn't get here!  This is an abstract base class, pretty much, except in the case of the 'selector' role."
         if $self->{req_headers};
