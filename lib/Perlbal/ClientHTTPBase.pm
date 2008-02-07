@@ -799,7 +799,7 @@ sub as_string {
     my $ret = $self->SUPER::as_string;
     my $name = $self->{sock} ? getsockname($self->{sock}) : undef;
     my $lport = $name ? (Socket::sockaddr_in($name))[0] : undef;
-    my $observed = $self->observed_ip;
+    my $observed = $self->observed_ip_string;
     $ret .= ": localport=$lport" if $lport;
     $ret .= "; observed_ip=$observed" if defined $observed;
     $ret .= "; reqs=$self->{requests}";
