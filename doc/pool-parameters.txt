@@ -1,0 +1,13 @@
+Reference stub for 'SET pool' commands.
+
+SET pool nodefile = '/path/to/file'
+... sets the file to autoload nodes from. Perlbal will periodically check this
+file for updates.
+
+SET pool nodefile = none 
+(also undef, null, "", '')
+... unsets the nodefile, but does not remove current members.
+
+SET pool balance_method = 'random'
+... sets the load balancing method to 'random', which is all there is!
+
