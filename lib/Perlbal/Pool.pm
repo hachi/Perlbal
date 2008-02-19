@@ -94,22 +94,6 @@ sub set {
 
 }
 
-sub dumpconfig {
-    my $self = shift;
-
-    my @return;
-
-    if (my $nodefile = $self->{'nodefile'}) {
-        push @return, "SET nodefile = $nodefile";
-    } else {
-        foreach my $node (@{$self->{nodes}}) {
-            my ($ip, $port) = @$node;
-            push @return, "ADD $ip:$port";
-        }
-    }
-    return @return;
-}
-
 # returns string of balance method
 sub balance_method {
     my Perlbal::Pool $self = $_[0];
