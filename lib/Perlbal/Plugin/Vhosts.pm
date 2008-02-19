@@ -75,6 +75,22 @@ sub unregister {
     return 1;
 }
 
+sub dumpconfig {
+    my ($class, $svc) = @_;
+
+    my $vhosts = $svc->{extra_config}->{_vhosts};
+
+    return unless $vhosts;
+
+    my @return;
+
+    while (my ($vhost, $target) = each %$vhosts) {
+        push @return, "VHOST $vhost = $target";
+    }
+
+    return @return;
+}
+
 # call back from Service via ClientHTTPBase's event_read calling service->select_new_service(Perlbal::ClientHTTPBase)
 sub vhost_selector {
     my Perlbal::ClientHTTPBase $cb = shift;

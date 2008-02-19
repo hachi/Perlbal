@@ -963,6 +963,45 @@ sub MANAGE_server {
     return $mc->err("unknown server option '$val'");
 }
 
+sub MANAGE_dumpconfig {
+    my $mc = shift;
+
+    while (my ($name, $pool) = each %pool) {
+        $mc->out("CREATE POOL $name");
+
+        if ($pool->can("dumpconfig")) {
+            foreach my $line ($pool->dumpconfig) {
+                $mc->out("  $line");
+            }
+        } else {
+            my $class = ref($pool);
+            $mc->out("  # Pool class '$class' is unable to dump config.");
+        }
+    } continue {
+        $mc->out("");
+    }
+
+    while (my ($name, $service) = each %service) {
+        $mc->out("CREATE SERVICE $name");
+
+        if ($service->can("dumpconfig")) {
+            foreach my $line ($service->dumpconfig) {
+                $mc->out("  $line");
+            }
+        } else {
+            my $class = ref($service);
+            $mc->out("  # Service class '$class' is unable to dump config.");
+        }
+
+        my $state = $service->{enabled} ? "ENABLE" : "DISABLE";
+        $mc->out("$state $name");
+    } continue {
+        $mc->out("");
+    }
+
+    return $mc->ok
+}
+
 sub MANAGE_reproxy_state {
     my $mc = shift;
     Perlbal::ReproxyManager::dump_state($mc->out);
