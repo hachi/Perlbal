@@ -29,6 +29,7 @@ use fields (
             'dirindexing',        # bool: direcotry indexing?  (for webserver role)  not async.
             'index_files',        # arrayref of filenames to try for index files
             'enable_concatenate_get',   # bool:  if user can request concatenated files
+			'concatenate_get_enable_gzip', # bool: allow gzip compression of concatenated files
             'enable_put', # bool: whether PUT is supported
             'max_put_size', # int: max size in bytes of a put file
             'max_chunked_request_size',  # int: max size in bytes of a chunked request (to be written to disk first)
@@ -330,6 +331,13 @@ our $tunables = {
         check_role => "web_server",
         check_type => "bool",
     },
+
+	'concatenate_get_enable_gzip' => {
+		des => "Enable Perlbal to use gzip compression, if a client accepts compressed data.",
+		default => 0,
+        check_role => "web_server",
+		check_type => "bool",
+	},
 
     'connect_ahead' => {
         des => "How many extra backend connections we keep alive in addition to the current ones, in anticipation of new client connections.",
