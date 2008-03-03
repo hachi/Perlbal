@@ -3,7 +3,7 @@
 use strict;
 use Perlbal::Test;
 
-use Test::More tests => 20;
+use Test::More tests => 26;
 require HTTP::Request;
 
 my $port = new_port();
@@ -87,6 +87,59 @@ is(get("${http}/foo/??a.txt,a.txt"), "$chunk1$chunk1", "dup concat");
     like($res->header("Last-Modified"), qr/\bGMT$/, "and it has a last modified");
     ok(! $res->header("Content-Length"), "No content-length");
     like($res->header("Connection"), qr/\bkeep-alive\b/, "and it's keep-alive");
+}
+
+
+SKIP: {
+    eval  { require Compress::Zlib };
+    skip "No Compress::Zlib found", 6 if $@;
+    my $sample = $chunk1.$chunk2;
+    my $url = "${http}/foo/??a.txt,bar/b.txt";
+    
+    my $res = $ua->request(HTTP::Request->new(GET => $url));
+    ok( $res && $res->is_success && ($res->content||'') eq $sample,
+        "compression not allowed and not requested - got uncompressed response");
+    
+    my $req = HTTP::Request->new(GET => $url);
+    $req->header("Accept-Encoding" => 'gzip');
+    $res = $ua->request($req);
+    ok( $res && $res->is_success && ($res->content||'') eq $sample,
+        "compression requested but not allowed - got uncompressed response");
+
+    manage("SET test.concatenate_get_enable_compression = 1");
+    manage("SET test.concat_compress_min_threshold_size = 0"); # since the default is 1k
+    $res = $ua->request(HTTP::Request->new(GET => $url));
+    ok( $res && $res->is_success && !$res->header('Content-Encoding') && ($res->content||'') eq $sample,
+        "compression allowed but not requested - got uncompressed response");
+
+    $req = HTTP::Request->new(GET => $url);
+    $req->header("Accept-Encoding" => 'gzip');
+    $res = $ua->request($req);
+    my $content = ($res && $res->is_success) ? $res->content : '';
+    ok($content && ($res->header('Content-Encoding')||'') eq 'gzip' && $sample eq Compress::Zlib::memGunzip($content),
+        "compression allowed and requested - got compressed response");
+
+    my $minsize = length($sample)+1;
+    manage("SET test.concat_compress_min_threshold_size = $minsize");
+    $req = HTTP::Request->new(GET => $url);
+    $req->header("Accept-Encoding" => 'gzip');
+    $res = $ua->request($req);
+    $content = ($res && $res->is_success) ? $res->content : '';
+    ok( $res && $res->is_success && !$res->header('Content-Encoding') && ($res->content||'') eq $sample,
+        "response is less then min threshold - got uncompressed response");
+
+    manage("SET test.concat_compress_min_threshold_size = 0");
+    my $maxsize = length($sample) - 1;
+    manage("SET test.concat_compress_max_threshold_size = $maxsize");
+    $req = HTTP::Request->new(GET => $url);
+    $req->header("Accept-Encoding" => 'gzip');
+    $res = $ua->request($req);
+    $content = ($res && $res->is_success) ? $res->content : '';
+    ok( $res && $res->is_success && !$res->header('Content-Encoding') && ($res->content||'') eq $sample,
+        "response is greater then max threshold - got uncompressed response");
+
+
+    manage("SET test.concatenate_get_enable_compression = 0");
 }
 
 manage("SET test.enable_concatenate_get = 0");

@@ -1,3 +1,14 @@
+    -- Add feature of compressing concatenated files using Compress::Zlib
+       New config parameters are:
+        -   concatenate_get_enable_compression (bool, if compression is 
+            enabled, false by default)
+        -   concat_compress_min_threshold_size (min size of files to 
+            be compressed, 1k by default)
+        -   concat_compress_max_threshold_size (max size of files to
+            be compressed, turn off by default)
+            Warning: to be compressed all files are loaded into memory, 
+            so set this value in production server!
+
     -- Add Include plugin by Eamon Daly <edaly@nextwavemedia.com>; plugin
        allows you to use "INCLUDE = /etc/conf.d/*" or "INCLUDE = /foo.conf"
        to bring in more config; can be nested.
