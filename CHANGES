@@ -1,3 +1,8 @@
+    -- Perl 5.10 support.  Patch from Andy Armstrong <andy@hexten.net>.
+       Disclaimer: at least the tests all pass now, but no real-world use yet.
+       Should be fine, though.  Please report your success to the mailing list
+       and/or brad@danga.com.
+
     -- Add Include plugin by Eamon Daly <edaly@nextwavemedia.com>; plugin
        allows you to use "INCLUDE = /etc/conf.d/*" or "INCLUDE = /foo.conf"
        to bring in more config; can be nested.
