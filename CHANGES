@@ -1,3 +1,7 @@
+    -- on successful write, update Perlbal::Socket's alive_time, so slowly
+       reproxied writes don't timeout the connection and kill it.  Patch
+       from Jonty <jonty@last.fm>.  r765
+
     -- Perl 5.10 support.  Patch from Andy Armstrong <andy@hexten.net>.
        Disclaimer: at least the tests all pass now, but no real-world use yet.
        Should be fine, though.  Please report your success to the mailing list

@@ -301,6 +301,21 @@ sub die_gracefully {
     $self->{do_die} = 1;
 }
 
+### METHOD: write()
+### Overridden from Danga::Socket to update our alive time on successful writes
+### Stops sockets from being closed on long-running write operations
+sub write {
+    my $self = shift;
+
+    my $ret;
+    if ($ret = $self->SUPER::write(@_)) {
+        # Mark this socket alive so we don't time out
+        $self->{alive_time} = $Perlbal::tick_time;
+    }
+    
+    return $ret;
+}
+
 ### METHOD: close()
 ### Set our state when we get closed.
 sub close {
