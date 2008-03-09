@@ -12,6 +12,7 @@ use warnings;
 no  warnings qw(deprecated);
 
 use base "Perlbal::ClientHTTPBase";
+use Perlbal::Util;
 
 use fields ('put_in_progress', # 1 when we're currently waiting for an async job to return
             'put_fh',          # file handle to use for writing data
@@ -46,7 +47,7 @@ sub new {
 sub new_from_base {
     my $class = shift;
     my Perlbal::ClientHTTPBase $cb = shift;    # base object
-    bless $cb, $class;
+    Perlbal::Util::rebless($cb, $class);
     $cb->init;
 
     $cb->watch_read(1);   # enable our reads, so we can get PUT/POST data

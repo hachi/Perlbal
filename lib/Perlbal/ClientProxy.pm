@@ -11,6 +11,7 @@ use base "Perlbal::ClientHTTPBase";
 no  warnings qw(deprecated);
 
 use Perlbal::ChunkedUploadState;
+use Perlbal::Util;
 
 use fields (
             'backend',             # Perlbal::BackendHTTP object (or undef if disconnected)
@@ -59,14 +60,12 @@ my $udp_sock;
 
 # ClientProxy
 sub new {
-    my ($class, $service, $sock) = @_;
-
-    my $self = $class;
-    $self = fields::new($class) unless ref $self;
-    $self->SUPER::new($service, $sock);       # init base fields
+    my Perlbal::ClientProxy $self = shift;
+    my ($service, $sock) = @_;
+    $self = fields::new($self) unless ref $self;
+    $self->SUPER::new($service,  $sock );
 
     Perlbal::objctor($self);
-    bless $self, ref $class || $class;
 
     $self->init;
     $self->watch_read(1);
@@ -76,7 +75,7 @@ sub new {
 sub new_from_base {
     my $class = shift;
     my Perlbal::ClientHTTPBase $cb = shift;
-    bless $cb, $class;
+    Perlbal::Util::rebless($cb, $class);
     $cb->init;
     $cb->watch_read(1);
     $cb->handle_request;

@@ -20,7 +20,10 @@ BEGIN {
 
 # TCPListener
 sub new {
-    my ($class, $hostport, $service, $opts) = @_;
+    my Perlbal::TCPListener $self = shift;
+    my ($hostport, $service, $opts) = @_;
+
+    $self = fields::new($self) unless ref $self;
     $opts ||= {};
 
     my $sock = IO::Socket::INET->new(
@@ -45,11 +48,10 @@ sub new {
         IO::Handle::blocking($sock, 0) or return Perlbal::error("Unable to make listener on $hostport non-blocking: $!");
     }
 
-    my $self = $class->SUPER::new($sock);
+    $self->SUPER::new($sock);
     $self->{service} = $service;
     $self->{hostport} = $hostport;
     $self->{sslopts} = $opts->{ssl};
-    bless $self, ref $class || $class;
     $self->watch_read(1);
     return $self;
 }

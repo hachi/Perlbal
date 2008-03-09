@@ -59,12 +59,11 @@ use fields ('service', # the service we're from
 sub new {
     my $class = "Perlbal::Plugin::EchoService::Client";
     my ($service, $sock) = @_;
-
-    my $self = $class->SUPER::new($sock);
+    my $self = fields::new($class);
+    $self->SUPER::new($sock);
     $self->{service} = $service;
     $self->{buf} = "";   # what we've read so far, not forming a complete line
 
-    bless $self, ref $class || $class;
     $self->watch_read(1);
     return $self;
 }

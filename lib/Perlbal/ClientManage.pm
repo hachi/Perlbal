@@ -16,15 +16,16 @@ use fields ('service',
 
 # ClientManage
 sub new {
-    my ($class, $service, $sock) = @_;
-    my $self = $class->SUPER::new($sock);
+    my Perlbal::ClientManage $self = shift;
+    my ($service, $sock) = @_;
+    $self = fields::new($self) unless ref $self;
+    $self->SUPER::new($sock);
     $self->{service} = $service;
     $self->{buf} = "";   # what we've read so far, not forming a complete line
 
     $self->{ctx} = Perlbal::CommandContext->new;
     $self->{ctx}->verbose(1);
 
-    bless $self, ref $class || $class;
     $self->watch_read(1);
     return $self;
 }

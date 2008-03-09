@@ -39,7 +39,7 @@ use fields ('service',             # Perlbal::Service object
             );
 
 use Fcntl ':mode';
-use Errno qw( EPIPE ECONNRESET );
+use Errno qw(EPIPE ECONNRESET);
 use POSIX ();
 
 # hard-code defaults can be changed with MIME management command
@@ -64,10 +64,10 @@ our $MimeType = {qw(
 
 # ClientHTTPBase
 sub new {
-    my ($class, $service, $sock, $selector_svc) = @_;
 
-    my $self = $class;
-    $self = fields::new($class) unless ref $self;
+    my Perlbal::ClientHTTPBase $self = shift;
+    my ($service, $sock, $selector_svc) = @_;
+    $self = fields::new($self) unless ref $self;
     $self->SUPER::new($sock);       # init base fields
 
     $self->{service}         = $service;
@@ -79,7 +79,6 @@ sub new {
 
     $self->state('reading_headers');
 
-    bless $self, ref $class || $class;
     $self->watch_read(1);
     return $self;
 }

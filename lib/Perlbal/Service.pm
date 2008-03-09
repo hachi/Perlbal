@@ -13,6 +13,7 @@ no  warnings qw(deprecated);
 
 use Perlbal::BackendHTTP;
 use Perlbal::Cache;
+use Perlbal::Util;
 
 use fields (
             'name',            # scalar: name of this service
@@ -1406,7 +1407,7 @@ sub return_to_base {
     my Perlbal::ClientHTTPBase $cb = shift;  # actually a subclass of Perlbal::ClientHTTPBase
 
     $cb->{service} = $self;
-    bless $cb, "Perlbal::ClientHTTPBase";
+    Perlbal::Util::rebless($cb, "Perlbal::ClientHTTPBase");
 
     # the read/watch events are reset by ClientHTTPBase's http_response_sent (our caller)
 }

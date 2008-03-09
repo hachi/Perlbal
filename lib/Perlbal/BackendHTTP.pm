@@ -61,7 +61,8 @@ our %NodeStats; # { "ip:port" => { ... } }; keep statistics about nodes
 # an options hashref that contains some options:
 #       reportto => object obeying reportto interface
 sub new {
-    my ($class, $svc, $ip, $port, $opts) = @_;
+    my Perlbal::BackendHTTP $self = shift;
+    my ($svc, $ip, $port, $opts) = @_;
     $opts ||= {};
 
     my $sock;
@@ -80,7 +81,7 @@ sub new {
     IO::Handle::blocking($sock, 0);
     connect $sock, Socket::sockaddr_in($port, $inet_aton);
 
-    my $self = fields::new($class);
+    $self = fields::new($self) unless ref $self;
     $self->SUPER::new($sock);
 
     Perlbal::objctor($self);
@@ -109,7 +110,6 @@ sub new {
     # for header reading:
     $self->init;
 
-    bless $self, ref $class || $class;
     $self->watch_write(1);
     return $self;
 }
@@ -171,7 +171,6 @@ sub new_process {
     $self->state("connecting");
 
     $self->init;
-    bless $self, ref $class || $class;
     $self->watch_write(1);
     return $self;
 }
