@@ -183,4 +183,19 @@ sub request {
     }
 }
 
+# Try a 0 length chunked request, as it used to crash server
+{
+    my $hdr = "POST /status HTTP/1.0\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n";
+    my $sock = IO::Socket::INET->new( PeerAddr => "127.0.0.1:$port" )
+        or return undef;
+    my $rv = syswrite($sock, $hdr);
+    die unless $rv == length($hdr);
+
+    # Give it time to crash
+    select undef, undef, undef, 1.0;
+
+    my $sock2 = IO::Socket::INET->new( PeerAddr => "127.0.0.1:$port" );
+    ok ($sock2, 'Server still alive');
+}
+
 1;

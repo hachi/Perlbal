@@ -1020,7 +1020,7 @@ sub send_buffered_upload {
 
     # reset our position so we start reading from the right spot
     $self->{buoutpos} = 0;
-    sysseek($self->{bufh}, 0, 0);
+    sysseek($self->{bufh}, 0, 0) if ($self->{bufh}); # But only if it exists at all
 
     # notify that we want the backend so we get the ball rolling
     $self->request_backend;
@@ -1034,14 +1034,16 @@ sub continue_buffered_upload {
     # now send the data
     my $clen = $self->{request_body_length};
 
-    my $sent = Perlbal::Socket::sendfile($be->{fd}, fileno($self->{bufh}), $clen - $self->{buoutpos});
-    if ($sent < 0) {
-        return $self->close("epipe") if $! == EPIPE;
-        return $self->close("connreset") if $! == ECONNRESET;
-        print STDERR "Error w/ sendfile: $!\n";
-        return $self->close('sendfile_error');
+    if ($self->{buoutpos} < $clen) {
+        my $sent = Perlbal::Socket::sendfile($be->{fd}, fileno($self->{bufh}), $clen - $self->{buoutpos});
+        if ($sent < 0) {
+            return $self->close("epipe") if $! == EPIPE;
+            return $self->close("connreset") if $! == ECONNRESET;
+            print STDERR "Error w/ sendfile: $!\n";
+            return $self->close('sendfile_error');
+        }
+        $self->{buoutpos} += $sent;
     }
-    $self->{buoutpos} += $sent;
 
     # if we're done, purge the file and move on
     if ($self->{buoutpos} >= $clen) {
@@ -1154,6 +1156,9 @@ sub buffered_upload_update {
 # destroy any files we've created
 sub purge_buffered_upload {
     my Perlbal::ClientProxy $self = shift;
+
+    # Main reason for failure below is a 0-length chunked upload, where the file is never created.
+    return unless $self->{bufh};
 
     # FIXME: it's reported that sometimes the two now-in-eval blocks
     # fail, hence the eval blocks and warnings.  the FIXME is to
