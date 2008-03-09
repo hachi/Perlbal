@@ -42,14 +42,6 @@ use Fcntl ':mode';
 use Errno qw( EPIPE ECONNRESET );
 use POSIX ();
 
-BEGIN {
-# this must not be mandatory, it should just check availability
-    my $rc = eval { require Compress::Zlib; };
-    $Perlbal::ClientHTTPBase::CAN_ZLIB = $rc && !$@;
-    #TODO it should be noted in logs 
-};
-    
-
 # hard-code defaults can be changed with MIME management command
 our $MimeType = {qw(
                     css  text/css
@@ -551,30 +543,26 @@ sub _serve_request_multiple {
     return $self->_simple_response(403, "Too many files requested") if @multiple_files > 100;
     return $self->_simple_response(403, "Bogus filenames") if grep { m!(?:\A|/)\.\./! } @multiple_files;
 
+    my $remain = @multiple_files + 1;  # 1 for the base directory
     my $dirbase = $svc->{docroot} . $base;
-    Perlbal::AIO::aio_stat($dirbase, sub {
-        # base directory must be a directory
-        if ($! || !S_ISDIR( (stat(_))[2] || 0 )) {
-            return $self->_simple_response(404, "Base directory not a directory");
-        }
-        my $remain = @multiple_files;
-        foreach my $file (@multiple_files) {
-            Perlbal::AIO::aio_stat("$dirbase$file", sub {
-                $remain--;
-                $statinfo{$file} = $! ? [] : [ stat(_) ];
-                return if $remain || $self->{closed};
-                $self->_serve_request_multiple_poststat($hd, $dirbase, \@multiple_files, \%statinfo);
-            });
-        }
-    });
+    foreach my $file ('', @multiple_files) {
+        Perlbal::AIO::aio_stat("$dirbase$file", sub {
+            $remain--;
+            $statinfo{$file} = $! ? [] : [ stat(_) ];
+            return if $remain || $self->{closed};
+            $self->_serve_request_multiple_poststat($hd, $dirbase, \@multiple_files, \%statinfo);
+        });
+    }
 }
 
 sub _serve_request_multiple_poststat {
     my Perlbal::ClientHTTPBase $self = shift;
     my ($hd, $basedir, $filelist, $stats) = @_;
 
-    my $can_gzip = $Perlbal::ClientHTTPBase::CAN_ZLIB && $self->{service}{concatenate_get_enable_compression};
-    my $use_gzip = $can_gzip && ($hd->header('Accept-Encoding')||'') =~ /gzip/;
+    # base directory must be a directory
+    unless (S_ISDIR($stats->{''}[2] || 0)) {
+        return $self->_simple_response(404, "Base directory not a directory");
+    }
 
     # files must all exist
     my $sum_length      = 0;
@@ -595,23 +583,19 @@ sub _serve_request_multiple_poststat {
     }
     $mime ||= 'text/plain';
 
-    $use_gzip &&= ! (
-        ($self->{service}{concat_compress_min_threshold_size} && 
-         $self->{service}{concat_compress_min_threshold_size} > $sum_length) 
-        ||
-        ($self->{service}{concat_compress_max_threshold_size} && 
-         $self->{service}{concat_compress_max_threshold_size} < $sum_length)
-    );
-
     my $lastmod = HTTP::Date::time2str($most_recent_mod);
     my $ims     = $hd->header("If-Modified-Since") || "";
 
     # IE sends a request header like "If-Modified-Since: <DATE>; length=<length>"
     # so we have to remove the length bit before comparing it with our date.
-    # 
-    $ims =~ s/; length=\d+//;
+    # then we save the length to compare later.
+    my $ims_len;
+    if ($ims && $ims =~ s/; length=(\d+)//) {
+        $ims_len = $1;
+    }
 
-    my $not_mod = $ims eq $lastmod;
+    # What is -f _ doing here? don't we detect the existance of all files above in the loop?
+    my $not_mod = $ims eq $lastmod && -f _;
 
     my $res;
     if ($not_mod) {
@@ -619,18 +603,13 @@ sub _serve_request_multiple_poststat {
     } else {
         return if $self->{service}->run_hook('concat_get_poststat_pre_send', $self, $most_recent_mod);
         $res = $self->{res_headers} = Perlbal::HTTPHeaders->new_response(200);
-        $res->header("Content-Length", $sum_length) unless $use_gzip;
-        $res->header("Server", "Perlbal");
-        $res->header("Content-Type",  $mime);
-        $res->header('Content-Encoding', 'gzip') if $use_gzip;
+        $res->header("Content-Length", $sum_length);
     }
 
     $res->header("Date", HTTP::Date::time2str());
-    $res->header('Vary', 'Accept-Encoding') if $can_gzip;
-    # It's not conforming to RFC-2616 10.3.5 to send Last-Modified with 304
-    # But Perlbal's test 17-webserver-concat.t wants it so let it be for now.
+    $res->header("Server", "Perlbal");
     $res->header("Last-Modified", $lastmod);
-
+    $res->header("Content-Type",   $mime);
     # has to happen after content-length is set to work:
     $self->setup_keepalive($res);
     return if $self->{service}->run_hook('modify_response_headers', $self);
@@ -644,89 +623,43 @@ sub _serve_request_multiple_poststat {
         return;
     }
 
+    $self->tcp_cork(1);  # cork writes to self
+    $self->write($res->to_string_ref);
+    $self->state('wait_open');
+
     # gotta send all files, one by one...
     my @remain = @$filelist;
-    if ($use_gzip) {
-        my $open_cb;
-        my $file = shift @remain;
-        my $data;
-        $open_cb = sub {
-            my $fh = shift;
-            unless ($fh) {
-                return $self->system_error("Can't open successfully stated file $basedir$file",'');
-            }
-            my $size = $stats->{$file}[7];
-            my $buf = '';
-            Perlbal::AIO::aio_read($fh, 0, $size, $buf, sub {
-                my $rc = shift;
-                CORE::close($fh) if $fh;
-                unless (defined $rc) {
-                    return $self->system_error("Error reading file $basedir$file",$!);
-                }
-                if ($rc < $size) {
-                    return $self->system_error("Error reading file $basedir$file","Bytes read less than the file size");
-                }
-                
-                $data .= $buf;
-                if (defined($rc) && @remain) {
-                    $file = shift @remain; 
-                    Perlbal::AIO::aio_open( $basedir.$file, 0, 0, $open_cb);
-                } 
-                else {
-                    # all files have been read, gzip and send'em
-                    $data = Compress::Zlib::memGzip($data);
-                    $res->header("Content-Length", length $data);
-                    # send it at last :)
+    $self->{post_sendfile_cb} = sub {
+        unless (@remain) {
+            $self->write(sub { $self->http_response_sent; });
+            return;
+        }
 
-                    $self->state('xfer_resp');
-                    $self->tcp_cork(1); # by setting reproxy_file_offset above, it won't cork, so we cork it
-                    $self->write($res->to_string_ref);
-                    $self->write(\$data);
-                    $self->write(sub { $self->http_response_sent; });
-                    # reenable writes after we get data
-                    $self->watch_write(1);
-                }
-            });
-        };
-        Perlbal::AIO::aio_open( $basedir.$file, 0, 0, $open_cb);
-    }
-    else {
-        $self->tcp_cork(1);  # cork writes to self
-        $self->write($res->to_string_ref);
-        $self->state('wait_open');
+        my $file     = shift @remain;
+        my $fullfile = "$basedir$file";
+        my $size     = $stats->{$file}[7];
 
-        $self->{post_sendfile_cb} = sub {
-            unless (@remain) {
-                $self->write(sub { $self->http_response_sent; });
-                return;
+        Perlbal::AIO::aio_open($fullfile, 0, 0, sub {
+            my $rp_fh = shift;
+
+            # if client's gone, just close filehandle and abort
+            if ($self->{closed}) {
+                CORE::close($rp_fh) if $rp_fh;
+                  return;
+              }
+
+            # handle errors
+            if (! $rp_fh) {
+                # couldn't open the file we had already successfully stat'ed.
+                # FIXME: do 500 vs. 404 vs whatever based on $!
+                return $self->close('aio_open_failure');
             }
 
-            my $file     = shift @remain;
-            my $fullfile = "$basedir$file";
-            my $size     = $stats->{$file}[7];
-
-            Perlbal::AIO::aio_open($fullfile, 0, 0, sub {
-                my $rp_fh = shift;
-
-                # if client's gone, just close filehandle and abort
-                if ($self->{closed}) {
-                    CORE::close($rp_fh) if $rp_fh;
-                    return;
-                }
-
-                # handle errors
-                if (! $rp_fh) {
-                    # couldn't open the file we had already successfully stat'ed.
-                    # FIXME: do 500 vs. 404 vs whatever based on $!
-                    return $self->close('aio_open_failure');
-                }
-
-                $self->{reproxy_file}     = $file;
-                $self->reproxy_fh($rp_fh, $size);
-            });
-        };
-        $self->{post_sendfile_cb}->();
-    }
+            $self->{reproxy_file}     = $file;
+            $self->reproxy_fh($rp_fh, $size);
+        });
+    };
+    $self->{post_sendfile_cb}->();
 }
 
 sub check_req_headers {
@@ -735,6 +668,7 @@ sub check_req_headers {
 
     if ($self->{service}->trusted_ip($self->peer_ip_string)) {
         my @ips = split /,\s*/, ($hds->header("X-Forwarded-For") || '');
+
         # This list may be empty, and that's OK, in that case we should unset the
         # observed_ip_string, so no matter what we'll use the 0th element, whether
         # it happens to be an ip string, or undef.

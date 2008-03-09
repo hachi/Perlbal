@@ -29,9 +29,6 @@ use fields (
             'dirindexing',        # bool: direcotry indexing?  (for webserver role)  not async.
             'index_files',        # arrayref of filenames to try for index files
             'enable_concatenate_get',   # bool:  if user can request concatenated files
-            'concatenate_get_enable_compression', # bool: allow compression of concatenated files
-            'concat_compress_min_threshold_size', # size: do not compress if requested size is less then minimum
-            'concat_compress_max_threshold_size', # size: do not compress if requested size is greate1r then minimum
             'enable_put', # bool: whether PUT is supported
             'max_put_size', # int: max size in bytes of a put file
             'max_chunked_request_size',  # int: max size in bytes of a chunked request (to be written to disk first)
@@ -334,27 +331,6 @@ our $tunables = {
         check_type => "bool",
     },
 
-    'concatenate_get_enable_compression' => {
-        des => "Enable Perlbal to use compression, if a client accepts compressed data. Requires Compress::Zlib",
-        default => 0,
-        check_role => "web_server",
-        check_type => "bool",
-    },
-
-    'concat_compress_min_threshold_size' => {
-        des => "If concatenation result is larger than this size in bytes, compression will be used. O, of course, means no low limit.",
-        default => '1k',
-        check_role => "web_server",
-        check_type => "size",
-    },
-
-    'concat_compress_max_threshold_size' => {
-        des => "If concatenation result is larger than this size in bytes, compression will NOT be used. The reason is the memory required to both compressed and uncompressed data. Set to 0 to not check size.",
-        default => '0',
-        check_role => "web_server",
-        check_type => "size",
-    },
-
     'connect_ahead' => {
         des => "How many extra backend connections we keep alive in addition to the current ones, in anticipation of new client connections.",
         default => 0,
@@ -408,10 +384,10 @@ our $tunables = {
         },
         setter => sub {
             my ($self, $val, $set, $mc) = @_;
-        # Do nothing here, we don't want the default setter because we've
-        # already set the value in the type_check step.
+	    # Do nothing here, we don't want the default setter because we've
+	    # already set the value in the type_check step.
             return $mc->ok;
-    },
+	},
     },
 
     'index_files' => {
