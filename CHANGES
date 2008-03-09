@@ -31,6 +31,8 @@
        was done to avoid duplicate code between the "end-user" way and the
        API way.
 
+    -- Chained selectors.  from Jeremy James <jbj@forbidden.co.uk>.
+
     -- add "cgilike" plugin which offers a simple API very loosely based on
        mod_perl for handling responses
 
