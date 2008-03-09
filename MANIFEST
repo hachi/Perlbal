@@ -28,6 +28,7 @@ lib/Perlbal/HTTPHeaders.pm
 lib/Perlbal/ManageCommand.pm
 lib/Perlbal/Plugin/AccessControl.pm
 lib/Perlbal/Plugin/AutoRemoveLeadingDir.pm
+lib/Perlbal/Plugin/Cgilike.pm
 lib/Perlbal/Plugin/EchoService.pm
 lib/Perlbal/Plugin/Highpri.pm
 lib/Perlbal/Plugin/Include.pm
