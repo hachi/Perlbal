@@ -27,7 +27,7 @@ use fields (
             # end-user tunables
             'listen',             # scalar IP:port of where we're listening for new connections
             'docroot',            # document root for webserver role
-            'dirindexing',        # bool: direcotry indexing?  (for webserver role)  not async.
+            'dirindexing',        # bool: directory indexing?  (for webserver role)  not async.
             'index_files',        # arrayref of filenames to try for index files
             'enable_concatenate_get',   # bool:  if user can request concatenated files
             'enable_put', # bool: whether PUT is supported
