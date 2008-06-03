@@ -960,6 +960,16 @@ sub MANAGE_server {
         return $mc->ok;
     }
 
+    if ($key eq "crash_backtrace") {
+        return $mc->err("Expected 1 or 0") unless $val eq '1' || $val eq '0';
+        if ($val) {
+            $SIG{__DIE__} = sub { Carp::confess(@_) };
+        } else {
+            $SIG{__DIE__} = undef;
+        }
+        return $mc->ok;
+    }
+
     return $mc->err("unknown server option '$val'");
 }
 

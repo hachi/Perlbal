@@ -53,6 +53,7 @@ server <param> = <value>   -- set a server parameter, where param is one of:
    aio_threads             : number of child threads doing disk IO.  (use between 2-50)
    track_obj               : developer option to track objects
    pidfile                 : filename to write pidfile (no pidfile if not specified)
+   crash_backtrace         : 1 or 0 indicating whether to perform a backtrace while the server is crashing.
 
 
 Diagnostic commands:
