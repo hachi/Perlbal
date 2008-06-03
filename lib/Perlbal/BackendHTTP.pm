@@ -38,6 +38,8 @@ use fields ('client',  # Perlbal::ClientProxy connection, or undef
             'use_count',  # number of requests this backend's been used for
             'generation', # int; counts what generation we were spawned in
             'buffered_upload_mode', # bool; if on, we're doing a buffered upload transmit
+
+            'scratch' # for plugins
             );
 use Socket qw(PF_INET IPPROTO_TCP SOCK_STREAM SOL_SOCKET SO_ERROR
               AF_UNIX PF_UNSPEC
@@ -349,6 +351,8 @@ sub event_write {
         if (defined $self->{service} && $self->{service}->{verify_backend} &&
             !$self->{has_attention} && !defined $NoVerify{$self->{ipport}}) {
 
+            return if $self->{service}->run_hook('backend_write_verify', $self);
+
             # the backend should be able to answer this incredibly quickly.
             $self->write("OPTIONS " . $self->{service}->{verify_backend_path} . " HTTP/1.0\r\nConnection: keep-alive\r\n\r\n");
             $self->watch_read(1);
@@ -374,6 +378,15 @@ sub event_write {
     $self->watch_write(0) if $done;
 }
 
+sub verify_success {
+    my Perlbal::BackendHTTP $self = shift;
+    $self->{waiting_options} = 0;
+    $self->{has_attention} = 1;
+    $NodeStats{$self->{ipport}}->{verifies}++;
+    $self->next_request(1); # initial
+    return;
+}
+
 sub verify_failure {
     my Perlbal::BackendHTTP $self = shift;
     $NoVerify{$self->{ipport}} = time() + 60;
@@ -384,6 +397,11 @@ sub verify_failure {
 
 sub event_read_waiting_options { # : void
     my Perlbal::BackendHTTP $self = shift;
+
+    if (defined $self->{service}) {
+        return if $self->{service}->run_hook('backend_readable_verify', $self);
+    }
+
     if ($self->{content_length_remain}) {
         # the HTTP/1.1 spec says OPTIONS responses can have content-lengths,
         # but the meaning of the response is reserved for a future spec.
@@ -400,11 +418,7 @@ sub event_read_waiting_options { # : void
     # if we've got the option response and read any response data
     # if present:
     if ($self->{res_headers} && ! $self->{content_length_remain}) {
-        # other setup to mark being done with options checking
-        $self->{waiting_options} = 0;
-        $self->{has_attention} = 1;
-        $NodeStats{$self->{ipport}}->{verifies}++;
-        $self->next_request(1); # initial
+        $self->verify_success;
     }
     return;
 }

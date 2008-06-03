@@ -1,3 +1,12 @@
+    -- Add backend_send_verify and backend_read_verify hooks to make custom
+       verification methods possible.
+
+    -- Add BackendHTTP method 'verify_success' and adjust code to follow
+       this. Intended for use with the above hooks.
+
+    -- Add a 'scratch' field to BackendHTTP objects so plugins can store
+       per-backend scratch data.
+
 1.70: 2008-03-08
 
     -- SECURITY: patch from Jeremey James <jbj@forbidden.co.uk> to not crash
