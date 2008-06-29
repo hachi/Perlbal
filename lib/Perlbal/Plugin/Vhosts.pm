@@ -3,9 +3,9 @@
 ###########################################################################
 
 # things to test:
-#   one persistent connection, first to a docs plugin, then to web proxy... see if it returns us to our base class after end of reuqest
+#   one persistent connection, first to a docs plugin, then to web proxy... see if it returns us to our base class after end of request
 #   PUTing a large file to a selector, seeing if it is put correctly to the PUT-enabled web_server proxy
-#   obvious cases:  non-existant domains, default domains (*), proper matching (foo.brad.lj before *.brad.lj)
+#   obvious cases:  non-existent domains, default domains (*), proper matching (foo.brad.lj before *.brad.lj)
 #
 
 package Perlbal::Plugin::Vhosts;

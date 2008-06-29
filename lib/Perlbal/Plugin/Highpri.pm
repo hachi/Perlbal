@@ -38,7 +38,7 @@ sub register {
         # if they said undef, that's not a regexp, that means use none
         my $temp;
         unless ($val eq 'undef' || $val eq 'none' || $val eq 'null') {
-            # verify this regex works?  do it in an eval because qr will die
+            # verify this regexp works?  do it in an eval because qr will die
             # if we give it something invalid
             eval {
                 $temp = qr{$val};

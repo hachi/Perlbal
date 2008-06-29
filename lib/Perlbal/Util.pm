@@ -17,7 +17,7 @@ sub durl {
 
 Safely re-bless a locked (use fields) hash into another package. Note
 that for our convenience elsewhere the set of allowable keys for the
-reblessed hash will be the union of the keys allowed by its old package
+re-blessed hash will be the union of the keys allowed by its old package
 and those allowed for the package into which it is blessed.
 
 =cut

@@ -1,3 +1,5 @@
+    -- Lots of typo corrections in documentation and comments from Nick Andrew
+
     -- Add SERVER crash_backtrace= setting, to make a crash of perlbal report
        a backtrace along with the error message.
 

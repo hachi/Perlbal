@@ -47,7 +47,7 @@ server <param> = <value>   -- set a server parameter, where param is one of:
    max_connections
    nice_level
    aio_mode                : one of "none", "linux" (Linux::AIO), or "ioaio" (IO::AIO)
-                             This controls how disk IO is done asynchronosly.  Highly recommended
+                             This controls how disk IO is done asynchronously.  Highly recommended
                              to use Linux::AIO or IO::AIO for webserving or reproxying files.
                              For purely reverse proxy or only reproxying URLs, none is fine.
    aio_threads             : number of child threads doing disk IO.  (use between 2-50)

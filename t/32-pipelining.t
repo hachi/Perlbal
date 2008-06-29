@@ -4,7 +4,7 @@
 # properly, notably not poisoning the backend by injecting two when we only
 # know of one, and also dealing okay with POSTs with an extra \r\n, which
 # happen in the real world, without disconnecting those users thinking
-# their bogus-pipeling-flooding us.
+# they're bogus-pipeline-flooding us.
 #
 
 use strict;

@@ -44,7 +44,7 @@ With this plugin loaded into a particular service, the plugin will then be calle
 all requests for that service.
 
 Set cgilike.handler to the name of a subroutine that will handle requests. This subroutine
-will recieve an object which allows interaction with the Perlbal service.
+will receive an object which allows interaction with the Perlbal service.
 
 	package MyPackage
 	sub handler {

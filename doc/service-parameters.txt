@@ -311,7 +311,7 @@ Only for 'web_server' services:
    |-------------------+------+------------+--------------------------------|
    | enable_put        | bool | false      | Enable HTTP PUT requests.      |
    |-------------------+------+------------+--------------------------------|
-   |                   |      |            | Comma-seperated list of        |
+   |                   |      |            | Comma-separated list of        |
    | index_files       |      | index.html | filenames to load when a user  |
    |                   |      |            | visits a directory URL, listed |
    |                   |      |            | in order of preference.        |

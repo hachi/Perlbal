@@ -59,7 +59,7 @@ sub register {
             sysseek($obj->{reproxy_fh}, $ld, &POSIX::SEEK_SET);
             $obj->{reproxy_file_offset} = $ld;
 
-            # reenable writes after we get data
+            # re-enable writes after we get data
             $obj->tcp_cork(1); # by setting reproxy_file_offset above, it won't cork, so we cork it
             $obj->write($data);
             $obj->watch_write(1);
@@ -278,7 +278,7 @@ sub new_png_palette
         } else {
             my $skip;
             # Skip rest of chunk and add to imgdata
-            # Number of bytes is +4 becauses of CRC
+            # Number of bytes is +4 because of CRC
             #
             for (my $count=0; $count < $length + 4; $count++) {
                 $read->(\$skip, 1);
@@ -325,7 +325,7 @@ Example C<perlbal.conf>:
 
 =head1 GRADIENTS
 
-You can change the gradient of the image by adding C</pg0011111164ffffff> to the end of the url.  C<00> is the index where the gradient starts and C<111111> is the color (in hex) of the begining of the gradient.  C<64> is the index of the end of the gradient and C<ffffff> is the color of the end of the gradient.  Note that all colors specified in hex should be lowercase.
+You can change the gradient of the image by adding C</pg0011111164ffffff> to the end of the url.  C<00> is the index where the gradient starts and C<111111> is the color (in hex) of the beginning of the gradient.  C<64> is the index of the end of the gradient and C<ffffff> is the color of the end of the gradient.  Note that all colors specified in hex should be lowercase.
 
 Example:
 

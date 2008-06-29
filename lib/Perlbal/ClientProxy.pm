@@ -316,7 +316,7 @@ sub start_reproxy_file {
         }
 
         # if the thing we're reproxying is indeed a file, advertise that
-        # we support byteranges on it
+        # we support byte ranges on it
         if (-f _) {
             $hd->header("Accept-Ranges", "bytes");
         }
@@ -426,7 +426,7 @@ sub backend_finished {
     my Perlbal::ClientProxy $self = shift;
     print "ClientProxy::backend_finished\n" if Perlbal::DEBUG >= 3;
 
-    # mark ourselves as having responded (presumeably if we're here,
+    # mark ourselves as having responded (presumably if we're here,
     # the backend has responded already)
     $self->{responded} = 1;
 
@@ -438,7 +438,7 @@ sub backend_finished {
     return $self->http_response_sent unless $self->{unread_data_waiting};
 
     # if we get here (and we do, rarely, in practice) then that means
-    # the backend read was empty/disconected (or otherwise messed up),
+    # the backend read was empty/disconnected (or otherwise messed up),
     # and the only thing we can really do is close the client down.
     $self->close("backend_finished_while_unread_data");
 }
@@ -1119,7 +1119,7 @@ sub buffered_upload_update {
         $self->{buoutpos} += $bytes;
 
         # now check if we wrote less than we had in this chunk of buffer.  if that's
-        # the case then we need to reenqueue the part of the chunk that wasn't
+        # the case then we need to re-enqueue the part of the chunk that wasn't
         # written out and update as appropriate.
         if ($bytes < $len) {
             my $diff = $len - $bytes;
@@ -1173,7 +1173,7 @@ sub purge_buffered_upload {
     $self->{bufh} = undef;
 
     eval {
-        # now asyncronously unlink the file
+        # now asynchronously unlink the file
         Perlbal::AIO::aio_unlink($self->{bufilename}, sub {
             if ($!) {
                 # note an error, but whatever, we'll either overwrite the file later (O_TRUNC | O_CREAT)

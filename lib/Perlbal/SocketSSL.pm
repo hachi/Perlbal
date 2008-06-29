@@ -62,7 +62,7 @@ sub new {
     $self->SUPER::new($sock);
 
     # TODO: would be good to have an overall timeout so that we can
-    # kill sockets that are open and just sitting ethere.  "ssl_handshake_timeout"
+    # kill sockets that are open and just sitting there.  "ssl_handshake_timeout"
     # or something like that...
 
     return $self;

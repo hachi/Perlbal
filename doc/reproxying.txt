@@ -27,7 +27,7 @@ X-REPROXY-FILE: /home/pics/$userid/$pic
 Perlbal will then use asynchronous IO to send the file to the user without
 slowing down Perlbal at all.
 
-This support also extens to URLs that can be located anywhere Perlbal has
+This support also extends to URLs that can be located anywhere Perlbal has
 access to.  It's the same syntax, nearly:
 
 X-REPROXY-URL: http://foo.com:80/resource.html

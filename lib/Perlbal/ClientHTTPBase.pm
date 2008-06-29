@@ -243,7 +243,7 @@ sub event_read {
     # PUT/POST overflow, it'll be sent to ClientHTTPBase, which can't
     # handle it yet.  must wait for the selector (which has as much
     # time as it wants) to route as to our subclass, which can then
-    # renable reads.
+    # re-enable reads.
     $self->watch_read(0);
 
     my $select = sub {
@@ -593,7 +593,7 @@ sub _serve_request_multiple_poststat {
         $ims_len = $1;
     }
 
-    # What is -f _ doing here? don't we detect the existance of all files above in the loop?
+    # What is -f _ doing here? don't we detect the existence of all files above in the loop?
     my $not_mod = $ims eq $lastmod && -f _;
 
     my $res;

@@ -27,7 +27,7 @@ sub register {
     $statobjs{$svc->{name}} = [ $svc, $sobj ];
 
     # simple events we count are done here.  when the hook on the left side is called,
-    # we simply increment the count of the stat ont he right side.
+    # we simply increment the count of the stat on the right side.
     my %simple = qw(
         start_send_file         files_sent
         start_file_reproxy      files_reproxied

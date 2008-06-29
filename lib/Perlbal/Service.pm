@@ -63,7 +63,7 @@ use fields (
             'waiting_clients',         # arrayref of clients waiting for backendhttp conns
             'waiting_clients_highpri', # arrayref of high-priority clients waiting for backendhttp conns
             'waiting_clients_lowpri',  # arrayref of low-priority clients waiting for backendhttp conns
-            'waiting_client_count',    # number of clients waiting for backendds
+            'waiting_client_count',    # number of clients waiting for backends
             'waiting_client_map'  ,    # map of clientproxy fd -> 1 (if they're waiting for a conn)
             'pending_connects',        # hashref of "ip:port" -> $time (only one pending connect to backend at a time)
             'pending_connect_count',   # number of outstanding backend connects
@@ -326,7 +326,7 @@ our $tunables = {
     },
 
     'enable_concatenate_get' => {
-        des => "Enable Perlbal's multiple-files-in-one-request mode, where a client have use a comma-separated list of files to return, always in text/plain.  Useful for webapps which have dozens/hundreds of tiny css/js files, and don't trust browsers/etc to do pipelining.  Decreases overall roundtrip latency a bunch, but requires app to be modified to support it.  See t/17-concat.t test for details.",
+        des => "Enable Perlbal's multiple-files-in-one-request mode, where a client have use a comma-separated list of files to return, always in text/plain.  Useful for web apps which have dozens/hundreds of tiny css/js files, and don't trust browsers/etc to do pipelining.  Decreases overall round-trip latency a bunch, but requires app to be modified to support it.  See t/17-concat.t test for details.",
         default => 0,
         check_role => "web_server",
         check_type => "bool",
@@ -394,7 +394,7 @@ our $tunables = {
     'index_files' => {
         check_role => "web_server",
         default => "index.html",
-        des => "Comma-seperated list of filenames to load when a user visits a directory URL, listed in order of preference.",
+        des => "Comma-separated list of filenames to load when a user visits a directory URL, listed in order of preference.",
         setter => sub {
             my ($self, $val, $set, $mc) = @_;
             $self->{index_files} = [ split(/[\s,]+/, $val) ];
@@ -1262,7 +1262,7 @@ sub spawn_backends {
         unless ($pool) {
             if (my $sp = $self->{server_process}) {
                 warn "To create = $to_create...\n";
-                warn "  spawing $sp\n";
+                warn "  spawning $sp\n";
                 my $be = Perlbal::BackendHTTP->new_process($self, $sp);
                 return;
             }

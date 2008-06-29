@@ -110,7 +110,7 @@ sub new {
             @created_objects = grep { $_ } @created_objects;
 
             # however, the grep turned our weak references back into strong ones, so
-            # we have to reweaken them
+            # we have to re-weaken them
             weaken($_) foreach @created_objects;
 
             # we've cleaned up at this point

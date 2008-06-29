@@ -8,7 +8,7 @@ package Perlbal::Plugin::EchoService;
 use strict;
 use warnings;
 
-# on load we need to define the service and any paramemters we want
+# on load we need to define the service and any parameters we want
 sub load {
 
     # define the echo service, which instantiates this type of object

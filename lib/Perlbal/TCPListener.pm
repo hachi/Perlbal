@@ -76,7 +76,7 @@ sub event_read {
 
         # SSL promotion if necessary
         if ($self->{sslopts}) {
-            # try to upgrade to SSL, this does no IO it just reblesses
+            # try to upgrade to SSL, this does no IO it just re-blesses
             # and prepares the SSL engine for handling us later
             IO::Socket::SSL->start_SSL(
                                        $psock,
