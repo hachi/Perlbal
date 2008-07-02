@@ -12,6 +12,7 @@ doc/hacking/classes.txt
 doc/hacking/hooks.txt
 doc/hacking/todo.txt
 doc/http-versions.txt
+doc/pool-parameters.txt
 doc/reproxying.txt
 doc/service-parameters.txt
 lib/Perlbal.pm
@@ -72,4 +73,5 @@ t/50-plugins.t
 t/52-chunked-upload.t
 t/60-child-httpd.t
 t/75-plugin-include.t
+t/90-accesscontrol.t
 t/helper/child-httpd.pl
