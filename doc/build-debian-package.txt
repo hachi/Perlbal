@@ -1,0 +1,31 @@
+How to build perlbal as a debian package
+========================================
+
+1. Checkout or unpack the source code
+
+2. Make sure all build-required packages are installed:
+
+   grep Build debian/control
+
+Install any packages listed on that line which are not presently installed.
+You will also need the dpkg-dev and fakeroot packages installed
+
+3. Do:
+
+   dpkg-buildpackage -rfakeroot
+
+If all went well you should see several files in the parent directory,
+such as:
+
+-rw-r--r--  1 user user 131270 2008-06-21 17:45 libperlbal-perl_1.57-1_all.deb
+-rw-r--r--  1 user user  20312 2008-06-21 17:45 perlbal_1.57-1_all.deb
+-rw-r--r--  1 user user    621 2008-06-21 17:44 perlbal_1.57-1.dsc
+-rw-r--r--  1 user user   1821 2008-06-21 17:45 perlbal_1.57-1_i386.changes
+-rw-r--r--  1 user user 147584 2008-06-21 17:44 perlbal_1.57-1.tar.gz
+-rw-r--r--  1 user user  28204 2008-06-21 17:45 perlbal-doc_1.57-1_all.deb
+
+4. You can now install the debian packages with:
+
+   dpkg -i libperlbal-perl_1.57-1_all.deb
+   dpkg -i perlbal_1.57-1_all.deb
+   dpkg -i perlbal-doc_1.57-1_all.deb
