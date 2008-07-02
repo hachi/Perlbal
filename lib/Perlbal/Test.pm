@@ -1,4 +1,29 @@
+#!/usr/bin/perl -w
+
 package Perlbal::Test;
+
+=head1 NAME
+
+Perlbal::Test - Test harness for perlbal server
+
+=head1 SYNOPSIS
+
+#  my $msock = Perlbal::Test::start_server();
+
+=head1 DESCRIPTION
+
+Perlbal::Test provides access to a perlbal server running on the
+local host, for testing purposes.
+
+The server can be an already-existing server, a child process, or
+the current process.
+
+Various functions are provided to interact with the server.
+
+=head1 FUNCTIONS
+
+=cut
+
 use strict;
 use POSIX qw( :sys_wait_h );
 use IO::Socket::INET;
@@ -17,11 +42,26 @@ our $mgmt_port;
 
 our $free_port = 60000;
 
-sub mgmt_port { return $mgmt_port; }
+=head1 I<mgmt_port()>
+
+Return the current management port number.
+
+=cut
+
+sub mgmt_port {
+	return $mgmt_port;
+}
 
 END {
     manage("shutdown") if $i_am_parent;
 }
+
+=head1 I<dump_res($http_response)>
+
+Return a readable string formatted from an HTTP::Response object.
+Only the first 80 characters of returned content are returned.
+
+=cut
 
 sub dump_res {
     my $res = shift;
@@ -41,14 +81,35 @@ sub dump_res {
     return $ret . "status=[$status] content=$len" . "[$ct]\n";
 }
 
+=head1 I<tempdir()>
+
+Return a newly created temporary directory. The directory will be
+removed automatically upon program exit.
+
+=cut
+
 sub tempdir {
     require File::Temp;
     return File::Temp::tempdir( CLEANUP => 1 );
 }
 
+=head1 I<new_port()>
+
+Return the next port number in the series. Port numbers are assigned
+starting at 60000.
+
+=cut
+
 sub new_port {
     return $free_port++;  # FIXME: make it somehow detect if port is in use?
 }
+
+=head1 I<filecontent($file>>
+
+Return a string containing the contents of the file $file. If $file
+cannot be opened, then return undef.
+
+=cut
 
 sub filecontent {
     my $file = shift;
@@ -59,6 +120,13 @@ sub filecontent {
     return $ct;
 }
 
+=head1 I<foreach_aio($callback)>
+
+Set the server into each AIO mode (none, ioaio) and call the specified
+callback function with the mode name as argument.
+
+=cut
+
 sub foreach_aio (&) {
     my $cb = shift;
 
@@ -68,6 +136,21 @@ sub foreach_aio (&) {
         $cb->($mode);
     }
 }
+
+=head1 I<manage($cmd, %opts)>
+
+Send a command $cmd to the server, and return the response line from
+the server.
+
+Optional arguments are:
+
+  quiet_failure => 1
+
+Output a warning if the response indicated an error,
+unless $opts{quiet_failure} is true, or the command
+was 'shutdown' (which doesn't return a response).
+
+=cut
 
 sub manage {
     my $cmd = shift;
@@ -87,6 +170,31 @@ sub manage {
     }
     return $res;
 }
+
+=head1 I<start_server($conf)>
+
+Optionally start a perlbal server and return a socket connected to its
+management port.
+
+The argument $conf is a string specifying initial configuration
+commands.
+
+If the environment variable TEST_PERLBAL_FOREGROUND is set to a true
+value then a server will be started in the foreground, in which case
+this function does not return. When the server function finishes,
+exit() will be called to terminate the process.
+
+If the environment variable TEST_PERLBAL_USE_EXISTING is set to a true
+value then a socket will be returned which is connected to an existing
+server's management port.
+
+Otherwise, a child process is forked and a socket is returned which is
+connected to the child's management port.
+
+The management port is assigned automatically, a new port number each
+time this function is called. The starting port number is 60000.
+
+=cut
 
 sub start_server {
     my $conf = shift;
@@ -127,6 +235,9 @@ sub start_server {
     _start_perbal_server($conf, $mgmt_port);
 }
 
+# Start a perlbal server running and tell it to listen on the specified
+# management port number. This function does not return.
+
 sub _start_perbal_server {
     my ($conf, $mgmt_port) = @_;
 
@@ -150,16 +261,42 @@ ENABLE mgmt
     exit 0;
 }
 
-# get the manager socket
+
+=head1 I<msock()>
+
+Return a reference to the socket connected to the server's management
+port.
+
+=cut
+
 sub msock {
     return $msock;
 }
+
+
+=head1 I<ua()>
+
+Return a new instance of LWP::UserAgent.
+
+=cut
 
 sub ua {
     require LWP;
     require LWP::UserAgent;
     return LWP::UserAgent->new;
 }
+
+=head1 I<wait_on_child($pid, $port)>
+
+Return a socket which is connected to a child process.
+
+$pid specifies the child process id, and $port is the port number on
+which the child is listening.
+
+Several attempts are made; if the child dies or a connection cannot
+be made within 5 seconds then this function dies with an error message.
+
+=cut
 
 sub wait_on_child {
     my $pid = shift;
@@ -176,6 +313,20 @@ sub wait_on_child {
         die "Timeout waiting for port $port to startup" if time > $start + 5;
     }
 }
+
+=head1 I<resp_from_sock($sock)>
+
+Read an HTTP response from a socket and return it
+as an HTTP::Response object
+
+In scalar mode, return only the $http_response object.
+
+In array mode, return an array of ($http_response, $firstline) where
+$firstline is the first line read from the socket, for example:
+
+"HTTP/1.1 200 OK"
+
+=cut
 
 sub resp_from_sock {
     my $sock = shift;
