@@ -3,13 +3,17 @@
 if [ ! -e /etc/perlbal/perlbal.conf ]
 	then
 		mkdir -p /etc/perlbal
-		cp /usr/share/perlbal/perlbal.conf.default /etc/perlbal/perlbal.conf
+		echo No /etc/perlbal/perlbal.conf, copying sample file
+		cp /usr/share/doc/perlbal/examples/perlbal.conf /etc/perlbal/perlbal.conf
+		echo Be sure to edit /etc/perlbal/perlbal.conf
 fi
 
 if [ ! -e /etc/perlbal/nodelist.dat ]
 	then
 		mkdir -p /etc/perlbal
-		cp /usr/share/perlbal/nodelist.dat.default /etc/perlbal/nodelist.dat
+		echo No /etc/perlbal/nodelist.dat copying sample file
+		cp /usr/share/doc/perlbal/examples/nodelist.dat /etc/perlbal/nodelist.dat
+		echo Be sure to edit /etc/perlbal/nodelist.dat
 fi
 
 #DEBHELPER#
