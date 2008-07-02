@@ -12,21 +12,31 @@
 # Description:       Start/Stop the perlbal daemon.
 ### END INIT INFO
 
+# PATH should only include /usr/* if it runs after the mountnfs.sh script
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 DAEMON=/usr/sbin/perlbal
 NAME=perlbal
 DESC=Perlbal
 PIDFILE=/var/run/$NAME.pid
 USER=root
+SCRIPTNAME=/etc/init.d/$NAME
 
-test -x $DAEMON || exit 0
+# Exit if the package is not installed
+[ -x "$DAEMON" ] || exit 0
 
 set -e
 
-case "$1" in
-  start)
-	echo -n "Starting $DESC: "
+# Read configuration variable file if it is present
+[ -r /etc/default/$NAME ] && . /etc/default/$NAME
 
+# Load the VERBOSE setting and other rcS variables
+. /lib/init/vars.sh
+
+#
+# Function that starts the daemon/service
+#
+do_start()
+{
 	if [ -e $PIDFILE ]
 		then
 		
@@ -42,13 +52,27 @@ case "$1" in
 	fi
 
 	start-stop-daemon --start --quiet --exec $DAEMON --pidfile $PIDFILE -b -m --name $NAME --user $USER
+}
+
+#
+# Function that stops the daemon/service
+#
+do_stop()
+{
+	start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE --name $NAME --user $USER
+	rm -f $PIDFILE
+}
+
+case "$1" in
+  start)
+	echo -n "Starting $DESC: "
+	do_start
 	echo "$NAME."
 	;;
   stop)
 	echo -n "Stopping $DESC: "
-	start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE --name $NAME --user $USER
+	do_stop
 	echo "$NAME."
-	rm -f $PIDFILE
 	;;
 
   restart|force-reload)
@@ -58,17 +82,15 @@ case "$1" in
 	#	just the same as "restart".
 	#
 	echo -n "Restarting $DESC: "
-	start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE --name $NAME --user $USER
-	rm -f $PIDFILE
+	do_stop
 	sleep 1
-	start-stop-daemon --start --quiet --exec $DAEMON --pidfile $PIDFILE -b -m --name $NAME --user $USER
+	do_start
 	echo "$NAME."
 	;;
   *)
-	N=/etc/init.d/$NAME
-	# echo "Usage: $N {start|stop|restart|reload|force-reload}" >&2
-	echo "Usage: $N {start|stop|restart|force-reload}" >&2
-	exit 1
+	#echo "Usage: $SCRIPTNAME {start|stop|restart|reload|force-reload}" >&2
+	echo "Usage: $SCRIPTNAME {start|stop|restart|force-reload}" >&2
+	exit 3
 	;;
 esac
 
