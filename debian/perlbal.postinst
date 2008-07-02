@@ -1,8 +1,12 @@
 #!/bin/sh
 
-if [ ! -e /etc/perlbal/perlbal.conf ]
+if [ ! -d /etc/perlbal ]
 	then
 		mkdir -p /etc/perlbal
+fi
+
+if [ ! -e /etc/perlbal/perlbal.conf ]
+	then
 		echo No /etc/perlbal/perlbal.conf, copying sample file
 		cp /usr/share/doc/perlbal/examples/perlbal.conf /etc/perlbal/perlbal.conf
 		echo Be sure to edit /etc/perlbal/perlbal.conf
@@ -10,7 +14,6 @@ fi
 
 if [ ! -e /etc/perlbal/nodelist.dat ]
 	then
-		mkdir -p /etc/perlbal
 		echo No /etc/perlbal/nodelist.dat copying sample file
 		cp /usr/share/doc/perlbal/examples/nodelist.dat /etc/perlbal/nodelist.dat
 		echo Be sure to edit /etc/perlbal/nodelist.dat
