@@ -1,3 +1,5 @@
+    -- Move manage_multi() from test script into Perlbal::Test class.
+
     -- Add documentation to Perlbal::Test.
 
     -- Fix building the package on debian.

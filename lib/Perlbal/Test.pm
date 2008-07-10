@@ -33,6 +33,7 @@ require Exporter;
 use vars qw(@ISA @EXPORT);
 @ISA = qw(Exporter);
 @EXPORT = qw(ua start_server foreach_aio manage filecontent tempdir new_port
+             manage_multi
              mgmt_port wait_on_child dump_res resp_from_sock msock);
 
 our $i_am_parent = 0;
@@ -168,6 +169,28 @@ sub manage {
 
         return 0;
     }
+    return $res;
+}
+
+=head1 I<manage_multi($cmd)>
+
+Send a command $cmd to the server, and return a multi-line
+response. Return the number zero if there was an error or
+no response.
+
+=cut
+
+sub manage_multi {
+    my $cmd = shift;
+
+    print $msock "$cmd\r\n";
+    my $res;
+    while (<$msock>) {
+        last if /^\./;
+        last if /^ERROR/;
+        $res .= $_;
+    }
+    return 0 if !$res || $res =~ /^ERR/;
     return $res;
 }
 

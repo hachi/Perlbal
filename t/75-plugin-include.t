@@ -45,17 +45,4 @@ for ('a' .. 'c') {
     like($s_output, qr/^test_$_ .+ ENABLED/m, "test_$_ loaded");
 }
 
-sub manage_multi {
-    my $cmd = shift;
-    print $msock "$cmd\r\n";
-    my $res;
-    while (<$msock>) {
-        last if /^\./;
-        last if /^ERROR/;
-        $res .= $_;
-    }
-    return 0 if !$res || $res =~ /^ERR/;
-    return $res;
-}
-
 1;
