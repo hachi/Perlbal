@@ -351,7 +351,7 @@ Example:
 
 There are no known bugs in this module.
 
-Please report problems to the Perlbal mailing list, http://lists.danga.com/mailman/listinfo/perlbal/
+Please report problems to the Perlbal mailing list, http://groups.google.com/group/perlbal
 
 Patches are welcome.
 
