@@ -265,6 +265,11 @@ sub header {
     return $self->{headers}{$key} = shift;
 }
 
+sub headers_list {
+    my Perlbal::HTTPHeaders $self = shift;
+    return [$self->{headers} ? keys %{ $self->{headers} } : ()];
+}
+
 sub to_string_ref {
     my Perlbal::HTTPHeaders $self = shift;
     my $st = join("\r\n",

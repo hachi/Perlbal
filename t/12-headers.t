@@ -6,7 +6,7 @@ use Test::More 'no_plan';
 
 use Perlbal;
 use Perlbal::HTTPHeaders;
-eval "use Perlbal::XS::HTTPHeaders;";
+eval "use Perlbal::XS::HTTPHeaders 0.20;";
 
 # classes we will be testing
 my @classes = ('Perlbal::HTTPHeaders');
@@ -33,6 +33,8 @@ foreach my $class (@classes) {
     is($obj->header('header'), 'content', "headers without content 2 - $class");
     is($obj->header('anoTHER'), '', "headers without content 3 - $class");
     is($obj->header('notthere'), undef, "headers without content 4 - $class");
+
+    is_deeply([sort @{ $obj->headers_list }], [qw/ another header something /], 'headers_list');
 }
 
 1;
