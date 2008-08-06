@@ -1,3 +1,10 @@
+perlbal (1.70-1) unstable; urgency=low
+
+  * New upstream release.
+  * Moved docs into perlbal package and removed perlbal-doc package
+
+ -- Andrew McClain <andrew@fluther.com>  Sat, 26 Jul 2008 17:46:23 -0700
+
 perlbal (1.57-1) unstable; urgency=low
 
   * New upstream release.

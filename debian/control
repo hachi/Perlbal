@@ -10,7 +10,8 @@ Section: web
 Priority: extra
 Architecture: all
 Depends: ${perl:Depends}, libperlbal-perl
-Suggests: perlbal-doc
+Conflicts: perlbal-doc
+Replaces: perlbal-doc
 Description: Perl-based reverse proxy load balancer and web server
  Perlbal is a single-threaded event-based server supporting HTTP load
  balancing, web serving, and a mix of the two. Perlbal can act as either a web
@@ -38,16 +39,4 @@ Description: Supporting perl libraries for perlbal
  server or a reverse proxy.
  .
  This package contains the module files (but not the daemon) for use with 
- perlbal, the reverse-proxy load balancer and webserver.
-
-Package: perlbal-doc
-Section: doc
-Priority: optional
-Architecture: all
-Description: Documentation for Perlbal
- Perlbal is a single-threaded event-based server supporting HTTP load
- balancing, web serving, and a mix of the two. Perlbal can act as either a web
- server or a reverse proxy.
- .
- This package contains documentation and implementation notes for use with
  perlbal, the reverse-proxy load balancer and webserver.
