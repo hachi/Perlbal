@@ -4,7 +4,7 @@ use strict;
 use Perlbal::Test;
 use Perlbal::Test::WebServer;
 use Perlbal::Test::WebClient;
-use Test::More tests => 26;
+use Test::More tests => 28;
 
 # option setup
 my $start_servers = 3; # web servers to start
@@ -125,6 +125,9 @@ is(options($resp), 1, "got a backend that did an options");
 # verify 13 count
 is(req_count(), 13, 'stats show 13 requests');
 
+$resp = $wc->request({ headers => "Content-Length: -20\r\n" }, "/foo.txt");
+is($resp->code, 400, 'Bad request when negative length');
+ok($resp->content =~ m/Content-Length < 0/, "Error is descriptive");
 
 sub add_all {
     foreach (@web_ports) {
