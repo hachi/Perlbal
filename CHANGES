@@ -1,3 +1,6 @@
+    -- SECURITY: Remote crash reported by Dan Conlon, patched perlbal to send
+       error on negative content length to prevent this.
+
     -- Move manage_multi() from test script into Perlbal::Test class.
 
     -- Add documentation to Perlbal::Test.
