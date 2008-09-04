@@ -753,9 +753,16 @@ sub handle_request {
         # if defined we're waiting on some amount of data.  also, we have to
         # subtract out read_size, which is the amount of data that was
         # extra in the packet with the header that's part of the body.
-        $self->{request_body_length} =
+        my $length = $self->{request_body_length} =
             $self->{content_length_remain} =
             $req_hd->content_length;
+
+        if (defined $length && $length < 0) {
+            $self->_simple_response(400, "Invalid request: Content-Length < 0");
+            $self->close("negative_content_length");
+            return;
+        }
+
         $self->{unread_data_waiting} = 1 if $self->{content_length_remain};
     }
 
