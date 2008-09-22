@@ -44,10 +44,6 @@ use strict;
 use warnings;
 no  warnings qw(deprecated);
 
-if ($Perlbal::VERSION <= 1.60) {
-    *Perlbal::load_config = *Perlbal::Plugin::Include::load_config_local;
-}
-
 # called when we are loaded
 sub load {
     my $class = shift;
