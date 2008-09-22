@@ -1,3 +1,9 @@
+1.72: 2008-09-21
+
+    -- Removed version check in Plugin/Include.pm
+
+    -- No other changes; fixing CPAN upload.
+
 1.71: 2008-09-13
 
     -- SECURITY: Remote crash reported by Dan Conlon, patched perlbal to send
