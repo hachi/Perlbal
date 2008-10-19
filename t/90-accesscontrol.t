@@ -4,7 +4,13 @@ use strict;
 use Perlbal::Test;
 use IO::Socket::INET;
 use HTTP::Request;
-use Test::More 'no_plan';
+use Test::More;
+
+BEGIN {
+    eval "require Net::Netmask"
+        ? plan 'no_plan'
+        : plan skip_all => 'Net::Netmask not installed';
+}
 
 my $port = new_port();
 
