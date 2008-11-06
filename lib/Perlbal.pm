@@ -263,6 +263,7 @@ sub run_manage_command {
 
     # expand variables
     $cmd =~ s/\$\{(.+?)\}/_expand_config_var($1)/eg;
+    $cmd =~ s/\$(\w+)/$ENV{$1}/g;
 
     $out ||= sub {};
     $ctx ||= Perlbal::CommandContext->new;
@@ -1173,7 +1174,6 @@ sub load_config {
     my $ctx = Perlbal::CommandContext->new;
     $ctx->verbose(0);
     while (my $line = <$fh>) {
-        $line =~ s/\$(\w+)/$ENV{$1}/g;
         return 0 unless run_manage_command($line, $writer, $ctx);
     }
     close($fh);
