@@ -1,3 +1,9 @@
+    -- silence warnings when things that look like variables on comment lines
+       in config input.
+
+    -- silence warnings from mgmt system when showing an object that doesn't
+       have a listening socket.
+
     -- don't fail on t/90-accesscontrol.t if Net::Netmask isn't
        installed. (Boris Zentner <bzm@2bz.de>)
 
