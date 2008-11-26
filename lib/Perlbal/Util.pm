@@ -8,7 +8,6 @@ no  warnings qw(deprecated);
 
 sub durl {
     my ($txt) = @_;
-    $txt =~ tr/+/ /;
     $txt =~ s/%([a-fA-F0-9][a-fA-F0-9])/pack("C", hex($1))/eg;
     return $txt;
 }

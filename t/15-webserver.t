@@ -3,7 +3,7 @@
 use strict;
 use Perlbal::Test;
 
-use Test::More tests => 15;
+use Test::More tests => 17;
 require HTTP::Request;
 require HTTP::Date;
 
@@ -71,6 +71,15 @@ ok(get("$url?foo=bar") eq $contents, "GET request");
     is($res->code, 304, "Got not modified");
     is($res->header("Content-Length"), undef, "Shouldn't get a Content-Length header");
 }
+
+set_path("/foo/bar+baz.txt");
+set_contents("foo bar baz\n" x 1000);
+write_file();
+ok(filecontent($disk_file) eq $contents, "disk file verify");
+
+# a simple get
+ok(get($url) eq $contents, "GET request with '+' filename");
+
 
 # 404 path
 ok(! get("$url/404.txt"), "missing file");
