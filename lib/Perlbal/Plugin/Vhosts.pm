@@ -83,6 +83,10 @@ sub vhost_selector {
     return $cb->_simple_response(404, "Not Found (no reqheaders)") unless $req;
 
     my $vhost = $req->header("Host");
+
+    # Browsers and the Apache API considers 'www.example.com.' == 'www.example.com'
+    $vhost =~ s/\.$//;
+
     my $uri = $req->request_uri;
     my $maps = $cb->{service}{extra_config}{_vhosts} ||= {};
 

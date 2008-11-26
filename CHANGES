@@ -1,3 +1,6 @@
+    -- change the VHost plugin to treat 'www.example.com.' and
+       'www.example.com' the same.
+
     -- silence warnings when things that look like variables on comment lines
        in config input.
 
