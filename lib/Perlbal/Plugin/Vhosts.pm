@@ -85,7 +85,7 @@ sub vhost_selector {
     my $vhost = $req->header("Host");
 
     # Browsers and the Apache API considers 'www.example.com.' == 'www.example.com'
-    $vhost =~ s/\.$//;
+    $vhost and $vhost =~ s/\.$//;
 
     my $uri = $req->request_uri;
     my $maps = $cb->{service}{extra_config}{_vhosts} ||= {};
