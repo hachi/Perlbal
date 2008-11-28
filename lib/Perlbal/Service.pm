@@ -133,7 +133,9 @@ our $tunables = {
     'listen' => {
         check_role => "*",
         des => "The ip:port to listen on.  For a service to work, you must either make it listen, or make another selector service map to a non-listening service.",
-        check_type => ["regexp", qr/^\d+\.\d+\.\d+\.\d+:\d+$/, "Expecting IP:port of form a.b.c.d:port."],
+        check_type => ["regexp", qr/^(\d+\.\d+\.\d+\.\d+:)?\d+$/,
+                       "Listen argument must be ip:port or port. " .
+                       "e.g. 192.168.0.1:80 or 81"],
         setter => sub {
             my ($self, $val, $set, $mc) = @_;
 

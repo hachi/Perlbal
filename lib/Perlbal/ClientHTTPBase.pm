@@ -792,12 +792,20 @@ sub system_error {
 sub event_err {  my $self = shift; $self->close('error'); }
 sub event_hup {  my $self = shift; $self->close('hup'); }
 
+sub _sock_port {
+    my $name = $_[0];
+    my $port = eval { (Socket::sockaddr_in($name))[0] };
+    return $port unless $@;
+    # fallback to IPv6:
+    return (Socket6::unpack_sockaddr_in($name))[0];
+}
+
 sub as_string {
     my Perlbal::ClientHTTPBase $self = shift;
 
     my $ret = $self->SUPER::as_string;
     my $name = $self->{sock} ? getsockname($self->{sock}) : undef;
-    my $lport = $name ? (Socket::sockaddr_in($name))[0] : undef;
+    my $lport = $name ? _sock_port($name) : undef;
     my $observed = $self->observed_ip_string;
     $ret .= ": localport=$lport" if $lport;
     $ret .= "; observed_ip=$observed" if defined $observed;

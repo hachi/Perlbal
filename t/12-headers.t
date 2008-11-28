@@ -6,12 +6,12 @@ use Test::More 'no_plan';
 
 use Perlbal;
 use Perlbal::HTTPHeaders;
-eval "use Perlbal::XS::HTTPHeaders 0.20;";
 
 # classes we will be testing
 my @classes = ('Perlbal::HTTPHeaders');
-push @classes, $Perlbal::XSModules{headers}
-    if $Perlbal::XSModules{headers};
+if (eval "use Perlbal::XS::HTTPHeaders 0.20; 1;") {
+    push @classes, $Perlbal::XSModules{headers};
+}
 
 # verify they work
 foreach my $class (@classes) {

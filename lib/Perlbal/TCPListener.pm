@@ -11,8 +11,13 @@ use warnings;
 no  warnings qw(deprecated);
 
 use base "Perlbal::Socket";
-use fields qw(service hostport sslopts);
+use fields ('service',
+            'hostport',
+            'sslopts',
+            'v6',  # bool: IPv6 libraries are available
+            );
 use Socket qw(IPPROTO_TCP SOL_SOCKET SO_SNDBUF);
+
 BEGIN {
     eval { require Perlbal::SocketSSL };
     if (Perlbal::DEBUG > 0 && $@) { warn "SSL support failed on load: $@\n" }
@@ -26,12 +31,41 @@ sub new {
     $self = fields::new($self) unless ref $self;
     $opts ||= {};
 
-    my $sock = IO::Socket::INET->new(
-                                     LocalAddr => $hostport,
-                                     Proto => IPPROTO_TCP,
-                                     Listen => 1024,
-                                     ReuseAddr => 1,
-                                     );
+    # Were ipv4 or ipv6 explicitly mentioned by syntax?
+    my $force_v4 = 0;
+    my $force_v6 = 0;
+
+    my @args;
+    if ($hostport =~ /^\d+$/) {
+        @args = ('LocalPort' => $hostport);
+    } elsif ($hostport =~ /^\d+\.\d+\.\d+\.\d+:/) {
+        $force_v4 = 1;
+        @args = ('LocalAddr' => $hostport);
+    }
+
+    my $v6_errors = "";
+
+    my $can_v6 = 0;
+    if (!$force_v4) {
+        eval "use Danga::Socket 1.61; 1; ";
+        if ($@) {
+            $v6_errors = "Danga::Socket 1.61 required for IPv6 support.";
+        } elsif (!eval { require IO::Socket::INET6; 1 }) {
+            $v6_errors = "IO::Socket::INET6 required for IPv6 support.";
+        } else {
+            $can_v6 = 1;
+        }
+    }
+
+    my $socket_class = $can_v6 ? "IO::Socket::INET6" : "IO::Socket::INET";
+    $self->{v6} = $can_v6;
+
+    my $sock = $socket_class->new(
+                                  @args,
+                                  Proto => IPPROTO_TCP,
+                                  Listen => 1024,
+                                  ReuseAddr => 1,
+                                  );
 
     return Perlbal::error("Error creating listening socket: " . ($@ || $!))
         unless $sock;
@@ -69,8 +103,12 @@ sub event_read {
         }
 
         if (Perlbal::DEBUG >= 1) {
-            my ($pport, $pipr) = Socket::sockaddr_in($peeraddr);
-            my $pip = Socket::inet_ntoa($pipr);
+            my ($pport, $pipr) = $self->{v6} ?
+                Socket6::unpack_sockaddr_in6($peeraddr) :
+                Socket::sockaddr_in($peeraddr);
+            my $pip = $self->{v6} ?
+                "[" . Socket6::inet_ntop(Socket6::AF_INET6(), $pipr) . "]" :
+                Socket::inet_ntoa($pipr);
             print "Got new conn: $psock ($pip:$pport) for " . $self->{service}->role . "\n";
         }
 
