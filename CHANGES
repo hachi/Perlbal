@@ -1,3 +1,13 @@
+    -- Beginnings of IPv6 support.  You can now set 'listen' to just a port
+       number and if you have IPv6 setup, have IO::Socket::INET6, and have
+       Danga::Socket 1.61, it'll listen on both IPv6 and IPv4 on that port.
+       (the equivalent to 0.0.0.0).  By default, with the old required syntax
+       of 'listen' being n.n.n.n:port, that'll force IPv4 mode and there are
+       no changes.  Even without IPv6 support, you can now listen on a port
+       without specifying e.g. 0.0.0.0:80.  Currently unimplemented: listening
+       on specific IPv6 addresses, connecting to IPv6 backends, etc.
+       (Brad Fitzpatrick <brad@danga.com>)
+
     -- support filenames with +'s in webserver mode (Jordi Funollet).
 
     -- change the VHost plugin to treat 'www.example.com.' and
