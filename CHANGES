@@ -1,3 +1,6 @@
+
+    -- Fix for serving files from the filesystem over SSL (Greg Denton) 
+
     -- Beginnings of IPv6 support.  You can now set 'listen' to just a port
        number and if you have IPv6 setup, have IO::Socket::INET6, and have
        Danga::Socket 1.61, it'll listen on both IPv6 and IPv4 on that port.

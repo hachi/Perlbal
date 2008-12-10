@@ -215,11 +215,41 @@ sub reproxy_fh {
         $self->{reproxy_fh} = $fh;
         $self->{reproxy_file_offset} = 0;
         $self->{reproxy_file_size} = $size;
-        # call hook that we're reproxying a file
-        return $fh if $self->{service}->run_hook("start_send_file", $self);
-        # turn on writes (the hook might not have wanted us to)
-        $self->watch_write(1);
-        return $fh;
+
+        my $is_ssl_webserver = ( $self->{service}->{listener}->{sslopts} &&
+                               ( $self->{service}->{role} eq 'web_server') );
+
+        unless ($is_ssl_webserver) {
+            # call hook that we're reproxying a file
+            return $fh if $self->{service}->run_hook("start_send_file", $self);
+            # turn on writes (the hook might not have wanted us to)
+            $self->watch_write(1);
+            return $fh;
+        } else { # use aio_read for ssl webserver instead of sendfile
+
+            print "webserver in ssl mode, sendfile disabled!\n"
+                if $Perlbal::DEBUG >= 3;
+
+            # turn off writes
+            $self->watch_write(0);
+            #create filehandle for reading
+            my $data = '';
+            Perlbal::AIO::aio_read($self->reproxy_fh, 0, 2048, $data, sub {
+                # got data? undef is error
+                return $self->_simple_response(500) unless $_[0] > 0;
+
+                # seek into the file now so sendfile starts further in
+                my $ld = length $data;
+                sysseek($self->{reproxy_fh}, $ld, &POSIX::SEEK_SET);
+                $self->{reproxy_file_offset} = $ld;
+                # reenable writes after we get data
+                $self->tcp_cork(1); # by setting reproxy_file_offset above,
+                                    # it won't cork, so we cork it
+                $self->write($data);
+                $self->watch_write(1);
+            });
+            return 1;
+        }
     }
 
     return $self->{reproxy_fh};
