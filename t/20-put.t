@@ -1,6 +1,8 @@
 #!/usr/bin/perl
 
 use strict;
+use warnings;
+
 use Perlbal::Test;
 
 use Test::More 'no_plan';
@@ -35,9 +37,20 @@ my $disk_file = "$dir/foo.txt";
 my $content;
 
 sub put_file {
+    my %opts = @_;
     my $req = HTTP::Request->new(PUT => $url);
     $content = "foo bar baz\n" x 1000;
+
+    if (exists $opts{content}) {
+        $content = $opts{content}
+    }
+
     $req->content($content);
+
+    if (my $headers = $opts{headers}) {
+        $req->header(@$headers);
+    }
+
     my $res = $ua->request($req);
     return $res->is_success;
 }
@@ -81,6 +94,8 @@ foreach_aio {
     ok(mkdir("$dir/$dir1"), "mkdir dir1");
     ok(mkdir("$dir/$dir1/dir2"), "mkdir dir1/dir2");
     ok(put_file(), "aio $mode: good put at dir1/dir2/foo.txt");
+    verify_put();
+    ok(put_file(content => "", headers => [ "Content-Length" => 0 ]), "aio $mode: zero byte file put");
     verify_put();
     ok(unlink($disk_file), "rm file");
     ok(rmdir("$dir/$dir1/dir2"), "rm dir2");

@@ -1,3 +1,4 @@
+    -- Allow zero byte PUT requests (in normal PUT situations)
 
     -- Fix for serving files from the filesystem over SSL (Greg Denton) 
 
