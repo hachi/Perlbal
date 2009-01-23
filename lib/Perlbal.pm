@@ -1295,7 +1295,7 @@ sub log {
     # simple logging functionality
     if ($foreground) {
         # syslog acts like printf so we have to use printf and append a \n
-        shift; # ignore the first parameter (info, warn, critical, etc)
+        shift; # ignore the first parameter (info, warn, crit, etc)
         printf(shift(@_) . "\n", @_);
     } else {
         # just pass the parameters to syslog

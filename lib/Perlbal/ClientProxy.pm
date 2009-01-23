@@ -1021,7 +1021,7 @@ sub send_buffered_upload {
 
     my $clen = $self->{req_headers}->content_length;
     if ($clen != $self->{buoutpos}) {
-        Perlbal::log('critical', "Content length of $clen declared but $self->{buoutpos} bytes written to disk");
+        Perlbal::log('crit', "Content length of $clen declared but $self->{buoutpos} bytes written to disk");
         return $self->_simple_response(500);
     }
 
@@ -1082,7 +1082,7 @@ sub buffered_upload_update {
 
             # throw errors back to the user
             if (! $self->{bufh}) {
-                Perlbal::log('critical', "Failure to open $fn for buffered upload output");
+                Perlbal::log('crit', "Failure to open $fn for buffered upload output");
                 return $self->_simple_response(500);
             }
 
@@ -1118,7 +1118,7 @@ sub buffered_upload_update {
 
         # check for error
         unless ($bytes) {
-            Perlbal::log('critical', "Error writing buffered upload: $!.  Tried to do $len bytes at $self->{buoutpos}.");
+            Perlbal::log('crit', "Error writing buffered upload: $!.  Tried to do $len bytes at $self->{buoutpos}.");
             return $self->_simple_response(500);
         }
 
