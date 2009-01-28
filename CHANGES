@@ -1,3 +1,5 @@
+    -- Fix X-REPROXY-FILE to work with SSL connections (Greg Denton)
+
     -- Syslog as 'crit' rather than 'critical' (noticed by Richard Bronosky)
 
     -- Allow zero byte PUT requests (in normal PUT situations)
