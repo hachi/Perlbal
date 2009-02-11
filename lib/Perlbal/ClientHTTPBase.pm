@@ -142,6 +142,11 @@ sub max_idle_time {
     return $_[0]->{service}->{persist_client_timeout};
 }
 
+# Called when this client is entering a persist_wait state, but before we are returned to base.
+sub persist_wait {
+    
+}
+
 # called when we've finished writing everything to a client and we need
 # to reset our state for another request.  returns 1 to mean that we should
 # support persistence, 0 means we're discarding this connection.
@@ -191,6 +196,8 @@ sub http_response_sent {
     $self->{scratch} = {};
     $self->{post_sendfile_cb} = undef;
     $self->state('persist_wait');
+
+    $self->persist_wait;
 
     if (my $selector_svc = $self->{selector_svc}) {
         if (! $selector_svc->run_hook('return_to_base', $self)){

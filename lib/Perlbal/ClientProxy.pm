@@ -443,6 +443,13 @@ sub backend_finished {
     $self->close("backend_finished_while_unread_data");
 }
 
+# Called when this client is entering a persist_wait state, but before we are returned to base.
+sub persist_wait {
+    my Perlbal::ClientProxy $self = $_[0];
+    # We're in keepalive, and just completed a proxy request
+    $self->{service}->run_hooks('end_proxy_request', $self);
+}
+
 # called when we've sent a response to a user fully and we need to reset state
 sub http_response_sent {
     my Perlbal::ClientProxy $self = $_[0];
