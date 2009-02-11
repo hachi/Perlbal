@@ -474,19 +474,19 @@ sub handle_response { # : void
     # special cases:  reproxying and retrying after server errors:
     if ((my $rep = $hd->header('X-REPROXY-FILE')) && $self->may_reproxy) {
         # make the client begin the async IO while we move on
-        $client->start_reproxy_file($rep, $hd);
         $self->next_request;
+        $client->start_reproxy_file($rep, $hd);
         return;
     } elsif ((my $urls = $hd->header('X-REPROXY-URL')) && $self->may_reproxy) {
+        $self->next_request;
         $self->{service}->add_to_reproxy_url_cache($rqhd, $hd)
             if $reproxy_cache_for;
-        $client->start_reproxy_uri($self->{res_headers}, $urls);
-        $self->next_request;
+        $client->start_reproxy_uri($hd, $urls);
         return;
     } elsif ((my $svcname = $hd->header('X-REPROXY-SERVICE')) && $self->may_reproxy) {
-        $self->{client} = undef;
-        $client->start_reproxy_service($self->{res_headers}, $svcname);
         $self->next_request;
+        $self->{client} = undef;
+        $client->start_reproxy_service($hd, $svcname);
         return;
     } elsif ($res_code == 500 &&
              $rqhd->request_method =~ /^GET|HEAD$/ &&
