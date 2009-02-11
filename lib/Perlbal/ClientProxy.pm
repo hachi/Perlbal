@@ -1117,7 +1117,7 @@ sub buffered_upload_update {
         $self->{is_writing} = 0;
 
         # check for error
-        unless ($bytes) {
+        unless ($bytes > 0) {
             Perlbal::log('crit', "Error writing buffered upload: $!.  Tried to do $len bytes at $self->{buoutpos}.");
             return $self->_simple_response(500);
         }
