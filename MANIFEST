@@ -34,9 +34,11 @@ lib/Perlbal/Plugin/EchoService.pm
 lib/Perlbal/Plugin/Highpri.pm
 lib/Perlbal/Plugin/Include.pm
 lib/Perlbal/Plugin/LazyCDN.pm
+lib/Perlbal/Plugin/MaxContentLength.pm
 lib/Perlbal/Plugin/NotModified.pm
 lib/Perlbal/Plugin/Palimg.pm
 lib/Perlbal/Plugin/Queues.pm
+lib/Perlbal/Plugin/Redirect.pm
 lib/Perlbal/Plugin/Stats.pm
 lib/Perlbal/Plugin/Vhosts.pm
 lib/Perlbal/Plugin/Vpaths.pm
