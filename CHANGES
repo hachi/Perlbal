@@ -1,3 +1,5 @@
+    -- Make Redirect plugin more standards compliant (Ask Bjørn Hansen)
+
     -- Fix X-REPROXY-FILE to work with SSL connections (Greg Denton)
 
     -- Syslog as 'crit' rather than 'critical' (noticed by Richard Bronosky)
@@ -19,7 +21,7 @@
     -- support filenames with +'s in webserver mode (Jordi Funollet).
 
     -- change the VHost plugin to treat 'www.example.com.' and
-       'www.example.com' the same.
+       'www.example.com' the same. (Ask)
 
     -- silence warnings when things that look like variables on comment lines
        in config input.

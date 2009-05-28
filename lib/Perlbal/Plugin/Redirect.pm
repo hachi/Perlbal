@@ -1,7 +1,4 @@
-
 package Perlbal::Plugin::Redirect;
-
-use Perlbal;
 use strict;
 use warnings;
 
@@ -23,11 +20,10 @@ sub handle_request {
 
         my $res_header = Perlbal::HTTPHeaders->new_response(301);
         $res_header->header('Location' => "http://$target_host$path");
+        $res_header->header('Content-Length' => 0);
+        # really should only do the keep-alive for 1.1, but that's a bigger issue
+        $res_header->header('Connection' => 'keep-alive');
         $pb->write($res_header->to_string_ref());
-
-        # FIXME: Should probably generate a more interesting body here.
-        my $body = "...";
-        $pb->write(\$body);
 
         return 1;
     };
