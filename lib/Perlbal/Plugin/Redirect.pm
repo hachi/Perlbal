@@ -21,8 +21,10 @@ sub handle_request {
         my $res_header = Perlbal::HTTPHeaders->new_response(301);
         $res_header->header('Location' => "http://$target_host$path");
         $res_header->header('Content-Length' => 0);
-        # really should only do the keep-alive for 1.1, but that's a bigger issue
-        $res_header->header('Connection' => 'keep-alive');
+        # For some reason a follow-up request gets a "400 Bad request" response,
+        # so until someone has time to figure out why, just punt and disable 
+        # keep-alives after this request.
+        $res_header->header('Connection' => 'close');
         $pb->write($res_header->to_string_ref());
 
         return 1;
