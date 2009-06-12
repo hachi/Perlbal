@@ -1,3 +1,5 @@
+    -- Make Content-Range replies work (Ask Bjørn Hansen) 
+
     -- Make Redirect plugin more standards compliant (Ask Bjørn Hansen)
 
     -- Fix X-REPROXY-FILE to work with SSL connections (Greg Denton)
