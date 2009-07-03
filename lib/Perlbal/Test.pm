@@ -27,6 +27,7 @@ Various functions are provided to interact with the server.
 use strict;
 use POSIX qw( :sys_wait_h );
 use IO::Socket::INET;
+use Socket qw(MSG_NOSIGNAL IPPROTO_TCP TCP_NODELAY SOL_SOCKET);
 use HTTP::Response;
 
 require Exporter;
@@ -96,13 +97,25 @@ sub tempdir {
 
 =head1 I<new_port()>
 
-Return the next port number in the series. Port numbers are assigned
+Return the next free port number in the series. Port numbers are assigned
 starting at 60000.
 
 =cut
 
 sub new_port {
-    return $free_port++;  # FIXME: make it somehow detect if port is in use?
+    test_port() ? return $free_port++ : return new_port($free_port++);
+}
+
+=head1 I<test_port()>
+
+Return 1 if the port is free to use for listening on $free_port else return 0.
+
+=cut
+
+sub test_port {
+    my $sock = IO::Socket::INET->new(LocalPort => $free_port) or return 0;
+    $sock->close();
+    return 1;
 }
 
 =head1 I<filecontent($file>>
