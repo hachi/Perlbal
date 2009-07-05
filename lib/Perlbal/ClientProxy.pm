@@ -555,11 +555,12 @@ sub event_write {
     my Perlbal::ClientProxy $self = shift;
     print "ClientProxy::event_write\n" if Perlbal::DEBUG >= 3;
 
-    $self->SUPER::event_write;
-
     # obviously if we're writing the backend has processed our request
     # and we are responding/have responded to the user, so mark it so
     $self->{responded} = 1;
+
+    # will eventually, finally reset the whole object on completion
+    $self->SUPER::event_write;
 
     # trigger our backend to keep reading, if it's still connected
     if ($self->{backend_stalled} && (my $backend = $self->{backend})) {

@@ -1,3 +1,6 @@
+    -- Fix obscure race condition (spontaneously closed keepalives
+       after POST requests, Andreas J Koenig)
+
     -- make Perlbal::Test be more robust and only use free ports.
        (Bart van der Schans <herengracht@gmail.com>)
        
