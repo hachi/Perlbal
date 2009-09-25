@@ -402,6 +402,10 @@ our $tunables = {
             $self->{index_files} = [ split(/[\s,]+/, $val) ];
             return $mc->ok;
         },
+        dumper => sub {
+            my ($self, $val) = @_;
+            return join(', ', @$val);
+        },
     },
 
     'default_service' => {
@@ -448,6 +452,10 @@ our $tunables = {
             # the type-checking phase.  instead, we do nothing here.
             return $mc->ok;
         },
+        dumper => sub {
+            my ($self, $val) = @_;
+            return $val->name;
+        }
     },
 
     'server_process' => {
@@ -638,6 +646,77 @@ sub run_manage_command {
     my $ctx = Perlbal::CommandContext->new;
     $ctx->{last_created} = $self->name;
     return Perlbal::run_manage_command($cmd, undef, $ctx);
+}
+
+sub dumpconfig {
+    my $self = shift;
+
+    my @return;
+
+    my %my_tunables = %$tunables;
+
+    my $dump = sub {
+        my $setting = shift;
+    };
+
+    foreach my $skip (qw(role listen pool)) {
+        delete $my_tunables{$skip};
+    }
+
+    my $role = $self->{role};
+
+    foreach my $setting ("role", "listen", "pool", sort keys %my_tunables) {
+        my $attrs = $tunables->{$setting};
+        my $value = $self->{$setting};
+
+        my $check_role = $attrs->{check_role};
+        my $check_type = $attrs->{check_type};
+        my $default    = $attrs->{default};
+        my $required   = $attrs->{required};
+
+        next if ($check_role && $check_role ne '*' && $check_role ne $role);
+
+        if ($check_type && $check_type eq 'size') {
+            $default = $1               if $default =~ /^(\d+)b$/i;
+            $default = $1 * 1024        if $default =~ /^(\d+)k$/i;
+            $default = $1 * 1024 * 1024 if $default =~ /^(\d+)m$/i;
+        }
+
+        if (!$required) {
+            next unless defined $value;
+            next if (defined $default && $value eq $default);
+        }
+
+        if (my $dumper = $attrs->{dumper}) {
+            $value = $dumper->($self, $value);
+        }
+
+        if ($check_type && $check_type eq 'bool') {
+            $value = 'on' if $value;
+        }
+
+        push @return, "SET $setting = $value";
+    }
+
+    my $plugins = $self->{plugins};
+
+    foreach my $plugin (keys %$plugins) {
+        local $@;
+
+        my $class = "Perlbal::Plugin::$plugin";
+        my $cv = $class->can('dumpconfig');
+
+        if ($cv) {
+            eval { push @return, $class->dumpconfig($self) };
+            if ($@) {
+                push @return, "# Plugin '$plugin' threw an exception while being dumped.";
+            }
+        } else {
+            push @return, "# Plugin '$plugin' isn't capable of dumping config.";
+        }
+    }
+
+    return @return;
 }
 
 # called once a role has been set
