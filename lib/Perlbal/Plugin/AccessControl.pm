@@ -177,4 +177,25 @@ sub unregister {
     return 1;
 }
 
+sub dumpconfig {
+    my ($class, $svc) = @_;
+
+    my @return;
+
+    my $cfg = $svc->{extra_config}->{_access} ||= {};
+    my $rules = $cfg->{rules} || [];
+
+    foreach my $rule (@$rules) {
+        my $action = uc $rule->[0];
+        my $type   = uc $rule->[1];
+        my $value  = $rule->[2];
+        push @return, "ACCESS $action $type $value";
+    }
+
+    my $default_action = $cfg->{deny_default} ? "DENY" : "ALLOW";
+    push @return, "ACCESS POLICY $default_action";
+
+    return @return;
+}
+
 1;
