@@ -1,9 +1,12 @@
+    -- Add 'dumpconfig' command and related framework.
+       *** BETA FEATURE STATUS ***
+
     -- Fix obscure race condition (spontaneously closed keepalives
        after POST requests, Andreas J Koenig)
 
     -- make Perlbal::Test be more robust and only use free ports.
        (Bart van der Schans <herengracht@gmail.com>)
-       
+
     -- Make Content-Range replies work (Ask Bjørn Hansen) 
 
     -- Make Redirect plugin more standards compliant (Ask Bjørn Hansen)
