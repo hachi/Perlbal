@@ -1126,22 +1126,46 @@ sub MANAGE_load {
     my $last_case;
     my $last_class;
 
-    my $load = sub {
-        my $name = shift;
+    my $good_error;
+
+    # TODO case protection
+
+    foreach my $name ($fn, lc $fn, ucfirst lc $fn) {
         $last_case = $name;
         my $class = $last_class = "Perlbal::Plugin::$name";
-        my $rv = eval "use $class; $class->load; 1;";
-        return $mc->err($@) if ! $rv && $@ !~ /^Can\'t locate/;
-        return $rv;
-    };
+        my $file = $class . ".pm";
+        $file =~ s!::!/!g;
 
-    my $rv = $load->($fn) || $load->(lc $fn) || $load->(ucfirst lc $fn);
-    return $mc->err($@) unless $rv;
+        my $rv = eval "use $class; 1;";
 
-    $PluginCase{lc $fn} = $last_case;
-    $plugins{$last_case} = $last_class;
+        if ($rv) {
+            $good_error = undef;
+            last;
+        }
 
-    return $mc->ok;
+        # If we don't have a good error yet, start with this one.
+        $good_error = $@ unless defined $good_error;
+
+        # If the file existed perl will place an entry in %INC (though it will be undef due to compilation error)
+        if (exists $INC{$file}) {
+            $good_error = $@;
+            last;
+        }
+    }
+
+    unless (defined $good_error) {
+        my $rv = eval "$last_class->load; 1;";
+
+        if ($rv) {
+            $PluginCase{lc $fn} = $last_case;
+            $plugins{$last_case} = $last_class;
+            return $mc->ok;
+        }
+
+        $good_error = $@;
+    }
+
+    return $mc->err($good_error);
 }
 
 sub MANAGE_reload {
