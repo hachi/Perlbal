@@ -183,8 +183,17 @@ sub start_reproxy_uri {
 sub try_next_uri {
     my Perlbal::ClientProxy $self = $_[0];
 
-    shift @{$self->{reproxy_uris}};
+    if ($self->{currently_reproxying}) {
+        # If we're currently reproxying to a backend, that means we want to try the next uri which is
+        # ->{reproxy_uris}->[0].
+    } else {
+        # Since we're not currently reproxying, that means we never got a backend in the first place,
+        # so we want to move on to the next uri which is ->{reproxy_uris}->[1] (shift one off)
+        shift @{$self->{reproxy_uris}};
+    }
+
     $self->{currently_reproxying} = undef;
+
     $self->start_reproxy_uri();
 }
 
