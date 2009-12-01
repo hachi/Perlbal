@@ -59,7 +59,8 @@ sub maxsize {
 }
 
 sub set_maxsize {
-    my ($self, $maxsize) = @_;
+    my Perlbal::Cache $self = shift;
+    my $maxsize = shift;
     $self->{maxsize} = $maxsize;
     $self->drop_tail while
         $self->{size} > $self->{maxsize};
@@ -67,7 +68,7 @@ sub set_maxsize {
 
 # For debugging only
 sub validate_list {
-    my ($self) = @_;
+    my Perlbal::Cache $self = shift;
 
     die "no tail pointer\n" if $self->{size} && ! $self->{tail};
     die "no head pointer\n" if $self->{size} && ! $self->{head};

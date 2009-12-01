@@ -1,3 +1,6 @@
+    -- Fix a fields glitch in Perlbal::Cache which would sometimes
+       cause errors and abnormal shutdown.
+
 1.73: 2009-10-05
 
     -- Add 'dumpconfig' command and related framework.
