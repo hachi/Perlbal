@@ -133,6 +133,11 @@ foreach_aio {
 # try to reproxy to a list of URLs, where the first one is bogus, and last one is good
 ok_reproxy_url_list();
 
+{
+    my $resp = $wc->request("reproxy_url:http://127.0.0.1:$webport/bar.txt http://127.0.0.1:$webport/foo.txt");
+    ok($resp->content eq $file_content, "reproxy URL w/ 404 one first");
+}
+
 # responses to HEAD requests should not have a body
 {
     $wc->keepalive(0);
