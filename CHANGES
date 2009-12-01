@@ -1,3 +1,6 @@
+    -- Silence a warning in PERLBAL_DEBUG >= 4 that we really don't
+       need to see.
+
     -- Fix chained service selectors to have their 'start_http_request'
        hook to be called.
 

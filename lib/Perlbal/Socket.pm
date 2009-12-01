@@ -80,6 +80,7 @@ sub write_debuggy {
 }
 
 if (Perlbal::DEBUG >= 4) {
+    no warnings 'redefine';
     *write = \&write_debuggy;
 }
 
