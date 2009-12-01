@@ -85,6 +85,15 @@ sub new {
     return $self;
 }
 
+sub new_from_base {
+    my $class = shift;
+    my Perlbal::ClientHTTPBase $cb = shift;    # base object
+    Perlbal::Util::rebless($cb, $class);
+
+    $cb->handle_request;
+    return $cb;
+}
+
 sub close {
     my Perlbal::ClientHTTPBase $self = shift;
 
@@ -274,6 +283,13 @@ sub event_read {
         if $self->{req_headers};
 
     my $hd = $self->read_request_headers;
+    $self->handle_request;
+}
+
+sub handle_request {
+    my Perlbal::ClientHTTPBase $self = shift;
+    my Perlbal::HTTPHeaders $hd = $self->{req_headers};
+
     return unless $hd;
 
     return if $self->{service}->run_hook('start_http_request', $self);

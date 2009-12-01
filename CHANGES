@@ -1,3 +1,6 @@
+    -- Fix chained service selectors to have their 'start_http_request'
+       hook to be called.
+
     -- Fix reproxy to not skip urls when the previous URL is a 'failure'
        HTTP status response. IE. don't skip the second url when the first
        one is a 404.

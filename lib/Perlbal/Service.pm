@@ -1474,7 +1474,7 @@ sub adopt_base_client {
         Perlbal::ClientProxy->new_from_base($cb);
         return;
     } elsif ($self->{'role'} eq "selector") {
-        $self->selector()->($cb);
+        Perlbal::ClientHTTPBase->new_from_base($cb);
         return;
     } else {
         $cb->_simple_response(500, "Can't map to service type $self->{'role'}");
