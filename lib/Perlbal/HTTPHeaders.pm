@@ -107,7 +107,7 @@ sub new {
 
         # check for valid response line
         return fail("Bogus response line") unless
-            $self->{responseLine} =~ m!^HTTP\/(\d+)\.(\d+)\s+(\d+)\s+(.*)$!;
+            $self->{responseLine} =~ m!^HTTP\/(\d+)\.(\d+)\s+(\d+)(?:\s+(.*))$!;
 
         my ($ver_ma, $ver_mi, $code) = ($1, $2, $3);
         $self->code($code, $4);

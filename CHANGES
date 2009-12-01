@@ -1,3 +1,6 @@
+    -- Don't require a space after the HTTP status in responses. In some
+       situations a server may not give it.
+
     -- Perlbal::log should act the same whether it is calling syslog or
        printf. Make it a little more DWIM.
 
