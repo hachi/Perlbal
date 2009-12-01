@@ -260,10 +260,6 @@ sub backend_response_received {
     my Perlbal::ClientProxy $self = $_[0];
     my Perlbal::BackendHTTP $be = $_[1];
 
-    # a response means that we are no longer currently waiting on a reproxy, and
-    # don't want to retry this URI
-    $self->{currently_reproxying} = undef;
-
     # we fail if we got something that's NOT a 2xx code, OR, if we expected
     # a certain size and got back something different
     my $code = $be->{res_headers}->response_code + 0;
@@ -286,6 +282,11 @@ sub backend_response_received {
         $self->try_next_uri;
         return 1;
     }
+
+    # a response means that we are no longer currently waiting on a reproxy, and
+    # don't want to retry this URI
+    $self->{currently_reproxying} = undef;
+
     return 0;
 }
 
