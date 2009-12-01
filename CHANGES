@@ -1,3 +1,6 @@
+    -- Perlbal::log should act the same whether it is calling syslog or
+       printf. Make it a little more DWIM.
+
     -- Let's make SSL clients work with service selectors, and even
        chained service selectors, when serving static files.
 
