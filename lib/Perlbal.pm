@@ -198,7 +198,7 @@ sub service {
 sub create_service {
     my $class = shift;
     my $name = shift;
-    
+
     unless (defined($name)) {
         $name = "____auto_".($service_autonumber++);
     }
