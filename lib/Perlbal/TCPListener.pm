@@ -147,17 +147,17 @@ sub class_new_socket {
 
     my $service_role = $self->{service}->role;
     if ($service_role eq "reverse_proxy") {
-        Perlbal::ClientProxy->new($self->{service}, $psock);
+        return Perlbal::ClientProxy->new($self->{service}, $psock);
     } elsif ($service_role eq "management") {
-        Perlbal::ClientManage->new($self->{service}, $psock);
+        return Perlbal::ClientManage->new($self->{service}, $psock);
     } elsif ($service_role eq "web_server") {
-        Perlbal::ClientHTTP->new($self->{service}, $psock);
+        return Perlbal::ClientHTTP->new($self->{service}, $psock);
     } elsif ($service_role eq "selector") {
         # will be cast to a more specific class later...
-        Perlbal::ClientHTTPBase->new($self->{service}, $psock, $self->{service});
+        return Perlbal::ClientHTTPBase->new($self->{service}, $psock, $self->{service});
     } elsif (my $creator = Perlbal::Service::get_role_creator($service_role)) {
         # was defined by a plugin, so we want to return one of these
-        $creator->($self->{service}, $psock);
+        return $creator->($self->{service}, $psock);
     }
 }
 

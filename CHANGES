@@ -1,3 +1,6 @@
+    -- Let's make SSL clients work with service selectors, and even
+       chained service selectors, when serving static files.
+
     -- Fix a fields glitch in Perlbal::Cache which would sometimes
        cause errors and abnormal shutdown.
 

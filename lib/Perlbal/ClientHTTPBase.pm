@@ -36,6 +36,7 @@ use fields ('service',             # Perlbal::Service object
 
             # service selector parent
             'selector_svc',        # the original service from which we came
+            'is_ssl',              # Is this socket SSL attached (restricted operations)
             );
 
 use Fcntl ':mode';
@@ -76,6 +77,7 @@ sub new {
     $self->{requests}        = 0;
     $self->{scratch}         = {};
     $self->{selector_svc}    = $selector_svc;
+    $self->{is_ssl}          = 0;
 
     $self->state('reading_headers');
 
@@ -323,7 +325,7 @@ sub event_write_reproxy_fh {
     $self->tcp_cork(1) if $self->{reproxy_file_offset} == 0;
     $self->watch_write(0);
 
-    if ($self->{service}->{listener}->{sslopts}) { # SSL (sendfile does not do SSL)
+    if ($self->{is_ssl}) { # SSL (sendfile does not do SSL)
         return if $self->{closed};
         if ($remain <= 0) { #done
             print "REPROXY SSL done\n" if Perlbal::DEBUG >= 2;

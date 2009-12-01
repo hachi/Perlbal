@@ -104,7 +104,8 @@ sub try_accept {
         delete $ref->{$fd};
 
         # now stick the new one in
-        $self->{listener}->class_new_socket($sock);
+        my Perlbal::ClientHTTPBase $cb = $self->{listener}->class_new_socket($sock);
+        $cb->{is_ssl} = 1;
         return;
     }
 
