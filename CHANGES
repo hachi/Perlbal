@@ -1,3 +1,7 @@
+    -- Fix reproxy to not skip urls when the previous URL is a 'failure'
+       HTTP status response. IE. don't skip the second url when the first
+       one is a 404.
+
     -- Don't require a space after the HTTP status in responses. In some
        situations a server may not give it.
 
