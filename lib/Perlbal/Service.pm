@@ -687,7 +687,7 @@ sub dumpconfig {
 
     foreach my $setting ("role", "listen", "pool", sort keys %my_tunables) {
         my $attrs = $tunables->{$setting};
-        my $value = $self->{$setting};
+        my $value = $attrs->{_plugin_inserted} ? $self->{extra_config}->{$setting} : $self->{$setting};
 
         my $check_role = $attrs->{check_role};
         my $check_type = $attrs->{check_type};

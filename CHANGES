@@ -1,3 +1,5 @@
+    -- Add extra_config awareness for plugin added tunables to dumpconfig.
+
     -- Plugins may now use the $set argument of add_tunable's interface
        to automatically set an extra_config value from within a setter
        override. Previously this would result in an error.
