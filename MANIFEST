@@ -55,7 +55,6 @@ lib/Perlbal/UploadListener.pm
 lib/Perlbal/Util.pm
 Makefile.PL
 MANIFEST
-META.yml			Module meta-data (added by MakeMaker)
 perlbal
 t/00-use.t
 t/10-testharness.t
