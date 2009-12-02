@@ -1,3 +1,7 @@
+    -- Plugins may now use the $set argument of add_tunable's interface
+       to automatically set an extra_config value from within a setter
+       override. Previously this would result in an error.
+
     -- Split the persist_client_timeout into two other options;
        persist_client_idle_timeout and idle_timeout. Depricate and
        add compatability for the old option.

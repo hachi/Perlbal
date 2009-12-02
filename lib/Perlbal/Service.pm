@@ -838,15 +838,19 @@ sub set {
             }
         }
 
+        if ($tun->{_plugin_inserted}) {
+            # plugins that add tunables need to be stored in the extra_config hash due to the main object
+            # using fields.  this passthrough is done so the config files don't need to specify this.
+            $set = sub {
+                $self->{extra_config}->{$key} = $val;
+                return $mc->ok;
+            };
+        }
+
         my $setter = $tun->{setter};
 
         if (ref $setter eq "CODE") {
             return $setter->($self, $val, $set, $mc);
-        } elsif ($tun->{_plugin_inserted}) {
-            # plugins that add tunables need to be stored in the extra_config hash due to the main object
-            # using fields.  this passthrough is done so the config files don't need to specify this.
-            $self->{extra_config}->{$key} = $val;
-            return $mc->ok;
         } else {
             return $set->();
         }
