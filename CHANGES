@@ -1,3 +1,7 @@
+    -- Split the persist_client_timeout into two other options;
+       persist_client_idle_timeout and idle_timeout. Depricate and
+       add compatability for the old option.
+
     -- Silence a warning in PERLBAL_DEBUG >= 4 that we really don't
        need to see.
 

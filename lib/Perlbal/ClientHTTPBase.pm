@@ -134,7 +134,7 @@ sub setup_keepalive {
     my $do_keepalive = $persist_client && $rqhd->req_keep_alive($reshd);
     if ($do_keepalive) {
         print "  doing keep-alive to client\n" if Perlbal::DEBUG >= 3;
-        my $timeout = $self->{service}->{persist_client_timeout};
+        my $timeout = $self->{service}->{persist_client_idle_timeout};
         $reshd->header('Connection', 'keep-alive');
         $reshd->header('Keep-Alive', $timeout ? "timeout=$timeout, max=100" : undef);
     } else {
@@ -150,7 +150,12 @@ sub setup_keepalive {
 
 # overridden here from Perlbal::Socket to use the service value
 sub max_idle_time {
-    return $_[0]->{service}->{persist_client_timeout};
+    my Perlbal::ClientHTTPBase $self = shift;
+    if ($self->state eq 'persist_wait') {
+        return $self->{service}->{persist_client_idle_timeout};
+    } else {
+        return $self->{service}->{idle_timeout};
+    }
 }
 
 # Called when this client is entering a persist_wait state, but before we are returned to base.

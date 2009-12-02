@@ -57,7 +57,8 @@ use fields (
             'reproxy_cache_maxsize', # int; maximum number of reproxy results to be cached. (0 is disabled and default)
             'client_sndbuf_size',    # int: bytes for SO_SNDBUF
             'server_process' ,       # scalar: path to server process (executable)
-            'persist_client_timeout',  # int: keep-alive timeout in seconds for clients (default is 30)
+            'persist_client_idle_timeout',  # int: keep-alive timeout in seconds for clients (default is 30)
+            'idle_timeout',                 # int: idle timeout outside of keep-alive time (default is 30)
 
             # Internal state:
             'waiting_clients',         # arrayref of clients waiting for backendhttp conns
@@ -471,12 +472,31 @@ our $tunables = {
     },
 
     'persist_client_timeout' => {
+        des => "Set both the persist_client_idle_timeout and idle_timeout (depricated)",
+        check_type => "int",
+        check_role => "*",
+        setter => sub {
+            my ($self, $val, $set, $mc) = @_;
+            $self->{persist_client_idle_timeout} = $val;
+            $self->{idle_timeout} = $val;
+            return $mc->ok;
+        },
+    },
+
+    'persist_client_idle_timeout' => {
         des => "Timeout in seconds for HTTP keep-alives to the end user (default is 30)",
         check_type => "int",
         default => 30,
         check_role => "*",
     },
-    
+
+    'idle_timeout' => {
+        des => "Timeout in seconds for idle connections to the end user (default is 30)",
+        check_type => "int",
+        default => 30,
+        check_role => "*",
+    },
+
     'buffer_uploads_path' => {
         des => "Directory root for storing files used to buffer uploads.",
 
