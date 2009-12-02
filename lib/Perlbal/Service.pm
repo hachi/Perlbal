@@ -405,6 +405,7 @@ our $tunables = {
         },
         dumper => sub {
             my ($self, $val) = @_;
+            return unless defined $val;
             return join(', ', @$val);
         },
     },
@@ -481,6 +482,7 @@ our $tunables = {
             $self->{idle_timeout} = $val;
             return $mc->ok;
         },
+        dump_ignore => 1,
     },
 
     'persist_client_idle_timeout' => {
@@ -687,6 +689,9 @@ sub dumpconfig {
 
     foreach my $setting ("role", "listen", "pool", sort keys %my_tunables) {
         my $attrs = $tunables->{$setting};
+
+        next if $attrs->{dump_ignore};
+
         my $value = $attrs->{_plugin_inserted} ? $self->{extra_config}->{$setting} : $self->{$setting};
 
         my $check_role = $attrs->{check_role};
