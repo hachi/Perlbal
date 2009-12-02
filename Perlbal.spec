@@ -1,8 +1,8 @@
 name:      Perlbal
 summary:   Perlbal - High efficiency reverse proxy and web server.
 version:   1.73
-release:   1
-vendor:    Brad Fitzpatrick <brad@danga.com>
+release:   1%{?dist}
+vendor:    Alan Kasindorf <dormando@rydia.net>
 packager:  Jonathan Steinert <rpm@hachi.kuiki.net>
 license:   Artistic
 group:     Applications/CPAN
@@ -18,7 +18,7 @@ buildrequires: perl(Test::More)
 buildrequires: perl(Time::HiRes)
 
 autoreq: no
-requires: perl(Perlbal) = %{version}-%{release}
+requires: perl-Perlbal = %{version}-%{release}
 
 %description
 High efficiency reverse proxy and web server.
