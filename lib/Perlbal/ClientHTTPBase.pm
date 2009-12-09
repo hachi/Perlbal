@@ -297,6 +297,8 @@ sub handle_request {
 
     return unless $hd;
 
+    $self->check_req_headers;
+
     return if $self->{service}->run_hook('start_http_request', $self);
 
     # we must stop watching for events now, otherwise if there's

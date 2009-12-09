@@ -1,3 +1,6 @@
+    -- Make service selectors have the 'observed_ip' concept available to
+       them.
+
     -- Add extra_config awareness for plugin added tunables to dumpconfig.
 
     -- Plugins may now use the $set argument of add_tunable's interface
