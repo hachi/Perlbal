@@ -41,7 +41,9 @@ use fields qw( listener create_time );
             $orig->($self, @{${*$self}->{__close_args}});
         } else {
             ${*$self}->{__close_args} = [ @_ ];
-            ${*$self}->{_danga_socket}->close('intercepted_ssl_close');
+            if (exists ${*$self}->{_danga_socket}) {
+                ${*$self}->{_danga_socket}->close('intercepted_ssl_close');
+            }
         }
     };
 }

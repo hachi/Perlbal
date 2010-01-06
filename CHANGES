@@ -1,3 +1,5 @@
+    -- Fix SSL socket close race crash.  (Jab <jk@ciphron.de>)
+
     -- Make service selectors have the 'observed_ip' concept available to
        them.
 
