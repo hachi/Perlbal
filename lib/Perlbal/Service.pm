@@ -296,7 +296,7 @@ our $tunables = {
     },
 
     'upload_status_listeners' => {
-        des => "Comma separated list of hosts in form 'a.b.c.d:port' which will receive UDP upload status packets no faster than once a second per HTTP request (PUT/POST) from clients that have requested an upload status bar, which they request by appending the URL get argument ?client_up_session=[xxxxxx] where xxxxx is 5-50 'word' characters (a-z, A-Z, 0-9, underscore).",
+        des => "Comma separated list of hosts in form 'a.b.c.d:port' which will receive UDP upload status packets no faster than once a second per HTTP request (PUT/POST) from clients that have requested an upload status bar, which they request by appending the URL get argument ?client_up_sess=[xxxxxx] where xxxxx is 5-50 'word' characters (a-z, A-Z, 0-9, underscore).",
         default => "",
         check_role => "reverse_proxy",
         check_type => sub {
