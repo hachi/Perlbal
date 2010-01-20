@@ -473,7 +473,7 @@ our $tunables = {
     },
 
     'persist_client_timeout' => {
-        des => "Set both the persist_client_idle_timeout and idle_timeout (depricated)",
+        des => "Set both the persist_client_idle_timeout and idle_timeout (deprecated)",
         check_type => "int",
         check_role => "*",
         setter => sub {

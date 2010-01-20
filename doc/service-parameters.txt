@@ -58,7 +58,7 @@ For all services:
 |                           |    |                     |Set both the               |
 |persist_client_timeout     |int |                     |persist_client_idle_timeout|
 |                           |    |                     |and idle_timeout           |
-|                           |    |                     |(depricated)               |
+|                           |    |                     |(deprecated)               |
 |---------------------------+----+---------------------+---------------------------|
 |                           |    |                     |What type of service. One  |
 |                           |    |                     |of 'reverse_proxy' for a   |
