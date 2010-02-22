@@ -889,8 +889,9 @@ sub satisfy_request_from_cache {
 
         # If 'Last-Modified' is same as 'If-Modified-Since', send a 304
         if ($ims eq $lm) {
-            my $res_hd = Perlbal::HTTPHeaders->new_response(304);
+            my $res_hd = $self->{res_headers} = Perlbal::HTTPHeaders->new_response(304);
             $res_hd->header("Content-Length", "0");
+            $self->setup_keepalive($res_hd);
             $self->tcp_cork(1);
             $self->state('xfer_resp');
             $self->write($res_hd->to_string_ref);
