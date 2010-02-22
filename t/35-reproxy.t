@@ -152,28 +152,33 @@ ok_reproxy_url_list();
 sub ok_reproxy_url_cached {
     my $resp = $wc->request("reproxy_url_cached:1:http://127.0.0.1:$webport/foo.txt");
     ok($resp && $resp->content eq $file_content, "reproxy with cache: $_[0]");
+    like($resp->header("Connection"), qr/Keep-Alive/i, "... and keep-alives are on");
 }
 
 sub ok_reproxy_url_list {
     my $resp = $wc->request("reproxy_url_multi:$deadport:$webport:/foo.txt");
     ok($resp->content eq $file_content, "reproxy URL w/ dead one first");
+    like($resp->header("Connection"), qr/Keep-Alive/i, "... and keep-alives are on");
 }
 
 sub ok_reproxy_file {
     my $resp = $wc->request("reproxy_file:$dir/foo.txt");
     ok($resp && $resp->content eq $file_content, "reproxy file");
+    like($resp->header("Connection"), qr/Keep-Alive/i, "... and keep-alives are on");
 }
 
 sub ok_reproxy_url {
     my $resp = $wc->request("reproxy_url:http://127.0.0.1:$webport/foo.txt");
     ok($resp->content eq $file_content, "reproxy URL") or diag(dump_res($resp));
     is($resp->code, 200, "response code is 200");
+    like($resp->header("Connection"), qr/Keep-Alive/i, "... and keep-alives are on");
 }
 
 sub ok_reproxy_url_204 {
     my $resp = $wc->request("reproxy_url204:http://127.0.0.1:$webport/foo.txt");
     ok($resp->content eq $file_content, "reproxy URL") or diag(dump_res($resp));
     is($resp->code, 200, "204 response code is 200");
+    like($resp->header("Connection"), qr/Keep-Alive/i, "... and keep-alives are on");
 }
 
 sub ok_status {
