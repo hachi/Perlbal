@@ -50,7 +50,7 @@ use Perlbal::ClientProxy;
 
 # if this is made too big, (say, 128k), then perl does malloc instead
 # of using its slab cache.
-use constant BACKEND_READ_SIZE => 61449;  # 60k, to fit in a 64k slab
+use constant BACKEND_READ_SIZE => 61440;  # 60k, to fit in a 64k slab
 
 # keys set here when an endpoint is found to not support persistent
 # connections and/or the OPTIONS method
