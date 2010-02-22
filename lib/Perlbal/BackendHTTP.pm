@@ -504,10 +504,6 @@ sub handle_response { # : void
     my $res_source = $client->{primary_res_hdrs} || $hd;
     my $thd = $client->{res_headers} = $res_source->clone;
 
-    # setup_keepalive will set Connection: and Keep-Alive: headers for us
-    # as well as setup our HTTP version appropriately
-    $client->setup_keepalive($thd);
-
     # if we had an alternate primary response header, make sure
     # we send the real content-length (from the reproxied URL)
     # and not the one the first server gave us
@@ -527,6 +523,10 @@ sub handle_response { # : void
         } 
         $thd->code(200) if $thd->response_code == 204;  # upgrade HTTP No Content (204) to 200 OK.
     }
+
+    # setup_keepalive will set Connection: and Keep-Alive: headers for us
+    # as well as setup our HTTP version appropriately
+    $client->setup_keepalive($thd);
 
     print "  writing response headers to client\n" if Perlbal::DEBUG >= 3;
     $client->write($thd->to_string_ref);
