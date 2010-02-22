@@ -520,7 +520,7 @@ sub handle_response { # : void
             $thd->code($rescode);
             $thd->header('Accept-Ranges', $hd->header('Accept-Ranges')) if $hd->header('Accept-Ranges');
             $thd->header('Content-Range', $hd->header('Content-Range')) if $hd->header('Content-Range');
-        } 
+        }
         $thd->code(200) if $thd->response_code == 204;  # upgrade HTTP No Content (204) to 200 OK.
     }
 
