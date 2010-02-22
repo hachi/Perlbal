@@ -217,7 +217,7 @@ sub serve_client {
             if ($cmd =~ /^reproxy_url_cached:(\d+):(.+)/i) {
                 kill 'USR1', $testpid;
                 $to_send = $response->(headers =>
-                                       "X-Reproxy-URL: $2\r\nX-Reproxy-Cache-For: $1; Last-Modified Content-Type\r\n");
+                                       "X-Reproxy-URL: $2\r\nX-Reproxy-Cache-For: $1; Last-Modified Content-Type\r\nLast-Modified: 199\r\nContent-Type: application/badger\r\n");
             }
 
             if ($cmd =~ /^reproxy_url_multi:((?:\d+:){2,})(\S+)/i) {
