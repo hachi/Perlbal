@@ -83,13 +83,14 @@ request("clean_on_early_close", 500_000,
         );
 
 # rate tests
-buffer_rules(rate => 200_000);
+# need to write at least 250k (default size threshold)
+buffer_rules(rate => 300_000);
 request("buffer_on_rate", 1_000_000,
         50_000,
-        "sleep:1",
+        "sleep:2",
         "empty",
         300_000,
-        "sleep:1",
+        "sleep:2",
         300_000,
         "exists",
         "finish",
