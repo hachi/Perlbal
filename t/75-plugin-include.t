@@ -37,7 +37,7 @@ ok(manage("INCLUDE = $dir/a.conf"), "include single");
 
 ok(manage("INCLUDE = $dir/b* $dir/c*"), "include multi");
 
-ok(! manage("INCLUDE = $dir/d.conf"), "error on nonexistent conf");
+ok(! manage("INCLUDE = $dir/d.conf", quiet_failure => 1), "error on nonexistent conf");
 
 my $s_output = manage_multi("show SERVICE");
 
