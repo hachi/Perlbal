@@ -1,3 +1,6 @@
+    -- Switch Redirect plugin to use ->send_full_response, which fixes
+       keep-alive handling for this plugin.
+
     -- Add a ClientHTTPBase method ->send_full_response, which is intended
        as a plugin's interface to send full http responses back while still
        having perlbal handle things like keepalives correctly.

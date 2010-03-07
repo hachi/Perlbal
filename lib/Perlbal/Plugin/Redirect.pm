@@ -18,14 +18,10 @@ sub handle_request {
 
         my $path = $req_header->request_uri;
 
-        my $res_header = Perlbal::HTTPHeaders->new_response(301);
-        $res_header->header('Location' => "http://$target_host$path");
-        $res_header->header('Content-Length' => 0);
-        # For some reason a follow-up request gets a "400 Bad request" response,
-        # so until someone has time to figure out why, just punt and disable 
-        # keep-alives after this request.
-        $res_header->header('Connection' => 'close');
-        $pb->write($res_header->to_string_ref());
+        $pb->send_full_response(301, [
+            'Location' => "http://$target_host$path",
+            'Content-Length' => 0
+        ], "");
 
         return 1;
     };
