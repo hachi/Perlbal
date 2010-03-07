@@ -1,3 +1,7 @@
+    -- Add a ClientHTTPBase method ->send_full_response, which is intended
+       as a plugin's interface to send full http responses back while still
+       having perlbal handle things like keepalives correctly.
+
     -- Make keep-alive results during reproxy work even if the initial
        response doesn't have a content-length.
 

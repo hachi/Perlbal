@@ -876,6 +876,44 @@ sub send_response {
     return $self->_simple_response(@_);
 }
 
+sub send_full_response {
+    my Perlbal::ClientHTTPBase $self = shift;
+    my $code = shift;
+    my $headers = shift || [];
+    my $bref = ref($_[0]) eq 'SCALAR' ? shift : \shift;
+
+    my $res = $self->{res_headers} = Perlbal::HTTPHeaders->new_response($code);
+
+    while (@$headers) {
+        my ($name, $value) = splice @$headers, 0, 2;
+        $res->header($name, $value);
+    }
+
+    if ($code == 204 || $code == 304) {
+        $res->header('Content-Length', undef);
+        $bref = \undef;
+    } elsif (defined $$bref) {
+        $res->header('Content-Length', length($$bref));
+    }
+
+    $res->header('Server', 'Perlbal'); # Tunable?
+    # $res->header('Date', # We should do this
+
+    $self->setup_keepalive($res);
+
+    $self->state('xfer_resp');
+    $self->tcp_cork(1);  # cork writes to self
+    $self->write($res->to_string_ref);
+
+    if (defined $$bref && $self->{req_headers} && $self->{req_headers}->request_method ne 'HEAD') {
+        # don't write body for head requests
+        $self->write($bref);
+    }
+
+    $self->write(sub { $self->http_response_sent; });
+    return 1;
+}
+
 # method that sends a 500 to the user but logs it and any extra information
 # we have about the error in question
 sub system_error {
