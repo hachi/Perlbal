@@ -120,6 +120,7 @@ sub setup_keepalive {
     # now get the headers we're using
     my Perlbal::HTTPHeaders $reshd = $_[1];
     my Perlbal::HTTPHeaders $rqhd = $self->{req_headers};
+    my $override_value = $_[2];
 
     # for now, we enforce outgoing HTTP 1.0
     $reshd->set_version("1.0");
@@ -128,6 +129,7 @@ sub setup_keepalive {
     # we respect for persist_client
     my $svc = $self->{selector_svc} || $self->{service};
     my $persist_client = $svc->{persist_client} || 0;
+    $persist_client = $override_value if defined $override_value;
     print "  service's persist_client = $persist_client\n" if Perlbal::DEBUG >= 3;
 
     # do keep alive if they sent content-length or it's a head request
@@ -881,6 +883,7 @@ sub send_full_response {
     my $code = shift;
     my $headers = shift || [];
     my $bref = ref($_[0]) eq 'SCALAR' ? shift : \shift;
+    my $options = shift || {};
 
     my $res = $self->{res_headers} = Perlbal::HTTPHeaders->new_response($code);
 
@@ -899,7 +902,7 @@ sub send_full_response {
     $res->header('Server', 'Perlbal'); # Tunable?
     # $res->header('Date', # We should do this
 
-    $self->setup_keepalive($res);
+    $self->setup_keepalive($res, $options->{persist_client});
 
     $self->state('xfer_resp');
     $self->tcp_cork(1);  # cork writes to self
