@@ -1441,7 +1441,6 @@ sub header_management {
     my ($mode, $key, $val, $mc) = @_;
     return $mc->err("no header provided") unless $key;
     return $mc->err("no value provided")  unless $val || $mode eq 'remove';
-    return $mc->err("only valid on reverse_proxy services") unless $self->{role} eq 'reverse_proxy';
 
     if ($mode eq 'insert') {
         push @{$self->{extra_headers}->{insert}}, [ $key, $val ];
@@ -1489,10 +1488,23 @@ sub selector {
     return $self->{selector};
 }
 
+# This is called anytime a client is leaving this service to be another service.
+sub release_client {
+    my Perlbal::Service $self = shift;
+    my Perlbal::ClientHTTPBase $cb = shift;
+
+    $self->munge_headers($cb->{req_headers});
+    return;
+}
+
 # given a base client from a 'selector' role, down-cast it to its specific type
 sub adopt_base_client {
     my Perlbal::Service $self = shift;
     my Perlbal::ClientHTTPBase $cb = shift;
+
+    if (my $orig_service = $cb->{service}) {
+        $orig_service->release_client($cb);
+    }
 
     $cb->{service} = $self;
 

@@ -1,3 +1,5 @@
+    -- Allow HEADER command on all service roles
+
     -- Switch Redirect plugin to use ->send_full_response, which fixes
        keep-alive handling for this plugin.
 
