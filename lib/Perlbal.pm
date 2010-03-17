@@ -470,7 +470,7 @@ sub MANAGE_mime {
             return $mc->err("$arg1 not a defined extension.");
         }
     } else {
-        return $mc->err("Usage: list, remove <ext>, add <ext> <mime>");
+        return $mc->err("Usage: list, remove <ext>, set <ext> <mime>");
     }
 }
 
