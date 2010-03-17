@@ -1,3 +1,6 @@
+    -- Change all the example configs to use a lower port
+       (Andreas J Koenig <andreas.j.koenig@gmail.com>)
+
     -- Fix typo in help for MIME command (Jeremy James <jeremy.james@gmail.com>)
 
     -- Allow HEADER command on all service roles
