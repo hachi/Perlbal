@@ -7,7 +7,9 @@ Perlbal - Reverse-proxy load balancer and webserver
 
 =head1 DESCRIPTION
 
-For now, see example configuration files in conf/
+For now, see example configuration files in conf/ from the CPAN tarball
+
+http://search.cpan.org/dist/Perlbal/
 
 =head1 AUTHORS
 
