@@ -95,6 +95,8 @@ use fields (
             'ssl_key_file',       # file:  path to key pem file
             'ssl_cert_file',      # file:  path to key pem file
             'ssl_cipher_list',    # OpenSSL cipher list string
+            'ssl_ca_path',        # directory:  path to certificates
+            'ssl_verify_mode',    # int:  verification mode, see IO::Socket::SSL documentation 
 
             'enable_error_retries',  # bool: whether we should retry requests after errors
             'error_retry_schedule',  # string of comma-separated seconds (full or partial) to delay between retries
@@ -575,6 +577,20 @@ our $tunables = {
         check_role => "*",
     },
 
+    'ssl_ca_path' => {
+        des => 'Path to directory containing certificates for SSL.',
+        default => undef,
+        check_type => "directory_or_none",
+        check_role => "*",
+    },
+
+    'ssl_verify_mode' => {
+        des => 'SSL verification mode',
+        default => 0,
+        check_type => "int",
+        check_role => "*",
+    },
+
     'enable_error_retries' => {
         des => 'Whether Perlbal should transparently retry requests to backends if a backend returns a 500 server error.',
         default => 0,
@@ -838,6 +854,8 @@ sub set {
                 return $mc->err("File '$val' not found for '$key'") unless -f $val;
             } elsif ($req_type eq "file_or_none") {
                 return $mc->err("File '$val' not found for '$key'") unless -f $val || $val eq $tun->{default};
+            } elsif ($req_type eq "directory_or_none") {
+                return $mc->err("Directory '$val' not found for '$key'") unless !defined $val || -d $val;
             } else {
                 die "Unknown check_type: $req_type\n";
             }
@@ -1561,6 +1579,8 @@ sub enable {
                 SSL_key_file    => $self->{ssl_key_file},
                 SSL_cert_file   => $self->{ssl_cert_file},
                 SSL_cipher_list => $self->{ssl_cipher_list},
+                (defined $self->{ssl_ca_path} ? (SSL_ca_path => $self->{ssl_ca_path}) : ()),
+                (defined $self->{ssl_verify_mode} ? (SSL_verify_mode => $self->{ssl_verify_mode}) : ()),
             };
             return $mc->err("IO::Socket:SSL (0.97+) not available.  Can't do SSL.") unless eval "use IO::Socket::SSL 0.97 (); 1;";
             return $mc->err("SSL key file ($self->{ssl_key_file}) doesn't exist")   unless -f $self->{ssl_key_file};
