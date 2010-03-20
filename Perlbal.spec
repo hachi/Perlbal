@@ -1,6 +1,6 @@
 name:      Perlbal
 summary:   Perlbal - High efficiency reverse proxy and web server.
-version:   1.73
+version:   1.74
 release:   1%{?dist}
 vendor:    Alan Kasindorf <dormando@rydia.net>
 packager:  Jonathan Steinert <rpm@hachi.kuiki.net>

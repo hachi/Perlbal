@@ -75,4 +75,5 @@ t/52-chunked-upload.t
 t/60-child-httpd.t
 t/75-plugin-include.t
 t/90-accesscontrol.t
+t/76-plugin-redirect.t
 t/helper/child-httpd.pl

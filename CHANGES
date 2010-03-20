@@ -1,3 +1,5 @@
+1.74: 2010-03-20
+
     -- Change headers->headers_list method to return original case for PP
 
     -- Add Slaven Rezic's SSL Client cert verification patch.
