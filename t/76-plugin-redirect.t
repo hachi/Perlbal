@@ -40,7 +40,7 @@ $wc->http_version('1.0');
 my $resp = $wc->request({ host => "example.com", }, "foo/bar.txt"); # Test lib prepends '/' for me.
 ok($resp, "Got a response");
 
-is($resp->code, 301, "Redirect has proper code: $_[0]");
+is($resp->code, 301, "Redirect has proper code");
 like($resp->header("Location"), qr{^http://example.net/foo/bar.txt$}, "Correct redirect response");
 like($resp->header("Connection"), qr/Keep-Alive/i, "... and keep-alives are on");
 
