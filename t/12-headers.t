@@ -34,7 +34,7 @@ foreach my $class (@classes) {
     is($obj->header('anoTHER'), '', "headers without content 3 - $class");
     is($obj->header('notthere'), undef, "headers without content 4 - $class");
 
-    is_deeply([sort @{ $obj->headers_list }], [qw/ another header something /], 'headers_list');
+    is_deeply([sort map {lc} @{ $obj->headers_list }], [qw/ another header something /], 'headers_list');
 }
 
 1;
