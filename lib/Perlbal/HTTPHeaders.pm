@@ -269,7 +269,8 @@ sub header {
 
 sub headers_list {
     my Perlbal::HTTPHeaders $self = shift;
-    return [$self->{headers} ? keys %{ $self->{headers} } : ()];
+    return [] unless $self->{headers};
+    return [ map { $self->{origcase}{$_} } keys %{$self->{headers}} ];
 }
 
 sub to_string_ref {
