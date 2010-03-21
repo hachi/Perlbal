@@ -1,4 +1,5 @@
 CHANGES
+CONTRIBUTING
 conf/echoservice.conf
 conf/load-balancer.conf
 conf/nodelist.dat

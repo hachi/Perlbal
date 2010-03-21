@@ -10,12 +10,21 @@ Perlbal - Reverse-proxy load balancer and webserver
 
 =head1 SEE ALSO
 
- http://www.danga.com/perlbal/
+L<http://www.danga.com/perlbal/>
+
+=head1 CONTRIBUTING
+
+Got a patch?  Or a bug report?  Instructions on how to contribute
+are located here:
+
+L<http://contributing.appspot.com/perlbal>
+
+Thanks!
 
 =head1 COPYRIGHT AND LICENSE
 
 Copyright 2004, Danga Interactive, Inc.
-Copyright 2005-2007, Six Apart, Ltd.
+Copyright 2005-2010, Six Apart, Ltd.
 
 You can use and redistribute Perlbal under the same terms as Perl itself.
 

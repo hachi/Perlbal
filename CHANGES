@@ -1,3 +1,5 @@
+    -- added links to http://contributing.appspot.com/perlbal
+
 1.74: 2010-03-20
 
     -- Change headers->headers_list method to return original case for PP
