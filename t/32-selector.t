@@ -19,7 +19,7 @@ my $dir = tempdir();
 my $pb_port = new_port();
 
 my $conf = qq{
-LOAD vhosts
+LOAD Vhosts
 CREATE POOL a
 
 CREATE SERVICE ss

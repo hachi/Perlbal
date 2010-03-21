@@ -37,7 +37,7 @@ SET buffer_uploads = off
 SET buffer_upload_threshold_size = 1
 
 ENABLE test
-LOAD vhosts
+LOAD Vhosts
 
 CREATE SERVICE ss
    SET role = selector
