@@ -296,7 +296,7 @@ sub drain_read_buf_to {
 ### can override if they want to do some other processing.
 sub die_gracefully {
     my Perlbal::Socket $self = $_[0];
-    if ($self->state eq 'persist_wait') {
+    if (defined $self->state && $self->state eq 'persist_wait') {
         $self->close('graceful_shutdown');
     }
     $self->{do_die} = 1;
@@ -313,7 +313,7 @@ sub write {
         # Mark this socket alive so we don't time out
         $self->{alive_time} = $Perlbal::tick_time;
     }
-    
+
     return $ret;
 }
 
