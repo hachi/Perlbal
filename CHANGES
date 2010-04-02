@@ -1,3 +1,5 @@
+1.75: 2010-04-02
+
     -- Stop doubleforking on daemonization. Seems useless and triggered a bug
        with newer IO::AIO's.
 
