@@ -1,3 +1,6 @@
+    -- Stop doubleforking on daemonization. Seems useless and triggered a bug
+       with newer IO::AIO's.
+
     -- Fix tests on OSX. (plugin loader doesn't play nicely with a case-
        insensitive filesystem)
 
