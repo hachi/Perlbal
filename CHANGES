@@ -1,3 +1,8 @@
+    -- Cap our read buffers before AIO file operations to 1MB, this will prevent
+       memory over-use on systems with slow disks for PUT, or buffered upload temp
+       files. Assuming you system is fast enough to keep up with the writes this
+       will not harm upload speeds.
+
 1.75: 2010-04-02
 
     -- Stop doubleforking on daemonization. Seems useless and triggered a bug

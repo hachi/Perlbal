@@ -1084,6 +1084,8 @@ sub continue_buffered_upload {
 # write data to disk
 sub buffered_upload_update {
     my Perlbal::ClientProxy $self = shift;
+    # Reading too far ahead of our AIO subsystem will cause us to buffer it in memory.
+    $self->watch_read(0) if $self->{read_ahead} >= 1024 * 1024; # arbitrary
     return if $self->{is_writing};
     return unless $self->{is_buffering} && $self->{read_ahead};
 
@@ -1124,9 +1126,13 @@ sub buffered_upload_update {
     }
 
     # at this point, we want to do some writing
-    my $bref = shift(@{$self->{read_buf}});
+    my $bref = \join("", map { $$_ } @{$self->{read_buf}});
+    $self->{read_buf} = []; # clear these out
+    $self->{read_ahead} = 0;
     my $len = length $$bref;
-    $self->{read_ahead} -= $len;
+
+    # After copying out and clearing the buffer, turn reads back on again to fill up another buffer.
+    $self->watch_read(1) if $self->{content_length_remain} || $self->{chunked_upload_state};
 
     # so at this point we have a valid filename and file handle and should write out
     # the buffer that we have

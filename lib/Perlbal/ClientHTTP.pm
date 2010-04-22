@@ -247,6 +247,9 @@ sub handle_put_chunked {
                 return;
             }
 
+            # Reading too far ahead of our AIO subsystem will cause us to buffer it in memory.
+            $self->watch_read(0) if $self->{read_ahead} >= 1024 * 1024; # arbitrary
+            # ->put_writeout clears {read_ahead}, so we run it after we need that
             $self->put_writeout if $self->{read_ahead} >= 8192; # arbitrary
         },
         on_disconnect => sub {
@@ -333,6 +336,9 @@ sub event_read_put {
     $self->{content_length_remain} -= $clen;
 
     if ($self->{content_length_remain}) {
+        # Reading too far ahead of our AIO subsystem will cause us to buffer it in memory.
+        $self->watch_read(0) if $self->{read_ahead} >= 1024 * 1024; # arbitrary
+        # ->put_writeout clears {read_ahead}, so we run it after we need that
         $self->put_writeout if $self->{read_ahead} >= 8192; # arbitrary
     } else {
         # now, if we've filled the content of this put, we're done
@@ -425,6 +431,9 @@ sub put_writeout {
     # reset our input buffer
     $self->{read_buf}   = [];
     $self->{read_ahead} = 0;
+
+    # After copying out and clearing the buffer, turn reads back on again to fill up another buffer.
+    $self->watch_read(1) if $self->{content_length_remain} || $self->{chunked_upload_state};
 
     # okay, file is open, write some data
     $self->{put_in_progress} = 1;
