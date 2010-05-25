@@ -135,4 +135,8 @@ sub event_write {
     $_[0]->try_accept;
 }
 
+sub event_err {
+    $_[0]->close('invalid_ssl_state');
+}
+
 1;
