@@ -1458,7 +1458,8 @@ sub header_management {
     my Perlbal::Service $self = shift;
     my ($mode, $key, $val, $mc) = @_;
     return $mc->err("no header provided") unless $key;
-    return $mc->err("no value provided")  unless $val || $mode eq 'remove';
+    return $mc->err("no value provided")  unless 
+        (defined $val && length $val || $mode eq 'remove');
 
     if ($mode eq 'insert') {
         push @{$self->{extra_headers}->{insert}}, [ $key, $val ];

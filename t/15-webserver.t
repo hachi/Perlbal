@@ -19,6 +19,8 @@ SET test.listen = 127.0.0.1:$port
 SET test.docroot = $dir
 SET test.dirindexing = 0
 SET test.persist_client = 1
+HEADER test insert X-Good-Day: 1
+HEADER test insert X-Bad-Day: 0
 ENABLE test
 };
 
