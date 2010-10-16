@@ -21,9 +21,10 @@ no  warnings qw(deprecated);
 use Danga::Socket 1.44;
 use IO::Socket::SSL 0.98;
 use Errno qw( EAGAIN );
+use Perlbal::Socket;
 
 use base 'Danga::Socket';
-use fields qw( listener create_time );
+use fields qw( listener create_time alive_time);
 
 # magic IO::Socket::SSL crap to make it play nice with us
 {
@@ -48,6 +49,17 @@ use fields qw( listener create_time );
     };
 }
 
+Perlbal::Socket->set_socket_idle_handler('Perlbal::SocketSSL' => sub {
+    my Perlbal::SocketSSL $v = shift;
+
+    my $max_age = eval { $v->max_idle_time } || 0;
+    return unless $max_age;
+
+    # Attributes are in another class, don't violate object boundaries.
+    $v->close("perlbal_timeout")
+        if $v->{alive_time} < $Perlbal::tick_time - $max_age;
+});
+
 # called: CLASS->new( $sock, $tcplistener )
 sub new {
     my Perlbal::SocketSSL $self = shift;
@@ -59,7 +71,7 @@ sub new {
 
     ${*$sock}->{_danga_socket} = $self;
     $self->{listener} = $listener;
-    $self->{create_time} = time;
+    $self->{alive_time} = $self->{create_time} = time;
 
     $self->SUPER::new($sock);
 
@@ -127,16 +139,23 @@ sub try_accept {
 
 sub event_read {
     $_[0]->watch_read(0);
+    $_[0]->{alive_time} = $Perlbal::tick_time;
     $_[0]->try_accept;
 }
 
 sub event_write {
     $_[0]->watch_write(0);
+    $_[0]->{alive_time} = $Perlbal::tick_time;
     $_[0]->try_accept;
 }
 
 sub event_err {
     $_[0]->close('invalid_ssl_state');
+}
+
+# You can tuna-fish, but you can't tune a Perlbal::SocketSSL
+sub max_idle_time {
+    return 60;
 }
 
 1;
