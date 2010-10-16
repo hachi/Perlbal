@@ -126,30 +126,65 @@ sub new {
     return $self;
 }
 
+# We need to maintain a cache of socket classes and what cleanup
+# handler (if any) we perform on them. This is because classes based
+# on Perlbal::Socket get one method, and Perlbal::SocketSSL gets a
+# different handler. Caching this information is done rather than a
+# static list because you can make new client classes in Perlbal.
+
+# If perl cached ->isa($class) call results we can make this shorter.
+my %class_isa_cache;
+
+# A list of socket classes that we are interested in, listed in
+# the order which they should be probed for.
+my %socket_class_handlers = (
+    'Perlbal::Socket' => sub {
+        my Perlbal::Socket $v = shift;
+
+        my $max_age = eval { $v->max_idle_time } || 0;
+        return unless $max_age;
+
+        # We're inside the class where ->{alive_time} is defined, safe to use.
+        $v->close("perlbal_timeout")
+            if $v->{alive_time} < $Perlbal::tick_time - $max_age;
+    },
+);
+
+sub set_socket_idle_handler {
+    my $class = shift;
+    my $handler_class = shift;
+    my $handler = shift;
+    $socket_class_handlers{$handler_class} = $handler;
+}
+
 # FIXME: this doesn't scale in theory, but it might use less CPU in
 # practice than using the Heap:: modules and manipulating the
 # expirations all the time, thus doing things properly
 # algorithmically.  and this is definitely less work, so it's worth
 # a try.
+
 sub _do_cleanup {
     my $sf = Perlbal::Socket->get_sock_ref;
 
-    my $now = time;
-
-    my @to_close;
-    while (my $k = each %$sf) {
-        my Perlbal::Socket $v = $sf->{$k};
-
-        my $max_age = eval { $v->max_idle_time } || 0;
-        next unless $max_age;
-
-        if ($v->{alive_time} < $now - $max_age) {
-            push @to_close, $v;
+    SOCKET: while (my $k = each %$sf) {
+        my $sock = $sf->{$k};
+        my $sock_class = ref $sf->{$k};
+        if (exists $class_isa_cache{$sock_class}) {
+            my $handler = $class_isa_cache{$sock_class};
+            next unless defined $handler;
+            $handler->($sock);
+            next SOCKET;
         }
-    }
 
-    foreach my $sock (@to_close) {
-        $sock->close("perlbal_timeout")
+        # No entry in the cache, find out what handler we should assign.
+        my $handler;
+        while (my ($check_class, $check_handler) = each %socket_class_handlers) {
+            next unless $sock->isa($check_class);
+            $handler = $check_handler;
+            last;
+        }
+        # Outside the loop, so that we assign undef if none of the loop passes find anything.
+        $class_isa_cache{$sock_class} = $handler;
     }
 
     Danga::Socket->AddTimer(5, \&_do_cleanup);
