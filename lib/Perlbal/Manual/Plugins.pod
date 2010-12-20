@@ -62,6 +62,7 @@ A Perlbal plugin consists in a package under the C<Perlbal::Plugin> namespace th
 
 These steps and functions (plus some helper functions you can define or use) are described below.
 
+PLEASE KEEP IN MIND: Perlbal is a single-process, asynchronous web server. You must not do things in plugins which will cause it to block, or no other requests can be served at the same time.
 
 =head3 Creating a package
 
@@ -238,7 +239,7 @@ C<check_type> can also contain a code reference that will be used to validate th
         ...
     },
 
-This code reference should return a true of false value. If returning false, the contents of C<$emesg> (which is passed as a reference to the function) will be used as the error message.
+This code reference should return a true or false value. If returning false, the contents of C<$emesg> (which is passed as a reference to the function) will be used as the error message.
 
 Here's a better explanation of the acceptable values for C<check_type>:
 

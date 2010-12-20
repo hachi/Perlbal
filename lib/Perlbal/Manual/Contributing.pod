@@ -17,7 +17,7 @@ This document aims at providing useful pointers for people wanting to contribute
 
 There's a description of Perlbal's internals in L<Perlbal::Manual::Internals>.
 
-There's a list of to-do items at L<Perlbal::Manual::ToDo>.
+There's a list of to-do items at http://code.google.com/p/perlbal/issues/list
 
 Also, join the mailing list at http://groups.google.com/group/perlbal.
 
@@ -52,7 +52,7 @@ Be sure to follow local style conventions.
 
     http://groups.google.com/group/perlbal
 
-=item Bug Tracker
+=item Bug Tracker and ToDo
 
     http://code.google.com/p/perlbal/issues/list
 
@@ -63,4 +63,3 @@ Be sure to follow local style conventions.
 
 L<Perlbal::Manual::Credits>,
 L<Perlbal::Manual::Internals>,
-L<Perlbal::Manual::ToDo>.

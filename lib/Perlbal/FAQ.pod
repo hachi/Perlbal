@@ -50,7 +50,7 @@ Currently, Perlbal supports only one balancing method: C<random>.
 
     SET pool balance_method = 'random'
 
-With this mode, Perlbal selects one of the nodes within the pool randomly for each request received.
+With this mode, Perlbal selects one of the nodes within the pool randomly for each request received. It prefers reusing existing idle backend connections if backend_persist is enabled, which is faster than waiting for a new connection to open each time.
 
 
 =head2 Plugins

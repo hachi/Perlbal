@@ -65,6 +65,28 @@ After that you define a service called C<service_mywebsite> with the role C<reve
 The last line is what allows you have several services configured in a file even if they are not currently active (a common scenario is to configure everything on the file and then enable/disable services on-the-fly as required; see L<Perlbal::Manual::Management> for more information on this process).
 
 
+=head3 The Load Balancing algorithm
+
+Perlbal uses a highly efficient load balancing algorithm. It is very effective for distributing dynamic web requests among potentially heterogeneous hardware.
+
+First, backend servers must have their MaxClients (for apache, or equivalent) setting tuned to a reasonable limit. If your hardware can run 20 requests in parallel before running out of CPU, set MaxClients to 20.
+
+Next, by default Perlbal will distribute requests randomly. Opening a new connection to any available backend, and issuing the request.
+
+The proper algorithm is able to be used if C<verify_backend>, C<backend_persist>, C<backend_persist_cache>, and C<connect_ahead> are enabled.
+
+    SET persist_backend       = on
+    SET verify_backend        = on
+    SET backend_persist_cache = 5
+    SET connect_ahead         = 2
+
+In this configuration, Perlbal will only route client requests to backends that it knows are real processes, instead of the OS listen queue. It will attempt to reuse pre-verified backends, and will attempt to create slightly more idle connections than it needs in preparation of future requests.
+
+When you put all this together, it becomes less likely that a client will wait for Perlbal to find an available backend. By setting your MaxClients properly, backends are able to serve traffic without getting overwhelmed. If no backends are available, Perlbal will queue them internally, rather than overload backends.
+
+You would want to disable C<verify_backend> if you are balancing across image servers, or other extremely lightweight requests.
+
+
 =head2 SEE ALSO
 
 L<Perlbal::Manual::Configuration>,

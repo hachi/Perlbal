@@ -78,6 +78,8 @@ Note that:
 
 ...unsets the nodefile, but does not remove current members.
 
+Also note: If you set a nodefile, then modify the pool via POOL ADD or POOL REMOVE, Perlbal will stop checking the nodefile for updates!
+
 Check F<conf/load-balancer.conf> and F<conf/nodelist.dat> for an example.
 
 

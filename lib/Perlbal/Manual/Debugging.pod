@@ -19,7 +19,7 @@ One of them is through a management console; the other is through debugging mess
 
 You'll need to set up a management service and use it to dump all the information you require.
 
-The comprehensive documentation on this process can be found at L<Perlbal::Manual::Management.
+The comprehensive documentation on this process can be found at L<Perlbal::Manual::Management>.
 
 
 =head2 Debugging messages

@@ -65,7 +65,7 @@ Default is 100k.
 
 =item B<buffer_size> = size
 
-How much ahead of a client we'll get while copying from a backend to a client. If a client gets behind this much, we stop reading from the backend for a bit.
+How much ahead of a client we'll get while copying from a backend to a client. If a client gets behind this much, we stop reading from the backend for a bit. Once all remaining data fits in the buffer, the backend is released and may be reused.
 
 Default is 256k.
 
@@ -170,7 +170,7 @@ See L<Perlbal::Manual::HighPriority> for more information.
 
 =item B<idle_timeout> = int
 
-Timeout in seconds for idle connections to the end user.
+Timeout in seconds for idle connections to the end user. It's also the limit for how long a backend may take to respond or transfer data.
 
 Default is 30.
 
@@ -330,7 +330,7 @@ Let's assume, for simplification purposes, that your service only has one server
 
 =item * Perlbal starts
 
-1 connection is opened (because of C<connect_ahead>'s value).
+No connections open until the very first request comes in (this may change in the future).
 
 =item * one requests arrives
 

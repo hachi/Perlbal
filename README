@@ -31,7 +31,7 @@ DESCRIPTION
 Perlbal is a Perl-based reverse proxy load balancer and web server.
 
 It processes hundreds of millions of requests a day just for LiveJournal,
-Vox and TypePad and dozens of other high-traffic websites.
+TypePad and dozens of other high-traffic websites.
 
 Perlbal is a single-threaded event-based server supporting HTTP load
 balancing, web serving, and a mix of the two (see below).
@@ -96,8 +96,8 @@ Role: Reverse Proxy
           o Can actually give Perlbal a list of URLs to try. Perlbal will find
             one that's alive. Again, the end user sees no redirects happening
 
-          o Can also redirect to a file, which Perlbal will serve
-            non-blocking. See webserver mode above
+          o Can also redirect to a local file, which Perlbal will serve
+            non-blocking. See webserver mode below
 
     * Persistent client connections (configurable)
 

@@ -95,11 +95,6 @@ Brief description of existing roles.
 Setting up a Perlbal C<selector> service.
 
 
-=item L<Perlbal::Manual::ToDo>
-
-Perlbal's To-Do list.
-
-
 =item L<Perlbal::Manual::WebServer>
 
 Setting up a Perlbal C<web_server> service.

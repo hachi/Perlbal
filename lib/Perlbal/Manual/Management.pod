@@ -200,6 +200,8 @@ Unsetting the file to autoload nodes from (note that this does not remove curren
 
 C<undef>, C<null>, "" and '' are interpreted just like C<none>.
 
+Note that manually modifying the pool (via POOL ADD or POOL REMOVE) will disable the periodic checking of the nodefile.
+
 Setting the load balancing method:
 
     SET pool balance_method = 'random'

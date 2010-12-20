@@ -19,6 +19,11 @@ How to install Perlbal.
 
     cpan> install Perlbal
 
+L<App::cpanminus> is also good at quickly installing Perlbal and all of its dependencies
+
+    $ cpanm Perlbal IO::AIO Perlbal::XS::HTTPHeaders
+
+... will give you an ideal Perlbal environment.
 
 =head2 Installing Perlbal (with a little more detail)
 
@@ -76,6 +81,16 @@ You can clone Perlbal's repository from github and install it by hand by followi
 
 
 =head2 Optional Dependencies and Asynchronous IO
+
+It is very highly recommended that L<Perlbal::XS::HTTPHeaders> is installed and enabled. If you have poor performance, the first thing to do is install L<Perlbal::XS::HTTPHeaders>.
+
+    $ perl -MCPAN -e shell
+
+    cpan> install Perlbal::XS::HTTPHeaders
+
+Enable it in your configuration:
+
+    XS enable headers
 
 Perlbal checks for L<IO::AIO> availability and uses it to perform asynchronous IO operations. If you're performing disk operations (e.g., using Perlbal as a web server), having L<IO::AIO> will improve your response times.
 

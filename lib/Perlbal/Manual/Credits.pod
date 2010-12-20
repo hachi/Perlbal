@@ -14,12 +14,11 @@ Lots of incredible people have contributed to make Perlbal the amazing tool that
 
 We are all very grateful for their help.
 
-Please let us know if you think someone is missing from this list.
+Please let us know if you think someone is missing from this list. The primary git repo may also be more up to date.
 
 
 =head2 CONTRIBUTORS
 
-Alan Kasindorf,
 Andreas J Koenig,
 Andrew McClain,
 Andy Armstrong,
@@ -31,6 +30,7 @@ Brad Fitzpatrick,
 Chuck Remes,
 Chris Hondl,
 Dan Conlon,
+dormando,
 Eamon Daly,
 Fred Moyer,
 Giao Phan,
