@@ -188,58 +188,9 @@ There are many custom plugins that send new headers to the backends, promote
 requests to the fast queue, maintain more detailed statistics, do image
 header manipulation, and more.
 
-The following is a list of known plugins. Most of these are shipped with Perlbal
-itself; the others can be easily attained through CPAN.
-
-    * Perlbal::Plugin::AccessControl
-
-    * Perlbal::Plugin::Addheader
-
-    * Perlbal::Plugin::AutoRemoveLeadingDir
-
-    * Perlbal::Plugin::BackendHeaders
-
-    * Perlbal::Plugin::Cgilike
-
-    * Perlbal::Plugin::EchoService
-
-    * Perlbal::Plugin::ExpandSSL
-
-    * Perlbal::Plugin::ForwardedFor
-
-    * Perlbal::Plugin::Highpri
-
-    * Perlbal::Plugin::Include
-
-    * Perlbal::Plugin::LazyCDN
-
-    * Perlbal::Plugin::MaxContentLength
-
-    * Perlbal::Plugin::NotModified
-
-    * Perlbal::Plugin::PSGI
-
-    * Perlbal::Plugin::Palimg
-
-    * Perlbal::Plugin::Queues
-
-    * Perlbal::Plugin::Redirect
-
-    * Perlbal::Plugin::Stats
-
-    * Perlbal::Plugin::StickySessions
-
-    * Perlbal::Plugin::TrustHeader
-
-    * Perlbal::Plugin::UrlGroup
-
-    * Perlbal::Plugin::Vhosts
-
-    * Perlbal::Plugin::Vpaths
-
 Writing your own plugins is also easy.
 
-For more information on how plugins work, see Perlbal::Manual::Plugins.
+For more information on how plugins work, and a list of known plugins see Perlbal::Manual::Plugins. You may also find them easily on CPAN.
 
 
 FURTHER DOCUMENTATION
