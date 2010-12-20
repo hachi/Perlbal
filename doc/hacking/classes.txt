@@ -50,14 +50,6 @@ of parameters set to further adjust its behavior.  By itself, the Service
 class handles maintaining pools of backend connections and managing statistics
 about itself.
 
-StatsListener -- descends from Perlbal::Socket
-  This class listens for UDP broadcasts from the web nodes describing how
-many available children they have.  This information is then used to pick an
-endpoint for a backend connection to be made to in order to handle a user's
-incoming request.
-
-
-
                             {{ INTERNET }}
                                   |
                                   v
