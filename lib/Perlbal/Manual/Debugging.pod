@@ -1,0 +1,178 @@
+=head1 NAME
+
+Perlbal::Manual::Debugging - Debugging Perlbal
+
+
+=head2 VERSION
+
+Perlbal 1.76.
+
+
+=head2 DESCRIPTION
+
+Perlbal has two ways of debugging.
+
+One of them is through a management console; the other is through debugging messages.
+
+
+=head2 Debugging in a console
+
+You'll need to set up a management service and use it to dump all the information you require.
+
+The comprehensive documentation on this process can be found at L<Perlbal::Manual::Management.
+
+
+=head2 Debugging messages
+
+You can control the ammount of debugging messages Perlbal dumps by setting the environment variable C<PERLBAL_DEBUG> to a value between 0 and 4:
+
+    PERLBAL_DEBUG = 0 # no debug
+
+    PERLBAL_DEBUG = 4 # debug everything
+
+
+=head3 Debug level 1
+
+You can activate basic debug by setting C<PERLBAL_DEBUG> to 1:
+
+    PERLBAL_DEBUG = 1
+
+The following debugging messages are turned on:
+
+=over 4
+
+=item * When a connection to a backend is closed, L<Perlbal::BackendHTTP> prints C<Backend $self is done; closing...>
+
+=item * When a connection to a backend is killed, L<Perlbal::ClientProxy> prints C<Client ($self) closing backend ($backend)>
+
+=item * When an HTTP request fails to be parsed, L<Perlbal::HTTPHeaders> prints C<HTTP parse failure: $reason>
+
+=item * When the connection is promoted to SSL, L<Perlbal::TCPListener> prints C<  .. socket upgraded to SSL!>
+
+=back
+
+
+=head3 Debug level 2
+
+By setting the debug level to 2 you'll get all the messages from level 1.
+
+    PERLBAL_DEBUG = 2
+
+You will also get a few others:
+
+=over 4
+
+=item * When a connection to a backend is opened and ready to be written to, L<Perlbal::BackendHTTP> prints C<Backend $self is writeable!>
+
+=item * When a response is about to be handled, L<Perlbal::BackendHTTP> prints C<BackendHTTP: handle_response>
+
+=item * When a backend is ready to be read from, L<Perlbal::BackendHTTP> prints C<Backend $self is readable!>
+
+=item * When there's an error with the connection to the backend, L<Perlbal::BackendHTTP> prints C<BACKEND event_err>
+
+=item * Whenever we're determining if we should be sending keep-alive header information back to the client, L<Perlbal::ClientHTTPBase> prints C<ClientHTTPBase::setup_keepalive($self)>
+
+=item * Whenever the client is ready for more of its file, L<Perlbal::ClientHTTPBase> prints C<REPROXY SSL done>
+
+=item * Right after we've read a chunk of a file and when a reproxy request is about to be sent, L<Perlbal::ClientHTTPBase> prints C<REPROXY Sent: $sent>
+
+=item * When we've written all data in the queue (and are about to stop waiting for write notifications), L<Perlbal::ClientHTTPBase> prints C<All writing done to $self>
+
+=item * Whenever a client proxy is about to be closed, L<Perlbal::ClientProxy> prints C<Perlbal::ClientProxy closed>, followed by a possible C<again> and a possible C<saying $reason>
+
+=item * When a client has disconnected, L<Perlbal::ClientProxy> prints C<ClientProxy::client_disconnected>
+
+=item * When a backend requests a client of a high priority request and the client is available, L<Perlbal/Service> prints C<Got from fast queue, in front of $backlog others>
+
+=item * When a backend requests a client of a normal priority request and the client is available, L<Perlbal/Service> prints C<Backend requesting client, got PRIORITY = $cp->{fd}.>
+
+=item * When a backend requests a client of a low priority request and the client is available, L<Perlbal/Service> prints C<Backend requesting client, got low priority = $cp->{fd}.>
+
+=item * When header are being read, L<Perlbal::Socket> prints C<Perlbal::Socket::read_headers($self) is_res=$is_res>
+
+
+=back
+
+
+=head3 Debug level 3
+
+    PERLBAL_DEBUG = 3
+
+By setting the debug level to 3 you'll get all the messages from level 1 and 2 plus the following:
+
+=over 4
+
+=item * Right before response headers are written to the client, L<Perlbal::BackendHTTP> prints C<  writing response headers to client>
+
+=item * As we're writing to the client, L<Perlbal::BackendHTTP> prints C<  content_length=VALUE> and C<  remain=VALUE>, where the values are C<undef> if they are not defined
+
+=item * If we're done writing to the client, L<Perlbal::BackendHTTP> prints C<  done.  detaching.>
+
+=item * Whenever we're determining if we should be sending keep-alive header information back to the client, L<Perlbal::ClientHTTPBase> prints C<  service's persist_client = $persist_client>
+
+=item * While determining if we should be sending keep-alive header information back to the client, if we were sent C<content-length> or it's a head request, as we're doing a keep alive L<Perlbal::ClientHTTPBase> prints C<  doing keep-alive to client>
+
+=item * If we're not sending keep-alive header information back ot the client, L<Perlbal::ClientHTTPBase> prints C<  doing connection: close>
+
+=item * Right after we've finished sending all of the results to the user, L<Perlbal::ClientProxy> prints C<ClientProxy::backend_finished>
+
+=item * When we've sent a response to a user fully and we need to reset state, L<Perlbal::ClientProxy> prints C<ClientProxy::http_response_sent -- resetting state>
+
+=item * When we're writing a response to a client, L<Perlbal::ClientProxy> prints C<ClientProxy::event_write>
+
+=item * After writing a response to a client, if it is still connected and we're triggering trigger our backend to keep reading, L<Perlbal::ClientProxy> prints C<  unstalling backend>
+
+=item * When reading a request, L<Perlbal::ClientProxy> prints C<ClientProxy::event_read>
+
+=item * When reading a request and just before we read the headers, L<Perlbal::ClientProxy> prints C<  no headers.  reading.>
+
+=item * When reading a request, if we're not buffering to disk or we're no longer reading, as we disable reads, L<Perlbal::ClientProxy> prints C<  disabling reads.>
+
+=item * As we're reading, L<Perlbal::ClientProxy> prints C<  reading $read_size bytes (VALUE bytes remain)>, where C<VALUE bytes remain> can be <undef>
+
+=item * After each read, L<Perlbal::ClientProxy> prints C<  read $len bytes>
+
+=item * After we finished reading the request, L<Perlbal::ClientProxy> prints C<  done_reading = $done_reading, backend = BACKEND>, where C<BACKEND> can be C<undef>
+
+=item * When we send the headers to the backend and it responds before we're done reading from the client, further reads from the client are discarded; in this situation L<Perlbal::ClientProxy> prints C<  already responded.>. If the client continues to send data, L<Perlbal::ClientProxy> prints C<  already responded [2].> and then gives up on reading
+
+=item * After reading, and having a backend available where we can write to, just before we do, L<Perlbal::ClientProxy> prints C<  got a backend.  sending write to it.>
+
+=item * After reading, if there's no backend available, L<Perlbal::ClientProxy> prints C<  no backend.  read_ahead = $self->{read_ahead}.>
+
+=item * If we know we've already started spooling a file to disk and we're about to continue doing so, L<Perlbal::ClientProxy> prints C<  bureason = $self->{bureason}>
+
+=item * If a backend wasn't available and we're about to request one, L<Perlbal::ClientProxy> prints C<  finally requesting a backend>
+
+=item * When we're trying to read headers and the client has disconnected, L<Perlbal::Socket> prints C<  client disconnected>
+
+=item * If we need to remove a trailing C<\r\n> from the headers, L<Perlbal::Socket> prints C<  throwing away leading \r\n>
+
+=item * If we've read a packet with headers and by the end of it we can't find the end of them, L<Perlbal::Socket> prints C<  can't find end of headers>
+
+=item * Once we've read some headers, L<Perlbal::Socket> prints C<  pre-parsed headers: [$hstr]>
+
+=item * After reading headers, if there's additional content that we've read, we push it back; when we do so, L<Perlbal::Socket> prints C<  pushing back $len bytes after header>
+
+=item * If we got bogus headers, and right before we close the connection due to a parsing failure, L<Perlbal::Socket> prints C<  bogus headers>
+
+=item * If we got valid headers, L<Perlbal::Socket> prints C<  got valid headers>
+
+=item * If we're reading buffered data from a client, L<Perlbal::Socket> prints C<draining readbuf from $self to $dest: [$$bref]>
+
+=back
+
+
+=head3 Debug level 4
+
+By setting the debug level to 4 you get all the messages from levels 1 to 3.
+
+Plus, C<write> is redefined so that whenever C<write> is called it first prints C<write($self, E<lt>$clenE<gt>"$content") from ($pkg, $filename, $line)>.
+
+    PERLBAL_DEBUG = 4
+
+
+=head2 SEE ALSO
+
+L<Perlbal::Manual::Configuration>,
+L<Perlbal::Manual::Management>.

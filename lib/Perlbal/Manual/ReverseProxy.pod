@@ -1,0 +1,398 @@
+=head1 NAME
+
+Perlbal::Manual::ReverseProxy - Configuring Perlbal as a Reverse Proxy
+
+
+=head2 VERSION
+
+Perlbal 1.76.
+
+
+=head2 DESCRIPTION
+
+How to configure a Perlbal Reverse Proxy service.
+
+
+=head2 READ ME FIRST
+
+Please read L<Perlbal::Manual::Configuration> first for a better explanation on how to configure Perlbal. This document will make much more sense after reading that.
+
+
+=head2 Configuring Perlbal as a Reverse Proxy
+
+Configuration of Perlbal as a Reverse Proxy is similar to configuration as a Load Balancer.
+
+Check L<Perlbal::Manual::LoadBalancer> under C<Using Perlbal as a Load Balancer> for a sample configuration file and for a brief explanation of the differences between a Load Balancer and a Reverse Proxy.
+
+
+=head2 Parameters
+
+You can set parameters via commands of either forms:
+
+    SET <service-name> <param> = <value>
+    SET <param> = <value>
+
+
+=over 8
+
+=item B<always_trusted> = bool
+
+Whether to trust all incoming requests' X-Forwarded-For and related headers. Set to true only if you know that all incoming requests from your own proxy servers that clean/set those headers.
+
+Default is false.
+
+
+=item B<backend_persist_cache> = int
+
+The number of backend connections to keep alive on reserve while there are no clients.
+
+Default is 2.
+
+
+=item B<blind_proxy> = bool
+
+Flag to disable any modification of X-Forwarded-For, X-Host, and X-Forwarded-Host headers.
+
+Default is false.
+
+
+=item B<buffer_backend_connect> = size
+
+How much content-body (POST/PUT/etc) data we read from a client before we start sending it to a backend web node. If C<buffer_uploads> is enabled, this value is used to determine how many bytes are read before Perlbal makes a determination on whether or not to spool the upload to disk.
+
+Default is 100k.
+
+
+=item B<buffer_size> = size
+
+How much ahead of a client we'll get while copying from a backend to a client. If a client gets behind this much, we stop reading from the backend for a bit.
+
+Default is 256k.
+
+
+=item B<buffer_size_reproxy_url> = size
+
+How much ahead of a client we'll get while copying from a reproxied URL to a client. If a client gets behind this much, we stop reading from the reproxied URL for a bit. The default is lower than the regular C<buffer_size> (50k instead of 256k) because it's assumed that you're only reproxying to large files on event-based webservers, which are less sensitive to many open connections, whereas the 256k buffer size is good for keeping heavy process-based free of slow clients.
+
+Default if 50k.
+
+
+=item B<buffer_upload_threshold_rate> = int
+
+If an upload is coming in at a rate less than this value in bytes per second, it will be buffered to disk. A value of 0 means the rate will not be checked.
+
+Default is 0.
+
+
+=item B<buffer_upload_threshold_size> = size
+
+If an upload is larger than this size in bytes, it will be buffered to disk. A value of 0 means the size will not be checked.
+
+Default is 250k.
+
+
+=item B<buffer_upload_threshold_time> = int
+
+If an upload is estimated to take more than this number of seconds, it will be buffered to disk. A value of 0 means the time will not be estimated.
+
+Default is 5.
+
+
+=item B<buffer_uploads> = bool
+
+Used to enable or disable the buffer uploads to disk system. If enabled, C<buffer_backend_connect> bytes worth of the upload will be stored in memory. At that point, the buffer upload thresholds will be checked to see if we should just send this upload to the backend or if we should spool it to the disk.
+
+Default if false.
+
+
+=item B<buffer_uploads_path> = path/to/directory
+
+Directory root for storing files used to buffer uploads.
+
+
+=item B<client_sndbuf_size> = I<size>
+
+How large to set the client's socket SNDBUF.
+
+Default is 0.
+
+
+=item B<connect_ahead> = int
+
+How many extra backend connections we keep alive in addition to the current ones, in anticipation of new client connections.
+
+Default is 0.
+
+
+=item B<enable_error_retries> = bool
+
+Whether Perlbal should transparently retry requests to backends if a backend returns a 500 server error.
+
+Default is false.
+
+
+=item B<enable_reproxy> = bool
+
+Enable 'reproxying' (end-user-transparent internal redirects) to either local files or other URLs. When enabled, the backend servers in the pool that this service is configured for will have access to tell this Perlbal instance to serve any local readable file, or connect to any other URL that this Perlbal can connect to. Only enable this if you trust the backend web nodes.
+
+Default is false.
+
+See the section C<Reproxying> in this document for more information.
+
+
+=item B<error_retry_schedule> = string of comma-separated seconds (full or partial)
+
+String of comma-separated seconds (full or partial) to delay between retries. For example "0,2" would mean do at most two retries, the first zero seconds after the first failure, and the second 2 seconds after the second failure. You probably don't need to modify the default value.
+
+Default it 0,0.25,0.50,1,1,1,1,1
+
+
+=item B<enable_ssl> = bool
+
+Enable SSL to the client.
+
+Default is false.
+
+
+=item B<high_priority_cookie> = cookie_name
+
+The cookie name to inspect to determine if the client goes onto the high-priority queue.
+
+See L<Perlbal::Manual::HighPriority> for more information.
+
+
+=item B<high_priority_cookie_contents> = string
+
+A string that the C<high_priority_cookie> must contain to go onto the high-priority queue.
+
+See L<Perlbal::Manual::HighPriority> for more information.
+
+
+=item B<idle_timeout> = int
+
+Timeout in seconds for idle connections to the end user.
+
+Default is 30.
+
+
+=item B<listen> = ip:port
+
+The ip:port to listen on. For a service to work, you must either make it listen, or make another selector service map to a non-listening service.
+
+
+=item B<max_backend_uses> = int
+
+The maximum number of requests to be made on a single persistent backend connection before releasing the connection.
+
+A value of 0 means there is no limit and the connection will only be discarded once the backend asks it to be or when Perlbal is sufficiently idle.
+
+Default is 0.
+
+
+=item B<max_chunked_request_size> = size
+
+The maximum size that will be accepted for a chunked request (which is written to disk, buffered uploads must be on). A value of 0 means no limit.
+
+Default is 209715200 (200MB).
+
+
+=item B<persist_client> = bool
+
+Whether to enable HTTP keep-alives to the end user.
+
+Default is false.
+
+
+=item B<persist_backend> = bool
+
+Whether to enable HTTP keep-alives to the backend webnodes.
+
+Default is false, but setting it to true is highly recommended if Perlbal is the only client to your backends. If not, beware that Perlbal will hog the connections, starving other clients.
+
+
+=item B<persist_client_idle_timeout> = int
+
+Timeout in seconds for HTTP persist_client_idle_timeout keep-alives to the end user.
+
+Default is 30.
+
+
+=item B<persist_client_timeout> = int (B<DEPRECATED>)
+
+Set both the persist_client_timeout persist_client_idle_timeout and idle_timeout.
+
+Deprecated.
+
+
+=item B<pool>
+
+Name of previously-created pool object containing the backend nodes that this reverse proxy sends requests to.
+
+
+=item B<queue_relief_chance> = int:0-100
+
+Chance (percentage) to take a standard priority request when we're in pressure relief mode.
+
+Default is 0.
+
+See L<Perlbal::Manual::HighPriority> for more information.
+
+
+=item B<queue_relief_size> = int
+
+Number of outstanding standard priority connections to activate pressure relief at.
+
+A value of 0 disables the high priority queue system entirely.
+
+Default is 0.
+
+See L<Perlbal::Manual::HighPriority> for more information.
+
+
+=item B<reproxy_cache_maxsize> = int
+
+Set the maximum number of cached reproxy results (X-REPROXY-CACHE-FOR) that may be kept in the service cache. These cached requests take up about 1.25KB of RAM each (on Linux x86), but will vary with usage. Perlbal still starts with 0 in the cache and will grow over time. Be careful when adjusting this and watch your RAM usage like a hawk.
+
+Default is 0, which means cache is disabled.
+
+
+=item B<role> = reverse_proxy|web_server|management|selector
+
+What type of service. One of 'reverse_proxy' for a service that load balances to a pool of backend webserver nodes, 'web_server' for a typical webserver', 'management' for a Perlbal management interface (speaks both command-line or HTTP, auto-detected), or 'selector', for a virtual service that maps onto other services.
+
+
+=item B<server_process>
+
+Executable which will be the HTTP server on stdin/stdout. (B<ALPHA>, B<EXPERIMENTAL>)
+
+
+=item B<ssl_cert_file> = path/to/file
+
+Path to certificate PEM file for SSL.
+
+Default is C<certs/server-cert.pem>.
+
+
+=item B<ssl_cipher_list> = cipher list
+
+OpenSSL-style cipher list.
+
+Default is C<ALL:!LOW:!EXP>.
+
+
+=item B<ssl_key_file> = path/to/file
+
+Path to private key PEM file for SSL.
+
+Default is C<certs/server-key.pem>.
+
+
+=item B<trusted_upstream_proxies> = Net::Netmask filter
+
+A L<Net::Netmask> filter (e.g. 10.0.0.0/24, see L<Net::Netmask>) that determines whether upstream clients are trusted or not, where trusted means their X-Forwarded-For/etc headers are not munged.
+
+
+=item B<upload_status_listeners> = comma separated list of hosts
+
+Comma separated list of hosts in form 'a.b.c.d:port' which will receive UDP upload status packets no faster than once a second per HTTP request (PUT/POST) from clients that have requested an upload status bar, which they request by appending the URL get argument ?client_up_sess=[xxxxx] where xxxxx is 5-50 'word' characters (a-z, A-Z, 0-9, underscore).
+
+
+=item B<verify_backend> = bool
+
+Whether Perlbal should send a quick OPTIONS request to the backends before sending an actual client request to them. If your backend is Apache or some other process-based webserver, this is highly recommended. All too often a loaded backend box will reply to new TCP connections, but it's the kernel's TCP stack Perlbal is talking to, not and actual Apache process yet. Using this option reduces end-user latency a ton on loaded sites.
+
+Default if false.
+
+
+=item B<verify_backend_path> = path
+
+What path the OPTIONS request sent by C<verify_backend> should use.
+
+Default is C<*>.
+
+=back
+
+
+=head2 More on Parameters
+
+=head3 backend_persist_cache vs. connect_ahead
+
+The C<backend_persist_cache> parameter refers to connections kept alive after being used, while C<connect_ahead> refers to connections opened in anticipation.
+
+For instance:
+
+    SET backend_persist_cache = 2
+    SET connect_ahead         = 1
+
+Let's assume, for simplification purposes, that your service only has one server. Here's an example of what could happen:
+
+=over 4
+
+=item * Perlbal starts
+
+1 connection is opened (because of C<connect_ahead>'s value).
+
+=item * one requests arrives
+
+This request starts being served on the open connection; Perlbal opens another connection because C<connect_ahead>'s value tells it to always open one in anticipation.
+
+=item * a second request arrives
+
+(the first request hasn't concluded yet)
+
+The second connection is used, a third one is created so we still have one in anticipation.
+
+=item * the first request finishes
+
+The connection is kept open; this means we now have three open connections: two being used and one free (the first and the third one are free).
+
+=item * the second request finishes
+
+The connection is killed, as we already have two other open connections (the first and the third), and that's the number set by C<backend_persist_cache> for the number of connections to be kept alive.
+
+=back
+
+
+=head3 Reproxying
+
+Perlbal supports the concept of reproxying. Basically, this gives it the ability to ask a backend node for a file and get back a specific header that says "this file is really over there, get it there." Perlbal will then load that file or URL and send it to the user transparently, without them ever knowing that they got reproxied to another location.
+
+Add the following line to your F<perlbal.conf> to enable reproxying on a per service basis ( reproxying is disabled by default in >= 1.38 ):
+
+    SET enable_reproxy  = true
+
+This can be useful for having URLs that get mapped to files on disk without giving users enough information to map out your directory structure. For example, you can create a file structure such as:
+
+    /home/pics/$userid/$pic
+
+Then you can have URLs such as:
+
+    http://foo.com/mysite/users/$userid/picture/$pic
+
+When this URL gets passed to the backend web node, it could return a simple response that includes this header:
+
+    X-REPROXY-FILE: /home/pics/$userid/$pic
+
+Perlbal will then use asynchronous IO to send the file to the user without slowing down Perlbal at all.
+
+This support also extends to URLs that can be located anywhere Perlbal has access to. It's the same syntax, nearly:
+
+    X-REPROXY-URL: http://foo.com:80/resource.html
+
+You can also specify multiple URLs:
+
+    X-REPROXY-URL: http://foo.com:80/resource.html http://baz.com:8080/res.htm
+
+Just specify any number of space separated URLs. Perlbal will request them one by one until one returns a response code of 200. At that point Perlbal will proxy the response back to the user just like normal.
+
+Note that the user's headers are NOT passed through to the web server. To the target server, it looks simply like Perlbal is requesting the resource for itself. This behavior may change at some point.
+
+One final note: the server that returns the reproxy header can also return a C<X-REPROXY-EXPECTED-SIZE> header. If present, Perlbal will consider a reproxy a failure if the file returned by the target system is of a different size than what the expected size header says. On failure, Perlbal tries the next URI in the list. If it's a file being reproxied, a 404 is returned if the file size is different.
+
+
+=head2 SEE ALSO
+
+L<Perlbal::Manual::Configuration>,
+L<Perlbal::Manual::FailOver>,
+L<Perlbal::Manual::LoadBalancer>,
+L<Perlbal::Manual::Management>.

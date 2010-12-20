@@ -1,0 +1,119 @@
+=head1 NAME
+
+Perlbal::Manual - Guide and reference manual for Perlbal
+
+
+=head2 VERSION
+
+Perlbal 1.76.
+
+
+=head2 DESCRIPTION
+
+This is the comprehensive guide and reference manual for Perlbal.
+
+
+=over 4
+
+=item L<Perlbal::Manual::Configuration>
+
+How to configure Perlbal: pools, services, syntax and more.
+
+
+=item L<Perlbal::Manual::Contributing>
+
+How to contribute to Perlbal.
+
+
+=item L<Perlbal::Manual::Credits>
+
+Author and contributor credits for Perlbal.
+
+
+=item L<Perlbal::Manual::Debugging>
+
+How Perlbal's Debugging system works.
+
+
+=item L<Perlbal::Manual::FailOver>
+
+How Perlbal's Fail Over mechanism works.
+
+
+=item L<Perlbal::Manual::HighPriority>
+
+Perlbal's high/low priority queueing system and how to use it.
+
+
+=item L<Perlbal::Manual::Hooks>
+
+Existing hooks and how they work.
+
+
+=item L<Perlbal::Manual::Install>
+
+Installation procedures for Perlbal.
+
+
+=item L<Perlbal::Manual::Internals>
+
+Perlbal's architecture at a glance. Useful for developers.
+
+
+=item L<Perlbal::Manual::LoadBalancer>
+
+Setting up a Perlbal Load Balancing service.
+
+
+=item L<Perlbal::Manual::Logging>
+
+How Perlbal's Logging system works.
+
+
+=item L<Perlbal::Manual::Management>
+
+Setting up a C<management> service, connecting to that service and managing Perlbal on-the-fly.
+
+
+=item L<Perlbal::Manual::Plugins>
+
+Known plugins and how to create new ones.
+
+
+=item L<Perlbal::Manual::ReverseProxy>
+
+Setting up a Perlbal C<reverse_proxy> service.
+
+
+=item L<Perlbal::Manual::Roles>
+
+Brief description of existing roles.
+
+
+=item L<Perlbal::Manual::Selector>
+
+Setting up a Perlbal C<selector> service.
+
+
+=item L<Perlbal::Manual::ToDo>
+
+Perlbal's To-Do list.
+
+
+=item L<Perlbal::Manual::WebServer>
+
+Setting up a Perlbal C<web_server> service.
+
+
+=back
+
+=head1 AUTHORS
+
+Bruno Martins and José Castro.
+
+
+=head2 SEE ALSO
+
+L<Perlbal::FAQ>.
+
+There are sample configuration files under F<conf/>, including samples for using and configuring existing plugins.

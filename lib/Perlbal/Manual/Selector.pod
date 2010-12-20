@@ -1,0 +1,49 @@
+=head1 NAME
+
+Perlbal::Manual::Selector - Configuring Perlbal as a virtual service that maps onto other services
+
+
+=head2 VERSION
+
+Perlbal 1.76.
+
+
+=head2 DESCRIPTION
+
+How to configure a Perlbal C<selector> service.
+
+
+=head2 READ ME FIRST
+
+Please read L<Perlbal::Manual::Configuration> first for a better explanation on how to configure Perlbal. This document will make much more sense after reading that.
+
+
+=head2 Configuring Perlbal as a Selector
+
+The C<selector> role allows you to create a service that selects to which other service a request should be sent to.
+
+Here's an example of how to do that with the help of L<Perlbal::Plugin::VHosts>:
+
+    LOAD vhosts
+
+    CREATE SERVICE selector_service
+      SET listen         = 0.0.0.0:80
+      SET role           = selector
+      SET plugins        = vhosts
+
+      VHOST *.site1.com  = service1
+      VHOST *.site2.com  = service2
+    ENABLE selector_service
+
+In this case, requests to both C<site1> and C<site2> are received by C<selector_service>, which then sends requests for C<site1> to C<service1> and requests for C<site2> to C<service2>.
+
+Depending on your needs, you may want to use an existing plugin (e.g., L<Perlbal::Plugin::Vhosts>, L<Perlbal::Plugin::VPaths>) or create your own (see C<selector> under L<Perlbal::Manual::Plugins>).
+
+
+=head2 SEE ALSO
+
+L<Perlbal::Manual::Configuration>,
+L<Perlbal::Manual::Management>,
+L<Perlbal::Manual::Plugins>,
+L<Perlbal::Plugin::Vhosts>,
+L<Perlbal::Plugin::VPaths>.

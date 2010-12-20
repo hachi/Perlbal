@@ -1,0 +1,117 @@
+=head1 NAME
+
+Perlbal::Manual::WebServer - Configuring Perlbal as a Web Server
+
+
+=head2 VERSION
+
+Perlbal 1.76.
+
+
+=head2 DESCRIPTION
+
+How to configure a Perlbal Web Server service.
+
+
+=head2 READ ME FIRST
+
+Please read L<Perlbal::Manual::Configuration> first for a better explanation on how to configure Perlbal. This document will make much more sense after reading that.
+
+
+=head2 Configuring Perlbal as a Web Server
+
+By default, perlbal looks for a configuration file at F</etc/perlbal/perlbal.conf>.
+
+You can also point perlbal at a different configuration file with the B<-c> flag.
+
+    $ perlbal -c /home/user/perlbal.conf
+
+
+Here's a very simple example where we configure a simple web server that serves an index file under /tmp
+
+    CREATE SERVICE perlbal_test
+        SET role           = web_server
+        SET listen         = 0.0.0.0:80
+        SET docroot        = /tmp
+    ENABLE perlbal_test
+
+The first line creates a service called C<perlbal_test>. The last line enables that service.
+
+The three parameters state - in order - that the service is a web server, that it listens on all addresses on port 80, and that its document root is C</tmp>.
+
+
+=head2 Parameters
+
+You can set parameters via commands of either forms:
+
+    SET <service-name> <param> = <value>
+    SET <param> = <value>
+
+
+=over 8
+
+=item B<dirindexing> = bool
+
+Show directory indexes when an HTTP request is for a directory. Warning: this is not an async operation, so will slow down Perlbal on heavily loaded sites.
+
+Default if false.
+
+
+=item B<docroot> = directory/root
+
+Directory root for web server.
+
+
+=item B<enable_concatenate_get> = bool
+
+Enable Perlbal's multiple-files-in-one-request mode, where a client have use a comma-separated list of files to return, always in text/plain.
+
+Useful for web apps which have dozens/hundreds of tiny css/js files, and don't trust browsers/etc to do pipelining.
+
+Decreases overall round-trip latency a bunch, but requires app to be modified to support it. See t/17-concat.t test for details.
+
+Default is false.
+
+
+=item B<enable_delete> = bool
+
+Enable HTTP DELETE requests.
+
+Default is false.
+
+
+=item B<enable_put> = bool
+
+Enable HTTP PUT requests.
+
+Default is false.
+
+
+=item B<index_files> = comma-separated list of filenames
+
+Comma-separated list of filenames to load when a user visits a directory URL, listed in order of preference.
+
+Default is index.html.
+
+
+=item B<max_put_size> = size
+
+The maximum content-length that will be accepted for a PUT request, if enable_put is on.
+
+Default is 0, which means there is no limit.
+
+
+=item B<min_put_directory> = int
+
+If PUT requests are enabled, require this many levels of directories to already exist. If not, fail.
+
+Default is 0.
+
+
+=back
+
+
+=head2 SEE ALSO
+
+L<Perlbal::Manual::Configuration>,
+L<Perlbal::Manual::Management>.

@@ -1,0 +1,583 @@
+=head1 NAME
+
+Perlbal::Manual::Management - Managing Perlbal on-the-fly
+
+
+=head2 VERSION
+
+Perlbal 1.76.
+
+
+=head2 DESCRIPTION
+
+How to configure a Perlbal C<management> service for on-the-fly configuration and debugging.
+
+
+=head2 READ ME FIRST
+
+Please read L<Perlbal::Manual::Configuration> first for a better explanation on how to configure Perlbal. This document will make much more sense after reading that.
+
+
+=head2 Setting up a management service
+
+You can create a management service in the following way:
+
+    CREATE SERVICE mgmt
+        SET role   = management
+        SET listen = 127.0.0.1:16000
+    ENABLE mgmt
+
+
+=head3 Consulting information with a browser
+
+If you access the management service (in this case, 127.0.0.1 on port 16000) with a browser you'll reach a page with information on the services that are enabled. You're also able to click those services and reach further information on each of them.
+
+=head3 Managing Perlbal via telnet
+
+If you telnet to the management service you get a connection that allows you manage your Perlbal's instance.
+
+    $ telnet 127.0.0.1 16000
+    Trying 127.0.0.1...
+    Connected to 127.0.0.1.
+    Escape character is '^]'.
+
+You now have access to several commands (which are case insensitive):
+
+=head4 Admin Commands
+
+=over 4
+
+
+=item create pool <name>
+
+=item create service <name>
+
+Creates a pool or a service.
+
+    create pool my_new_pool
+
+    create service my_new_service
+
+
+=item disable <service>
+
+Disables a service (stops listening).
+
+    disable my_service
+
+Note that you can not disable C<management> services.
+
+
+=item enable <service>
+
+Enables a service (starts listening).
+
+    enable my_service
+
+
+=item header <service> insert <header>:<value>
+
+=item header <service> remove <header>
+
+Inserts or removes headers from the request before they're passed on to the backend.
+
+When adding headers you must state the value:
+
+    header my_service insert x-myamazingheader:myamazingvalue
+
+When removing headers you don't need the state any value, the header will be removed regardless of the value it holds:
+
+    header my_service remove Connection
+
+Note: the usage of C<x-> in the beginning of your header is not required, but the convention is that non-standard headers be prefixed with C<x->.
+
+
+=item load <plugin>
+
+Loads a Perlbal plugin.
+
+    load AccessControl
+
+
+=item plugins
+
+Lists plugins
+
+
+=item pool <name> add <ip[:port]>
+
+=item pool <name> remove <ip[:port]>
+
+Allows you to add or remove nodes from a service.
+
+    pool add my_service 127.0.0.1:1337
+
+    pool remove my_service 127.0.0.1:1337
+
+Note that adding a node that already exists or removing a non-existing node do not result in an error message.
+
+Also note that the port number defaults to :80 if omitted.
+
+
+=item reproxy_state
+
+Dumps the state of reproxy status.
+
+    reproxy_state
+    SERVER max_reproxy_connections = 0
+
+
+=item server <param> = <value>
+
+Sets a server parameter, where param is one of:
+
+
+=over 8
+
+=item * max_reproxy_connections = <value>
+
+Maximum number of concurrent connections to the backends.
+
+
+=item * max_reproxy_connections(C<ip>) = <value>
+
+Maximum number of concurrent connections to one specific backend.
+
+
+=item * max_connections = <value>
+
+Sets the value of C<RLIMIT_NOFILE> (maximum number of open files for this process).
+
+Requires L<BSD::Resource>. Also, Perlbal must be run under a superuser.
+
+
+=item * nice_level = <value>
+
+Sets the C<nice> level for the process.
+
+
+=item * aio_mode = <value>
+
+One of C<none>, C<linux> for L<Linux::AIO>, or C<ioaio> for L<IO::AIO>.
+
+This controls how disk IO is done asynchronously. Highly recommended to use L<Linux::AIO> or L<IO::AIO> for webserving or reproxying files. For purely reverse proxy or only reproxying URLs, none is fine.
+
+
+=item * aio_threads = <value>
+
+Number of child threads doing disk IO. Use between 2 and 50.
+
+
+=item * track_obj = <value>
+
+Developer option to track objects.
+
+
+=item * pidfile = <value>
+
+Filename to write pidfile to (no pidfile if not specified).
+
+
+=item * crash_backtrace = <value>
+
+1 or 0 indicating whether to perform a backtrace while the server is crashing.
+
+
+=back
+
+
+=item set [<pool_name>] <param> = <value>
+
+Sets a property on a pool. If the pool was just created, specifying the pool name is optional.
+
+Setting the file to autoload nodes from (Perlbal will periodically check the file for updates):
+
+    SET my_pool nodefile = /path/to/file
+
+Unsetting the file to autoload nodes from (note that this does not remove current members):
+
+    SET my_pool nodefile = none
+
+C<undef>, C<null>, "" and '' are interpreted just like C<none>.
+
+Setting the load balancing method:
+
+    SET pool balance_method = 'random'
+
+Yes, we do realize that C<random> is the only method currently available, but hey.
+
+
+=item set [<service_name>] <param> = <value>
+
+Sets a property on a service. If the service was just created, specifying the service name is optional.
+
+See L<Perlbal::Manual::LoadBalancer>, L<Perlbal::Manual::ReverseProxy> and L<Perlbal::Manual::WebServer> for the list of available parameters.
+
+
+=item show service [<service_name>]
+
+=item show pool [<pool_name>]
+
+List all services:
+
+    show service
+
+Show details of a service:
+
+    show service my_service
+
+Lists all pools, nodes and services using them:
+
+    show pool
+
+Show the members of a pool:
+
+    show pool my_pool
+
+
+=item shutdown [graceful]
+
+Shuts down the server (you'll also lose your telnet session).
+
+Can be used instantly, killing all active connections:
+
+    shutdown
+
+Using the parameter C<graceful> listening sockets are closed and perlbal stays alive until clients bleed off.
+
+    shutdown graceful
+
+
+=item unload <plugin>
+
+Unloads a plugin.
+
+    unload AccessControl
+
+
+=item use <service>
+
+=item use <pool>
+
+Sets the implied service or pool for future operations.
+
+For instance, after:
+
+    use my_pool
+
+You can just type:
+
+    pool add 127.0.0.1:6000
+
+Note that creating a service or pool also sets it as the implied service.
+
+
+=item xs
+
+=item xs [enable <module>]
+
+=item xs [disable <module>]
+
+Show status of XS modules loaded:
+
+    xs
+
+Turn on an already-loaded XS module:
+
+    xs enable module_name
+
+Turn off an already-loaded XS module:
+
+    xs disable module_name
+
+
+=back
+
+
+=head4 Diagnostic Commands
+
+
+=over 4
+
+=item aio
+
+Shows L<Perlbal::AIO> stats.
+
+
+=item backends
+
+Lists the open connections to the backends.
+
+    backends
+    127.0.0.1:3080 1
+    127.0.0.1:3081 2
+
+In the above example, there are 3 open connections (they may be being used or they may simply be open according to the value of C<connect_ahead>).
+
+
+=item dumpconfig
+
+Shows the current configuration for each service.
+
+If a service uses a plugin that supports C<dumpconfig>, that plugin's configuration is also dumped (see C<dumpconfig> under L<Perlbal::Manual::Plugins> for more information).
+
+
+=item fd
+
+Shows the maximum number of file descriptors and how many are currently in use.
+
+    fd
+    max 1024
+    cur 8
+
+
+=item gladiator
+
+Requires L<Devel::Gladiator>.
+
+Iterate's Perl's internal memory structures and can be used to enumerate all the currently live SVs.
+
+This can be used to hunt leaks and to profile memory usage.
+
+
+=item help
+
+Displays the list of available commands.
+
+
+=item leaks
+
+=item leaks <code>
+
+Iterates over active objects.
+
+If an argument is specified, it is treated as code with C<$_> being the reference to the object.
+
+Shows objects that might have been leaked.
+
+
+=item mime
+
+Lists known mime types.
+
+    mime
+    css text/css
+    doc application/msword
+    ...
+
+
+=item node <ip[:port]>
+
+Dumps information on a specific node.
+
+    node 127.0.0.1:8181
+    127.0.0.1:8181 attempts 10
+    127.0.0.1:8181 lastattempt 1290461126
+
+Calling C<node> with a parameter is the same as calling C<nodes>.
+
+
+=item nodes
+
+Dumps information on all nodes.
+
+    nodes
+    127.0.0.1:8181 attempts 10
+    127.0.0.1:8181 lastattempt 1290461126
+    127.0.0.1:8081 connects 19
+    127.0.0.1:8081 lastconnect 1290461127
+    127.0.0.1:8081 attempts 19
+    127.0.0.1:8081 responsecodes 200 11
+    127.0.0.1:8081 lastattempt 1290461127
+
+
+=item noverify
+
+Shows the amount of time left for each node marked as noverify.
+
+If the C<verify_backend> parameter is set to a true value, perlbal tries to send an C<OPTIONS> command to a node before sending it the actual client request. If the node doesn't support the C<OPTIONS> command, the node is added to an internal hash so that an C<OPTIONS> command is not issued for new requests during the next 60 seconds.
+
+    noverify
+    127.0.0.1:8081 42
+
+In the above example, node 127.0.0.1:8081 is on that list and still has 42 seconds until an C<OPTIONS> command is tried again.
+
+If the time is a negative value it means that the C<OPTIONS> command will be issued before the next request.
+
+
+=item obj
+
+Shows objects count in scope.
+
+The environment variable C<DEBUG_OBJ> must be set to a true value (see C<Environment Variables> under L<Perlbal::Manual::Configuration> for more information).
+
+
+=item pending
+
+Shows pending backend connections by service, node, and age.
+
+
+=item proc
+
+Shows CPU usage, current time, pid, and total requests processed.
+
+
+=item prof on
+
+=item prof off
+
+=item prof data
+
+Enables/disables profiling or dumps profile data.
+
+
+=item queues
+
+Shows status of all queues (normal, high priority and low priority) for all enabled services.
+
+    queues
+    service_mywebsite-normal.age 1
+    service_mywebsite-normal.count 8
+    service_mywebsite-highpri.age 0
+    service_mywebsite-highpri.count 0
+    service_mywebsite-lowpri.age 0
+    service_mywebsite-lowpri.count 0
+
+
+=item reload <plugin_name>
+
+Reloads a plugin that supports reloading.
+
+
+=item socks [all]
+
+=item socks summary
+
+Lists all sockets or shows a summary of the sockets (by default lists all sockets).
+
+    socks
+       fd    age
+        3   748s Perlbal::ClientManage(R): open to 85.245.86.253:52248
+        4  1003s Perlbal::TCPListener(R): open: listening on 82.102.30.112:80 for service 'ws'
+        6  1003s Perlbal::TCPListener(R): open: listening on 0.0.0.0:60000 for service 'mgmt'
+
+    socks summary
+        1 Perlbal::ClientManage
+        2 Perlbal::TCPListener
+    Aggregate write buffer: 0.0k
+                Open files: 0
+
+
+=item state changes
+
+Lists recent state changes of requests.
+
+For instance, while a request is being processed this command may issue something like:
+
+    state changes
+    Perlbal::ClientProxy=HASH(0x12d7ec28): reading_headers, wait_backend, backend_req_sent, wait_res
+    Perlbal::BackendHTTP=HASH(0x12d75f30): connecting, bored, sending_req, wait_res
+    wait_res 2
+
+And as soon as the request is processed:
+
+    state changes
+    Perlbal::BackendHTTP=HASH(0x12d75f30): connecting, bored, sending_req, wait_res, xfer_res, closed
+    closed 1
+
+Note: This functionality depends on the environment variable C<PERLBAL_TRACK_STATES> being set to a true value.
+
+
+=item states
+
+=item states <service>
+
+Shows how many sockets of which type and in which state currently exist for all services.
+
+    states
+    Perlbal::ClientProxy draining_res 1
+
+If a service is specified, shows the information for that service only.
+
+    states ws
+    Perlbal::BackendHTTP wait_res 1
+    Perlbal::ClientProxy wait_res 1
+
+
+=item track
+
+Dumps objects tracked, sorted by age.
+
+    track
+    15s Perlbal::HTTPHeaders=HASH(0x1a043a50): Perlbal::HTTPHeaders::clone, Perlbal::BackendHTTP::assign_client, Perlbal::Service::register_boredom, Perlbal::BackendHTTP::event_write, Danga::Socket::EpollEventLoop, (eval), Perlbal::run
+    15s Perlbal::HTTPHeaders=HASH(0x19594fe0): Perlbal::HTTPHeaders::new, Perlbal::Socket::read_headers, Perlbal::Socket::read_response_headers, Perlbal::BackendHTTP::event_read_waiting_options, Perlbal::BackendHTTP::event_read, Danga::Socket::EpollEventLoop, (eval), Perlbal::run
+    15s Perlbal::HTTPHeaders=HASH(0x1a043d80): Perlbal::HTTPHeaders::new, Perlbal::Socket::read_headers, Perlbal::Socket::read_response_headers, Perlbal::BackendHTTP::event_read, Danga::Socket::EpollEventLoop, (eval), Perlbal::run
+    15s Perlbal::BackendHTTP=HASH(0x1a044608): Perlbal::BackendHTTP::new, Perlbal::Service::spawn_backends, Perlbal::Service::note_bad_backend_connect, Perlbal::BackendHTTP::event_err, Danga::Socket::EpollEventLoop, (eval), Perlbal::run
+    15s Perlbal::BackendHTTP=HASH(0x1a042588): Perlbal::BackendHTTP::new, Perlbal::Service::spawn_backends, Perlbal::Service::note_bad_backend_connect, Perlbal::BackendHTTP::verify_failure, Perlbal::BackendHTTP::event_read_waiting_options, Perlbal::BackendHTTP::event_read, Danga::Socket::EpollEventLoop, (eval), Perlbal::run
+    15s Perlbal::BackendHTTP=HASH(0x1a044488): Perlbal::BackendHTTP::new, Perlbal::Service::spawn_backends, Perlbal::Service::request_backend_connection, Perlbal::ClientProxy::request_backend, Perlbal::ClientProxy::handle_request, Perlbal::ClientProxy::event_read, Danga::Socket::EpollEventLoop, (eval), Perlbal::run
+
+For this to work you must have the environment variable C<DEBUG_OBJ> set to a true value and the server option C<track_obj> on:
+
+    server track_obj = 1
+    OK
+
+
+=item uptime
+
+=item version
+
+Shows the time the server was started, the current uptime and Perlbal's version.
+
+
+=item varsize
+
+Debug management command to track size of internal data structures.
+
+    varsize
+    svc-ws-bored_backends [] 2
+    svc-ws-pending_connects {} 2
+      {127.0.0.1:3080}  =
+      {127.0.0.1:3081}  = Perlbal::BackendHTTP=HASH(0x1cfd2490)
+
+
+=item verbose on
+
+=item verbose off
+
+Turns verbose mode on or off.
+
+    verbose on
+    load AccessControl
+    OK
+    verbose off
+    load AccessControl
+    verbose on
+    OK
+    load AccessControl
+    OK
+
+Yes, verbose mode only activates the printing of an OK message upon completion of some commands such as C<load>. Errors are displayed regardless of verbose status.
+
+
+=back
+
+
+=head2 CAVEAT
+
+Note that this functionality doesn't implement any sort of authentication. If you can telnet to the address you specify, you can access the information and change things on the fly.
+
+Some alternatives to authentication are commonly employed:
+
+=over 4
+
+=item * specifying the address as being 127.0.0.1 means that no one outside the machine can telnet to the management service;
+
+=item * setting the management address as a private IP available only through a VPN, for instance, will allow you to manage these accesses on the VPN instead.
+
+=back
+
+
+=head2 SEE ALSO
+
+L<Perlbal::Manual::Configuration>,
+L<Perlbal::Manual::Debugging>.

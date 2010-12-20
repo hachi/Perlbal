@@ -1,0 +1,305 @@
+                                 Perlbal
+
+                              Version 1.76
+
+                             18th June 2010
+
+                  Copyright 2004, Danga Interactive, Inc.
+                   Copyright 2005-2010, Six Apart, Ltd.
+
+  You can use and redistribute Perlbal under the same terms as Perl itself.
+
+                      http://www.danga.com/perlbal/
+
+
+INSTALLATION
+------------
+
+If you have CPAN installed you can install Perlbal from the command line:
+
+    $ cpan Perlbal
+
+See Perlbal::Manual::Install for further information on installing Perlbal,
+including instructions for specific operating systems and some
+troubleshooting (the file lives under lib/Perlbal/Manual/Install.pod, it is
+recommended that you read it using perldoc).
+
+
+DESCRIPTION
+-----------
+
+Perlbal is a Perl-based reverse proxy load balancer and web server.
+
+It processes hundreds of millions of requests a day just for LiveJournal,
+Vox and TypePad and dozens of other high-traffic websites.
+
+Perlbal is a single-threaded event-based server supporting HTTP load
+balancing, web serving, and a mix of the two (see below).
+
+Almost everything in Perlbal can be configured or reconfigured on the fly
+without needing to restart the software (see Perlbal::Manual::Management).
+
+In this file you'll find:
+
+    * GENERAL FEATURES
+    * PERFORMANCE
+    * STATISTICS AND MONITORING
+    * PLUGINS (EXTENSIBILITY)
+    * FURTHER DOCUMENTATION
+    * SUPPORT
+    * CONTRIBUTING
+
+
+GENERAL FEATURES
+----------------
+
+Perlbal has many features; this is just a short list of some of them:
+
+
+Role: Reverse Proxy
+
+    * Maintains pool of connected backend connections to reduce turnover
+
+    * Gets list of nodes either from asynchronously monitored node file, or
+        from in-server pool objects which you can add/remove nodes from
+        using the management interface
+
+    * Intelligent load balancing based on what backend connections are free
+        for a new request. No unreliable "weighting" numbers required
+
+    * Can verify (using a quick OPTIONS request) that a backend connection is
+        talking to a webserver and not just the kernel's listen queue before
+        sending client requests at it. Lower latency for the client
+
+    * Has a high priority queue for sending requests through to backends quickly
+
+          o Uses cookies to determine if a request should go to fast queue
+            (configurable)
+
+          o Highpri (high priority) plugin supports making requests high
+            priority by URI or Host
+
+          o Can specify a relief level to let low priority requests through to
+            prevent starvation
+
+    * Can allow X-Forwarded-For (and similar) headers from client based on
+        client IP
+
+    * Configurable header management before sending request to backend
+
+    * Internal redirection to file or URL(s)
+
+          o Big one for us; a backend can instruct Perlbal to fetch the user's
+            data from a completely separate server and port and URL, 100%
+            transparent to the user
+
+          o Can actually give Perlbal a list of URLs to try. Perlbal will find
+            one that's alive. Again, the end user sees no redirects happening
+
+          o Can also redirect to a file, which Perlbal will serve
+            non-blocking. See webserver mode above
+
+    * Persistent client connections (configurable)
+
+    * Persistent backend connections (shared by multiple clients;
+        no "backend waste") 
+
+
+Role: Web Server
+
+    * Listen on a port, share from a directory
+
+    * Directory indexing
+
+    * Byte range support (clients can resume downloads)
+
+    * Can have directory index requests fall back to index file list
+
+          o I.e., requests for /foo/ go to /foo/index.html instead
+
+          o Multiple index files supported, tries one at a time until it finds
+            one
+
+    * Persistent client connections (configurable)
+
+    * Almost all disk operations are done asynchronously as to not stall the
+    event loop
+
+    * Configurable support for storing files (PUT, DELETE support)
+
+
+PERFORMANCE
+-------------
+
+    * Great performance "out-of-the-box" (for both small and large sites)
+
+    * 100% asynchronous in all the recommended use cases
+
+    * Lightweight
+
+    * HTTP Header processing (optionally) done in C with
+        Perlbal::XS::HTTPHeaders for maximum performance
+
+    * Event-based using epoll or kqueue to avoid the scalability problems of
+        not-so-modern systems
+
+
+STATISTICS AND MONITORING
+-------------------------
+
+Perlbal's management interface provides extremely detailed and powerful
+statistics in addition to runtime configuration. For example:
+
+    * CPU usage (user, system)
+
+    * Total requests served across all services
+
+    * Requests service by individual backends
+
+    * Perlbal's uptime
+
+    * All connected sockets (and tons of info about each)
+
+    * Outstanding connections to backends
+
+    * Backends that have recently failed verification
+
+    * Pending backend connections by service
+
+    * Total of all socket states by socket type
+
+    * Size (in seconds and number of connections) of all queues
+
+    * State of reproxy engine (queued requests, outstanding requests,
+        backends)
+
+    * Loaded plugins per service
+
+(All statistics are in machine readable form, easy to parse and write scripts
+that check on the status of Perlbal)
+
+
+PLUGINS (EXTENSIBILITY)
+-----------------------
+
+Perlbal supports the concept of having per-service (and global) plugins that
+can add functionality or override many parts of request handling and behavior.
+There are many custom plugins that send new headers to the backends, promote
+requests to the fast queue, maintain more detailed statistics, do image
+header manipulation, and more.
+
+The following is a list of known plugins. Most of these are shipped with Perlbal
+itself; the others can be easily attained through CPAN.
+
+    * Perlbal::Plugin::AccessControl
+
+    * Perlbal::Plugin::Addheader
+
+    * Perlbal::Plugin::AutoRemoveLeadingDir
+
+    * Perlbal::Plugin::BackendHeaders
+
+    * Perlbal::Plugin::Cgilike
+
+    * Perlbal::Plugin::EchoService
+
+    * Perlbal::Plugin::ExpandSSL
+
+    * Perlbal::Plugin::ForwardedFor
+
+    * Perlbal::Plugin::Highpri
+
+    * Perlbal::Plugin::Include
+
+    * Perlbal::Plugin::LazyCDN
+
+    * Perlbal::Plugin::MaxContentLength
+
+    * Perlbal::Plugin::NotModified
+
+    * Perlbal::Plugin::PSGI
+
+    * Perlbal::Plugin::Palimg
+
+    * Perlbal::Plugin::Queues
+
+    * Perlbal::Plugin::Redirect
+
+    * Perlbal::Plugin::Stats
+
+    * Perlbal::Plugin::StickySessions
+
+    * Perlbal::Plugin::TrustHeader
+
+    * Perlbal::Plugin::UrlGroup
+
+    * Perlbal::Plugin::Vhosts
+
+    * Perlbal::Plugin::Vpaths
+
+Writing your own plugins is also easy.
+
+For more information on how plugins work, see Perlbal::Manual::Plugins.
+
+
+FURTHER DOCUMENTATION
+---------------------
+
+Perlbal's documentation is split into several sections under
+Perlbal::Manual::*.
+
+Perlbal::Manual provides the index for the manual:
+
+    perldoc Perlbal::Manual
+
+Individual sections can be viewed in the same manner:
+
+    perldoc Perlbal::Manual::Configuration
+    perldoc Perlbal::Manual::LoadBalancer
+    perldoc Perlbal::Manual::Plugins
+
+If you're interested in the internals of the Perlbal:
+
+    perldoc Perlbal::Manual::Internals
+
+The documentation is relatively new (December 2010) and was mostly written
+or gathered by Bruno Martins and José Castro under a TPF grant. You can read
+more about it at http://7eip.sl.pt and http://4hw3.sl.pt.
+
+
+SUPPORT
+-------------
+
+Feel free to ask us questions on the mailing list:
+
+    http://groups.google.com/group/perlbal
+
+There are also the old Perlbal List Archives for postings until June 2008:
+
+    http://lists.danga.com/pipermail/perlbal/
+
+
+CONTRIBUTING
+-------------
+
+You may find information on how to contribute under
+Perlbal::Manual::Contributing.
+
+The source code currently resides in https://github.com/perlbal/Perlbal
+
+
+AUTHOR
+-------------
+
+Perlbal was originally written by Brad Fitzpatrick and counts with the help
+and contributions from many other people.
+
+See Perlbal::Manual::Credits for details.
+
+
+COPYRIGHT
+-------------
+
+Copyright 2004, Danga Interactive, Inc. Copyright 2005-2010, Six Apart, Ltd.
+
+You can use and redistribute Perlbal under the same terms as Perl itself.

@@ -1,0 +1,263 @@
+=head1 NAME
+
+Perlbal::Manual::Hooks - How Perlbal's hooks work
+
+
+=head2 VERSION
+
+Perlbal 1.76.
+
+
+=head2 DESCRIPTION
+
+Basically, a hook is a bit of code that is run at certain stages in the requests that Perlbal handles.There are all kinds of hooks available and they all do different things. Some are only applicable to some of the roles and others are applicable only to certain classes. Each hook is described in detail below, but first a description of the basics of a hook.
+
+In general, you define a hook by calling the C<register_hook> method on a L<Perlbal::Service> object. You specify what hook you are interested in and provide a reference to a subroutine that will be called with the parameters particular to that hook.
+
+There are three types of hooks:
+
+
+=head2 Global hooks
+
+These are hooks that are defined on a global scale. They are set like so:
+
+    Perlbal::register_global_hook('foo', sub { return 0; });
+
+That would define a global hook named foo that would return 0 when it's called. (Return codes from hooks will be explained below)
+
+Global hooks are useful to define management commands. See C<manage_command> under L<Perlbal::Manual::Plugins> for more information.
+
+
+=head2 Service handler hooks
+
+A handler hook is attached to a particular service. These hooks are called one at a time until one hook returns 1. At that point, no further hooks are called. For example:
+
+    $service->register_hook('bar', sub {
+        # do something
+        return 1;
+    });
+
+When this hook runs, it would return 1, signalling to Perlbal that it had done what it needed to do and that Perlbal shouldn't call any further hooks. You can use this type of hook to create sets of plugins that all handle different types of requests, and when one hook had handled a request it wouldn't continue telling other hooks about the request.
+
+
+=head3 backend_client_assigned
+
+Happens right after a backend is assigned to a client, but before we've talked to the backend and asked it to do something. If you return a true value, the process is stopped and you will manually have to send the client's request to the backend, etc.
+
+Called in L<Perlbal::BackendHTTP>.
+
+Available in role C<reverse_proxy>.
+
+
+=head3 backend_readable_verify
+
+When the backend is about to start sending the response.
+
+Called in L<Perlbal::BackendHTTP>.
+
+Available in all roles.
+
+
+=head3 backend_response_received
+
+Called as soon as response headers are read from the backend. If you return a true value, will stop all handling at that point.
+
+Called in L<Perlbal::BackendHTTP>.
+
+Available in all roles.
+
+
+=head3 backend_write_verify
+
+When the backend is ready to receive the request.
+
+Called in L<Perlbal::BackendHTTP>.
+
+Available in all roles.
+
+
+=head3 concat_get_poststat_file_missing
+
+Called when a missing file was requested in a request for multiple files concatenated, right before sending the 404 response. Return a true value to overtake the connection.
+
+Called in L<Perlbal::ClientHTTPBase>.
+
+Available in role C<web_server>.
+
+See also C<concat_get_poststat_pre_send>, C<static_get_poststat_file_missing> and C<static_get_poststat_pre_send>.
+
+
+=head3 concat_get_poststat_pre_send
+
+Called when the resulting file of a request for multiple files concatenated is about to be sent, right before the 200 response code is added as a header. Return a true value to overtake the connection.
+
+Called in L<Perlbal::ClientHTTPBase>.
+
+Available in role C<web_server>.
+
+See also C<concat_get_poststat_file_missing>, C<static_get_poststat_file_missing> and C<static_get_poststat_pre_send>.
+
+
+=head3 handle_put
+
+Called when handling a PUT request.
+
+Called in L<Perlbal::ClientHTTP>.
+
+Available in role C<web_server>.
+
+
+=head3 make_high_priority
+
+Called when a request is received and right before we're about to determine if this request is high priority or not. Return a true value to make the request high priority; false to leave it alone. Note that this is only called when the request isn't already high priority due to cookie priority scheduling, which is done inside L<Perlbal::Service>.
+
+Called in L<Perlbal::ClientProxy>.
+
+Available in all roles.
+
+
+=head3 make_low_priority
+
+Called when a request is received and right before we're about to determine if this request is high priority or not. Return a true value to make the request low priority; false to leave it alone.
+
+Called in L<Perlbal::ClientProxy>.
+
+Available in all roles.
+
+
+=head3 modify_response_headers
+
+Called when we've set all the headers, and are about to serve a file. You can change or add response headers at this point, or cancel the process by returning a true value. You will have to send the response to the client yourself if you do this.
+
+Called in L<Perlbal::ClientHTTPBase>.
+
+Available in role C<web_server>.
+
+
+=head3 proxy_read_request
+
+Called on the request before we send the request to a backend.
+
+Called in L<Perlbal::ClientProxy>.
+
+Available in all roles.
+
+
+=head3 put_writeout
+
+Called when there is some put data to write out.
+
+Called in L<Perlbal::ClientHTTP>.
+
+Available in role C<web_server>.
+
+
+=head3 reproxy_fh_finished
+
+Called when a reproxy file has completed and is about to close the file handle. You can cancel the process by returning a true value (in which case you will have to close the reproxy_fh yourself).
+
+Called in L<Perlbal::ClientHTTPBase>.
+
+Available in role C<web_server>.
+
+
+=head3 return_to_base
+
+Called when a request has been finished, and control of the Client* object is about to be transferred back to ownership by a service selector. Return a true value if the perlbal core action in this situation should be bypassed.
+
+Called in L<Perlbal::ClientHTTPBase>.
+
+Available in all roles.
+
+
+=head3 start_file_reproxy
+
+Called when we've been told to reproxy a file. If you return a true value, Perlbal will not perform any operations on the file and will simply return. You can also change the file in the scalar ref passed as the second parameter.
+
+Called in L<Perlbal::ClientProxy>; receives C<$filename_ref>, a reference to the filename.
+
+Available in role C<reverse_proxy>.
+
+
+=head3 start_http_request
+
+A generic hook that works for both webserver and proxy modes, run after either the specific C<start_proxy_request> or C<start_web_request> hooks below. Like those, you return true from this hook to takeover the connection.
+
+Called in L<Perlbal::ClientProxy> and L<Perlbal::ClientHTTP>.
+
+Available in roles C<reverse_proxy> and C<web_server>.
+
+
+=head3 start_proxy_request
+
+Called as soon as we've read in headers from a user but right before we've requested a backend connection. If a true value is returned, Perlbal will not request a backend.
+
+Called in L<Perlbal::ClientProxy>.
+
+Available in role C<reverse_proxy>.
+
+
+=head3 start_send_file
+
+Called when we've opened a file and are about to start sending it to the user using sendfile. Return a true value to cancel the default sending.
+
+Called in L<Perlbal::ClientHTTPBase>.
+
+Available in role C<web_server>.
+
+
+=head3 start_serve_request
+
+Called when we're about to serve a local file, before we've done any work. You can change the file served by modifying C<$uri_ref>, or cancel the process by returning a true value.
+
+Called in L<Perlbal::ClientHTTPBase>; receives C<$uri_ref>, a reference to the URI.
+
+Available in role C<web_server>.
+
+
+=head3 start_web_request
+
+When a service has gotten headers and is about to serve it. Return a true value to cancel the default handling of web requests.
+
+Called in L<Perlbal::ClientHTTP>.
+
+Available in role C<web_server>.
+
+
+=head3 static_get_poststat_file_missing
+
+Called when a missing static single file was requested, right before sending the 404 response. Return a true value to overtake the connection.
+
+Called in L<Perlbal::ClientHTTPBase>.
+
+Available in role C<web_server>.
+
+See also C<concat_get_poststat_file_missing>, C<concat_get_poststat_pre_send> and C<static_get_poststat_pre_send>.
+
+
+=head3 static_get_poststat_pre_send
+
+Called when a static single file is about to be sent, right before the 200 response code is added as a header. Return a true value to overtake the connection.
+
+Called in L<Perlbal::ClientHTTPBase>.
+
+Available in role C<web_server>.
+
+See also C<concat_get_poststat_file_missing>, C<concat_get_poststat_pre_send> and C<static_get_poststat_file_missing>.
+
+
+=head2 Service general hooks
+
+These hooks are defined the same way as above, but general hooks are all run. The return code is ignored. This can be useful for putting in code that records statistics about an action or something to that effect.
+
+
+=head3 end_proxy_request
+
+This hook is called when the L<Perlbal::ClientProxy> object is being closed.
+
+Available in role C<reverse_proxy>.
+
+
+=head2 SEE ALSO
+
+L<Perlbal::Manual::Internals>, L<Perlbal::Manual::Plugins>.

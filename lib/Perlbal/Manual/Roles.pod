@@ -1,0 +1,53 @@
+=head1 NAME
+
+Perlbal::Manual::Roles - Roles supported by Perlbal
+
+
+=head2 VERSION
+
+Perlbal 1.76.
+
+
+=head2 DESCRIPTION
+
+Brief description of Perlbal's roles.
+
+
+=head2 Available Roles
+
+
+=head3 management
+
+Used to set a management service (a port you can telnet to and issue configuration/debugging commands to).
+
+See L<Perlbal::Manual::Management> for more information.
+
+
+=head3 reverse_proxy
+
+Used for reverse proxy and load balancing.
+
+See L<Perlbal::Manual::LoadBalancer> and L<Perlbal::Manual::ReverseProxy> for more information.
+
+
+=head3 selector
+
+A virtual service that maps onto other services.
+
+See L<Perlbal::Manual::Selector> for more information.
+
+
+=head3 web_server
+
+Used to set Perlbal as a web server.
+
+See L<Perlbal::Manual::WebServer> for more information.
+
+
+=head2 SEE ALSO
+
+L<Perlbal::Manual::LoadBalancer>,
+L<Perlbal::Manual::Management>,
+L<Perlbal::Manual::ReverseProxy>,
+L<Perlbal::Manual::Selector>,
+L<Perlbal::Manual::WebServer>.

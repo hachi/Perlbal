@@ -1,0 +1,1021 @@
+=head1 NAME
+
+Perlbal::Manual::Internals - Perlbal's architecture at a glance
+
+
+=head2 VERSION
+
+Perlbal 1.76.
+
+
+=head2 DESCRIPTION
+
+Perlbal listens for UDP broadcasts from the web nodes describing how many available children they have. This information is then used to pick an endpoint for a backend connection to be made to in order to handle a user's incoming request.
+
+                            {{ INTERNET }}
+                                  |
+                                  v
+              [Service]<===>[TCPListener]
+                          ___/    |    \___
+                         v        v        v
+             [ClientManage]  [ClientHTTP] [ClientProxy]
+                                                ^
+                                                |
+                                                v
+                                          [BackendHTTP]
+
+So connections come in from wherever and get to the TCPListener. It uses Service objects to determine what kind of Client* to spawn. The Client classes then handle crafting the response for the user.
+
+
+=head2 Classes
+
+The following is a brief introduction/overview to the main Perlbal's classes:
+
+
+=head3 Perlbal::Socket
+
+Descends from L<Danga::Socket>.
+
+Adds on to the base class to provide some functionality specifically useful for creating HTTP sockets.
+
+=head4 Fields
+
+=over 4
+
+=item headers_string
+
+Headers as they're being read.
+
+
+=item req_headers
+
+The final L<Perlbal::HTTPHeaders> object inbound.
+
+
+=item res_headers
+
+Response headers outbound (L<Perlbal::HTTPHeaders> object).
+
+
+=item create_time
+
+Creation time.
+
+
+=item alive_time
+
+Last time noted alive.
+
+
+=item state
+
+General purpose state; used by descendants.
+
+
+=item do_die
+
+If on, die and do no further requests.
+
+
+=item read_buf
+
+Arrayref of scalarref read from client.
+
+
+=item read_ahead
+
+Bytes sitting in read_buf.
+
+
+=item read_size
+
+Total bytes read from client, ever.
+
+=item ditch_leading_rn
+
+If true, the next header parsing will ignore a leading \r\n.
+
+
+=item observed_ip_string
+
+If defined, contains the observed IP string of the peer we're serving. This is intended for holding the value of the X-Forwarded-For and using it to govern ACLs.
+
+
+=back
+
+
+=head3 Perlbal::TCPListener
+
+Descends from L<Perlbal::Socket>.
+
+Very lightweight and fast connection accept class. Takes incoming connections as fast as possible and passes them off, instantiating one of the various Client* classes to handle it.
+
+=head4 Fields
+
+=over 4
+
+=item service
+
+L<Perlbal::Service>.
+
+
+=item hostport
+
+Scalar IP port of where this service is listening for new connections.
+
+
+=item sslopts
+
+The SSL Options.
+
+    use Data::Dumper;
+    warn Dumper( $tcp_listener->{'sslopts'} );
+
+The above lines would print something like the following:
+
+    $VAR1 = {
+              'ssl' => {
+                         'SSL_cipher_list' => '...',
+                         'SSL_cert_file' => '...',
+                         'SSL_key_file' => ',,,',
+                         'SSL_ca_path' => '...',
+                         'SSL_verify_mode' => '...'
+                       }
+            };
+
+
+=item v6
+
+Boolean value stating whether the installation of Perlbal supports IPv6 (which basically boils down to L<Danga::Socket> v1.6.1 and L<IO::Socket::INET6> being available).
+
+
+=back
+
+
+=head3 Perlbal::BackendHTTP
+
+Descends from L<Perlbal::Socket>.
+
+This class handles connections to the backend web nodes for getting data back to the user. This class is used by other classes such as L<Perlbal::ClientProxy> to send a request to an internal node.
+
+=head4 Fields
+
+=over 4
+
+=item client
+
+L<Perlbal::ClientProxy> connection, or undef.
+
+
+=item service
+
+L<Perlbal::Service>.
+
+
+=item pool
+
+L<Perlbal::Pool>; whatever pool we spawned from.
+
+
+=item ip
+
+IP scalar.
+
+
+=item port
+
+Port scalar.
+
+
+=item ipport
+
+C<$ip:$port>.
+
+
+=item reportto
+
+Object; must implement reporter interface.
+
+
+=item has_attention
+
+Has been accepted by a webserver and we know for sure we're not just talking to the TCP stack.
+
+
+=item waiting_options
+
+If true, we're waiting for an OPTIONS * response to determine when we have attention.
+
+
+=item disconnect_at
+
+Time this connection will be disconnected, if it's kept-alive and backend told us; otherwise C<undef> for unknown.
+
+
+=item content_length
+
+Length of document being transferred. Only applies when the backend server sends a content-length header.
+
+
+=item content_length_remain
+
+Bytes remaining to be read. Only applies when the backend server sends a content-length header.
+
+
+=item use_count
+
+Number of requests this backend's been used for.
+
+
+=item generation
+
+Int; counts what generation we were spawned in.
+
+
+=item buffered_upload_mode
+
+Boolean. If on, we're doing a buffered upload transmit.
+
+
+=item scratch
+
+Extra storage; plugins can use it if they want.
+
+
+=back
+
+
+=head3 Perlbal::HTTPHeaders
+
+Header management. Parses headers (request and response) and stores data for further user. Also manages validation of the request line so that it conforms to HTTP specifications.
+
+=head4 Fields
+
+=over 4
+
+=item headers
+
+href; lowercase header -> comma-sep list of values.
+
+
+=item origcase
+
+Href; lowercase header -> provided case.
+
+
+=item hdorder
+
+Aref; order headers were received (canonical order).
+
+
+=item method
+
+Scalar; request method (if GET request).
+
+
+=item uri
+
+Scalar; request URI (if GET request).
+
+
+=item type
+
+C<res> or C<req>.
+
+
+=item code
+
+HTTP response status code.
+
+
+=item codetext
+
+Status text that for response code.
+
+
+=item ver
+
+Version (string) "1.1".
+
+
+=item vernum
+
+Version (number: major*1000+minor): "1.1" => 1001.
+
+
+=item responseLine
+
+First line of HTTP response (if response).
+
+
+=item requestLine
+
+First line of HTTP request (if request).
+
+
+=back
+
+
+=head3 Perlbal::ClientHTTPBase
+
+Descends from L<Perlbal::Socket>.
+
+Provides base functionality to L<Perlbal::ClientHTTP> and L<Perlbal::ClientProxy>. Notably, the ability to efficiently send files to the remote user. Also handles most of the state logic for statistics and such. Is also used for services of type C<selector>. L<Perlbal::ClientHTTPBase> then reads in the request headers, and asks the service to re-bless the client instance to a more specific type, for either a L<Perlbal::ClientProxy> or L<Perlbal::ClientHTTP> (depending on selector's mapping).
+
+=head4 Fields
+
+=over 4
+
+
+=item service
+
+L<Perlbal::Service> object.
+
+
+=item replacement_uri
+
+URI to send instead of the one requested; this is used to instruct C<_serve_request> to send an index file instead of trying to serve a directory and failing.
+
+
+=item scratch
+
+Extra storage; plugins can use it if they want.
+
+
+=item reproxy_file
+
+Filename the backend told us to start opening.
+
+
+=item reproxy_file_size
+
+Size of file, once we C<stat()> it.
+
+
+=item reproxy_fh
+
+If needed, L<IO::Handle> of fd.
+
+
+=item reproxy_file_offset
+
+How much we've sent from the file.
+
+
+=item post_sendfile_cb
+
+Subref to run after we're done sendfile'ing the current file.
+
+
+=item requests
+
+Number of requests this object has performed for the user.
+
+
+=item selector_svc
+
+The original service from which we came.
+
+
+=item is_ssl
+
+Whether the socket was SSL attached (restricted operations).
+
+
+=back
+
+
+=head3 Perlbal::ClientHTTP
+
+Descends from L<Perlbal::ClientHTTPBase>.
+
+Very simple and lightweight class. Handles sending files to the user without much overhead. Most of the functionality is contained in the parent class, and this class doesn't implement much new stuff.
+
+=head4 Fields
+
+=over 4
+
+=item put_in_progress
+
+1 when we're currently waiting for an async job to return.
+
+
+=item put_fh
+
+File handle to use for writing data.
+
+
+=item put_fh_filename
+
+Filename of put_fh.
+
+
+=item put_pos
+
+File offset to write next data at.
+
+
+=item content_length
+
+Length of document being transferred.
+
+
+=item content_length_remain
+
+Bytes remaining to be read.
+
+
+=item chunked_upload_state
+
+Boolean/obj: if processing a chunked upload, L<Perlbal::ChunkedUploadState> object, else undef.
+
+
+=back
+
+
+=head3 Perlbal::ClientProxy
+
+Descends from L<Perlbal::ClientHTTPBase>.
+
+Takes an incoming connection from a user and connects to a backend node (C<Perlbal::BackendHTTP>) and relays the request. The backend can then either tell the proxy to reproxy and load a file from disk, or return a file directly, or just return a status message.
+
+=head4 Fields
+
+=over 4
+
+=item backend
+
+L<Perlbal::BackendHTTP> object (or C<undef> if disconnected).
+
+
+=item backend_requested
+
+True if we've requested a backend for this request.
+
+
+=item reconnect_count
+
+Number of times we've tried to reconnect to backend.
+
+
+=item high_priority
+
+Boolean; 1 if we are or were in the high priority queue.
+
+
+=item low_priority
+
+Boolean; 1 if we are or were in the low priority queue.
+
+
+=item reproxy_uris
+
+Arrayref; URIs to reproxy to, in order.
+
+
+=item reproxy_expected_size
+
+Int: size of response we expect to get back for reproxy.
+
+
+=item currently_reproxying
+
+Arrayref; the host info and URI we're reproxying right now.
+
+
+=item content_length_remain
+
+Int: amount of data we're still waiting for.
+
+
+=item responded
+
+Bool: whether we've already sent a response to the user or not.
+
+
+=item last_request_time
+
+Int: time that we last received a request.
+
+
+=item primary_res_hdrs
+
+If defined, we are doing a transparent reproxy-URI and the headers we get back aren't necessarily the ones we want. Instead, get most headers from the provided C<res> headers object here.
+
+
+=item is_buffering
+
+Bool; if we're buffering some/all of a request to memory/disk.
+
+
+=item is_writing
+
+Bool; if on, we currently have an C<aio_write> out.
+
+
+=item start_time
+
+Hi-res time when we started getting data to upload.
+
+
+=item bufh
+
+Buffered upload filehandle object.
+
+
+=item bufilename
+
+String; buffered upload filename.
+
+
+=item bureason
+
+String; if defined, the reason we're buffering to disk.
+
+
+=item buoutpos
+
+Int; buffered output position.
+
+
+=item backend_stalled
+
+Boolean: if backend has shut off its reads because we're too slow.
+
+
+=item unread_data_waiting
+
+Boolean: if we shut off reads while we know data is yet to be read from client.
+
+
+=item chunked_upload_state
+
+Bool/obj: if processing a chunked upload, L<Perlbal::ChunkedUploadState> object, else undef.
+
+
+=item request_body_length
+
+Integer: request's body length, either as-declared, or calculated after chunked upload is complete.
+
+
+=item last_upload_packet
+
+Unixtime we last sent a UDP upload packet. For perlbal sending out UDP packets related to upload status (for xmlhttprequest upload bar).
+
+
+=item upload_session
+
+Client's self-generated upload session. For perlbal sending out UDP packets related to upload status (for xmlhttprequest upload bar).
+
+
+=item retry_count
+
+Number of times we've retried this request so far after getting C<500> errors.
+
+
+=back
+
+
+=head3 Perlbal::ClientManage
+
+Descends from L<Perlbal::Socket>.
+
+Simple interface that provides a way for users to use the management interface of Perlbal. You can connect to the management port (as defined in the config file) with a web browser or regular telnet (see L<Perlbal::Manual::Management> for more information on this).
+
+=head4 Fields
+
+=over 4
+
+=item service
+
+L<Perlbal::Service>.
+
+
+=item buf
+
+Read buffer.
+
+
+=item is_http
+
+Boolean stating whether the request is HTTP.
+
+
+=item ctx
+
+L<Perlbal::CommandContext>.
+
+
+=back
+
+
+=head3 Perlbal::Service
+
+A service is a particular item that Perlbal is doing. Services can have a role which defines how they behave. Each service can also have a bunch of parameters set to further adjust its behavior. By itself, the Service class handles maintaining pools of backend connections and managing statistics about itself.
+
+=head4 Fields
+
+=over 4
+
+
+=item name
+
+Name of the service.
+
+
+=item role
+
+Role type (C<web_server>, C<reverse_proxy>, etc).
+
+
+=item enabled
+
+Boolean; whether we're enabled or not (enabled = listening).
+
+
+=item pool
+
+L<Perlbal::Pool> that we're using to allocate nodes if we're in proxy mode.
+
+
+=item listener
+
+L<Perlbal::TCPListener> object, when enabled.
+
+
+=item reproxy_cache
+
+L<Perlbal::Cache> object, when enabled.
+
+
+=back
+
+
+=head4 End-user tunables
+
+=over 4
+
+=item listen
+
+C<IP:port> of where we're listening for new connections.
+
+
+=item docroot
+
+Document root for C<web_server> role.
+
+
+=item dirindexing
+
+Boolean; directory indexing (for C<web_server> role). Not async.
+
+
+=item index_files
+
+Arrayref of filenames to try for index files.
+
+
+=item enable_concatenate_get
+
+Boolean; if user can request concatenated files.
+
+
+=item enable_put
+
+Boolean; whether PUT is supported.
+
+
+=item max_put_size
+
+Max size in bytes of a put file.
+
+
+=item max_chunked_request_size
+
+Max size in bytes of a chunked request (to be written to disk first).
+
+
+=item min_put_directory
+
+Number of directories required to exist at beginning of URIs in put.
+
+
+=item enable_delete
+
+Boolean; whether DELETE is supported.
+
+
+=item high_priority_cookie
+
+Cookie name to check if the client's requests should be considered high priority.
+
+See also C<high_priority_cookie_contents>.
+
+
+=item high_priority_cookie_contents
+
+Aforementioned cookie value must contain this substring.
+
+
+=item backend_persist_cache
+
+Max number of persistent backends to hold onto while no clients.
+
+
+=item persist_client
+
+Boolean; persistent connections for clients.
+
+
+=item persist_backend
+
+Boolean; persistent connections for backends.
+
+
+=item verify_backend
+
+Boolean; get attention of backend before giving it clients (using OPTIONS).
+
+
+=item verify_backend_path
+
+Path to check with the OPTIONS request (default is C<*>).
+
+
+=item max_backend_uses
+
+Max requests to send per kept-alive backend (default 0 = unlimited).
+
+
+=item connect_ahead
+
+Number of spare backends to connect to in advance all the time.
+
+
+=item buffer_size
+
+How much data a L<Perlbal::ClientProxy> object should buffer from a backend.
+
+
+=item buffer_size_reproxy_url
+
+Same as above but for backends that are reproxying for us.
+
+
+=item queue_relief_size
+
+Number of outstanding standard priority connections to activate pressure relief at.
+
+
+=item queue_relief_chance
+
+Int, 0-100; % chance to take a standard priority request when we're in pressure relief mode.
+
+
+=item trusted_upstream_proxies
+
+L<Net::Netmask> object containing netmasks for trusted upstreams.
+
+
+=item always_trusted
+
+Boolean; if true, always trust upstreams.
+
+
+=item blind_proxy
+
+Boolean; if true, do not modify C<X-Forwarded-For>, C<X-Host>, or C<X-Forwarded-Host> headers.
+
+
+=item enable_reproxy
+
+Boolean; if true, advertise that server will reproxy files and/or URLs.
+
+
+=item reproxy_cache_maxsize
+
+Maximum number of reproxy results to be cached. (0 is disabled and default).
+
+
+=item client_sndbuf_size
+
+Bytes for C<SO_SNDBUF>.
+
+
+=item server_process
+
+Path to server process (executable).
+
+
+=item persist_client_idle_timeout
+
+Keep-alive timeout in seconds for clients (default is 30).
+
+
+=item idle_timeout
+
+Idle timeout outside of keep-alive time (default is 30).
+
+
+=back
+
+
+=head4 Internal state
+
+=over 4
+
+=item waiting_clients
+
+Arrayref of clients waiting for backendhttp connections.
+
+
+=item waiting_clients_highpri
+
+Arrayref of high-priority clients waiting for backendhttp connections.
+
+
+=item waiting_clients_lowpri
+
+Arrayref of low-priority clients waiting for backendhttp connections.
+
+
+=item waiting_client_count
+
+Number of clients waiting for backends.
+
+
+=item waiting_client_map
+
+Map of clientproxy fd -> 1 (if they're waiting for a connection).
+
+
+=item pending_connects
+
+Hashref of C<ip:port> -> C<$time> (only one pending connect to backend at a time).
+
+
+=item pending_connect_count
+
+Number of outstanding backend connects.
+
+
+=item bored_backends
+
+Arrayref of backends we've already connected to, but haven't got clients.
+
+
+=item hooks
+
+Hashref: hookname => [ [ plugin, ref ], [ plugin, ref ], ... ].
+
+
+=item plugins
+
+Hashref: name => 1.
+
+
+=item plugin_order
+
+Arrayref: name, name, name...
+
+
+=item plugin_setters
+
+Hashref: { plugin_name => { key_name => coderef } }.
+
+
+=item extra_config
+
+Hashref with extra config options; name => values.
+
+
+=item spawn_lock
+
+Boolean; if true, we're currently in C<spawn_backends>.
+
+
+=item extra_headers
+
+{ insert => [ [ header, value ], ... ], remove => [ header, header, ... ], set => [ [ header, value ], ... ] }.
+
+Used in header management interface.
+
+
+=item generation
+
+Int; generation count so we can slough off backends from old pools.
+
+
+=item backend_no_spawn
+
+{ "ip:port" => 1 }.
+
+If on, C<spawn_backends> will ignore this C<ip:port> combo.
+
+
+=item buffer_backend_connect
+
+0 if off; otherwise, number of bytes to buffer before we ask for a backend.
+
+
+=item selector
+
+CODE ref, or undef, for role C<selector> services.
+
+
+=item default_service
+
+Name of a service a selector should default to.
+
+
+=item buffer_uploads
+
+Boolean; enable/disable the buffered uploads to disk system.
+
+
+=item buffer_uploads_path
+
+Path to store buffered upload files.
+
+
+=item buffer_upload_threshold_time
+
+Int; buffer uploads estimated to take longer than this.
+
+
+=item buffer_upload_threshold_size
+
+Int; buffer uploads greater than this size (in bytes).
+
+
+=item buffer_upload_threshold_rate
+
+Int; buffer uploads uploading at less than this rate (in bytes/sec).
+
+
+=item upload_status_listeners
+
+Comma separated list of C<ip:port> of UDP upload status receivers.
+
+
+=item upload_status_listeners_sockaddr
+
+Arrayref of sockaddrs (packed ip/port).
+
+
+=item enable_ssl
+
+Boolean; whether this service speaks SSL to the client.
+
+
+=item ssl_key_file
+
+File path to key pem file.
+
+
+=item ssl_cert_file
+
+File to path to cert pem file.
+
+
+=item ssl_cipher_list
+
+OpenSSL cipher list string.
+
+
+=item ssl_ca_path
+
+Path to certificates directory.
+
+
+=item ssl_verify_mode
+
+Int; verification mode, see L<IO::Socket::SSL>.
+
+
+=item enable_error_retries
+
+Boolean; whether we should retry requests after errors.
+
+
+=item error_retry_schedule
+
+Comma-separated seconds (full or partial) to delay between retries.
+
+
+=item latency
+
+Milliseconds of latency to add to request.
+
+
+=item _stat_requests
+
+Total requests to this service.
+
+
+=item _stat_cache_hits
+
+Total requests to this service that were served via the reproxy-url cache.
+
+
+=back

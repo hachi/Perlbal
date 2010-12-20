@@ -1,0 +1,73 @@
+=head1 NAME
+
+Perlbal::Manual::LoadBalancer - Using Perlbal as a Load Balancer
+
+
+=head2 VERSION
+
+Perlbal 1.76.
+
+
+=head2 DESCRIPTION
+
+How to configure a Perlbal Load Balancing service.
+
+
+=head2 READ ME FIRST
+
+Please read L<Perlbal::Manual::Configuration> first for a better explanation on how to configure Perlbal. This document will make much more sense after reading that.
+
+
+=head2 Using Perlbal as a Load Balancer
+
+For a better understanding of how to set up Perbal as a Load Balancer, it should be noted that a Load Balancer and a Reverse Proxy can often be the same thing; not always, but often.
+
+A Load Balancer is a server (or device) that balances requests across a number of servers to spread the load. A Reverse Proxy can still do this but also have a number of other features.
+
+Perlbal as a Reverse Proxy provides features such as buffering content, preserving connections to the backend servers, starting connections ahead of time and a high priority queue, among others.
+
+You could almost say that a Load Balancer is a subset of a Reverse Proxy (it's not, but you could).
+
+When it comes to Perlbal, the Load Balancer is implemented as a Reverse Proxy without all the extra options, and that's why you set the role of a Load Balancer to C<reverse_proxy>:
+
+    SET role            = reverse_proxy
+
+
+=head3 Simple load balancing
+
+Let's assume you want to configure two machines to serve your website and you want to let Perlbal decide how to balance the requests. For the sake of this exercise let's assume you have two servers at:
+
+    10.0.0.1:80
+    10.0.0.2:80
+
+And now you want to use these two machines to serve your website at:
+
+    10.0.0.3:80
+
+
+Here's a sample configuration to make this happen:
+
+    CREATE POOL mywebsite
+        POOL mywebsite ADD 10.0.0.1:80
+        POOL mywebsite ADD 10.0.0.2:80
+
+    CREATE SERVICE service_mywebsite
+        SET role            = reverse_proxy
+        SET pool            = mywebsite
+        SET listen          = 10.0.0.3:80
+    ENABLE service_mywebsite
+
+
+The first line defines a pool of machines called C<mywebsite>. The second and third lines add your two machines to that pool (note that the indentation is not mandatory).
+
+After that you define a service called C<service_mywebsite> with the role C<reverse_proxy> set to listen on C<10.0.0.3:80> and using the pool C<mywebsite> to serve the requests.
+
+The last line is what allows you have several services configured in a file even if they are not currently active (a common scenario is to configure everything on the file and then enable/disable services on-the-fly as required; see L<Perlbal::Manual::Management> for more information on this process).
+
+
+=head2 SEE ALSO
+
+L<Perlbal::Manual::Configuration>,
+L<Perlbal::Manual::FailOver>,
+L<Perlbal::Manual::Management>,
+L<Perlbal::Manual::ReverseProxy>.

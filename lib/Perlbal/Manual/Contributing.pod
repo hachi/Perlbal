@@ -1,0 +1,66 @@
+=head1 NAME
+
+Perlbal::Manual::Contributing - How to contribute to Perlbal
+
+
+=head2 VERSION
+
+Perlbal 1.76.
+
+
+=head2 DESCRIPTION
+
+This document aims at providing useful pointers for people wanting to contribute to Perlbal.
+
+
+=head2 Knowing more about the project
+
+There's a description of Perlbal's internals in L<Perlbal::Manual::Internals>.
+
+There's a list of to-do items at L<Perlbal::Manual::ToDo>.
+
+Also, join the mailing list at http://groups.google.com/group/perlbal.
+
+
+=head2 How to submit patches
+
+Send your patch to the mailing list:
+
+L<http://groups.google.com/group/perlbal>
+
+Preferred format is either a URL to your change, or a unified diff ("diff -u") attachment.
+
+For bonus points, include your patch inline also for ease of inline commenting during code reviews, but be sure to also attach the patch or include a URL.
+
+Be sure to follow local style conventions.
+
+
+=head2 Useful links
+
+
+=over 4
+
+=item Project homepage
+
+    http://www.danga.com/perlbal/
+
+=item Code repository
+
+    https://github.com/perlbal/Perlbal (git)
+
+=item Mailing list
+
+    http://groups.google.com/group/perlbal
+
+=item Bug Tracker
+
+    http://code.google.com/p/perlbal/issues/list
+
+=back
+
+
+=head2 SEE ALSO
+
+L<Perlbal::Manual::Credits>,
+L<Perlbal::Manual::Internals>,
+L<Perlbal::Manual::ToDo>.

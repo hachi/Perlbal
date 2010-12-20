@@ -1,0 +1,266 @@
+=head1 NAME
+
+Perlbal::Manual::Configuration - How to configure Perlbal
+
+
+=head2 VERSION
+
+Perlbal 1.76.
+
+
+=head2 DESCRIPTION
+
+By default, Perlbal looks for a configuration file at F</etc/perlbal/perlbal.conf>.
+
+You can also point perlbal at a different configuration file with the B<-c> flag.
+
+    $ perlbal -c /home/user/perlbal.conf
+
+B<-c> has the alias B<--conf>.
+
+
+=head2 Setting up Perlbal as a daemon
+
+You can run C<perlbal> as a daemon:
+
+    $ perlbal --daemon -c /home/user/perlbal.conf
+
+B<--daemon> has the alias B<-d>.
+
+A common practice is to create a C<perlbal.sh> file that supports the common operations you'll require (start, stop, restart) and place it under C</etc/init.d>. You can find a sample file in C<debian/perlbal.init>.
+
+
+=head2 Configuration file
+
+A Perlbal's configuration file is a text file where you create pools and services, add servers to pools, set services' parameters and enable/disable services.
+
+Indentation is not mandatory, but it's considered a good practice for readability issues.
+
+Configuration is case insensitive, but it's also a good practice to uppercase all directives.
+
+
+=head3 Pools
+
+Here's a sample configuration of a pool:
+
+    CREATE POOL mywebsite
+        POOL mywebsite ADD 10.0.0.1:80
+        POOL mywebsite ADD 10.0.0.2:80
+
+The first line creates a pool called C<mywebsite>. The second and third lines add two different servers to that pool.
+
+From here on you'll be able to use this pool in a service.
+
+Also, note that right after creating the pool, you don't need to specify which pool you're adding servers to, as it is considered to be the active pool:
+
+    CREATE POOL mywebsite
+        POOL ADD 10.0.0.1:80
+        POOL ADD 10.0.0.2:80
+
+
+=head4 Configuring a pool in a separate file
+
+You can create a pool in a separate file by using the C<nodefile> parameter:
+
+    CREATE POOL dynamic
+        SET nodefile = conf/nodelist.dat
+
+This separate file should contain addresses in the form of C<ip:port>, one per line (empty lines are ignored, as well as comments started by the C<#> sign).
+
+Perlbal will check the file periodically for updates.
+
+The path to the file is relative to where perlbal was started.
+
+Note that:
+
+    SET pool nodefile = none
+    (also undef, null, "", '')
+
+...unsets the nodefile, but does not remove current members.
+
+Check F<conf/load-balancer.conf> and F<conf/nodelist.dat> for an example.
+
+
+=head4 Pool balance method
+
+You can set the pool balance method:
+
+    SET pool balance_method = 'random'
+
+At the present time, C<random> is the only load balancing method available.
+
+
+=head3 Services
+
+Here's a sample service:
+
+    CREATE SERVICE service_mywebsite
+        SET role            = reverse_proxy
+        SET pool            = mywebsite
+        SET listen          = 10.0.0.3:80
+
+The first line creates a service called C<service_mywebsite>.
+
+On the three following lines we are setting up three parameters for that service (you can see this same example in L<Perlbal::Manual::LoadBalancer> in more detail).
+
+It is good practice to always start a service with the definition of its role; this way you'll avoid error messages caused by attempting to set parameters that are only acceptable for certain roles while Perlbal doesn't know which role the service is supposed to be yet.
+
+
+=head3 Setting parameters
+
+You can set parameters via commands of either forms:
+
+    SET <service-name> <param> = <value>
+    SET <param> = <value>
+
+For a full list of parameters see L<Perlbal::Manual::LoadBalancer>, L<Perlbal::Manual::ReverseProxy> or L<Perlbal::Manual::WebServer>.
+
+
+=head4 B<Note on types>:
+
+'bool' values can be set using one of 1, true, yes, on, 0, false, off, or no.
+
+'size' values are in integer bytes, or an integer followed by 'b', 'k', or 'm' (case-insensitive) for bytes, KiB, or MiB.
+
+
+=head3 Enabling/Disabling services
+
+To enable a service:
+
+    ENABLE service_mywebsite
+
+To disable a service:
+
+    DISABLE service_mywebsite
+
+These lines is what allows you to have several services configured in a file even if they are not currently active (a common scenario is to configure everything on the file and then enable/disable services on-the-fly as required; see L<Perlbal::Manual::Management> for more information on this process).
+
+
+=head3 Including configuration files
+
+While Perlbal doesn't natively let you include a configuration file within another, one of its core Plugins does.
+
+By using L<Perlbal::Plugin::Include> you can use this feature:
+
+    LOAD include
+    INCLUDE = /etc/perlbal/my.conf
+    INCLUDE = /etc/perlbal/other.conf /etc/perlbal/*.conf
+
+See L<Perlbal::Plugin::Include> for further examples and more information.
+
+
+=head3 Expansions
+
+The following things expand/interpolate in config files/commands:
+
+=over 4
+
+=item C<${ip:eth0}>
+
+Expands to the configured IP for interface "eth0". Probably only works on Linux.
+
+=back
+
+
+=head3 Comments
+
+Comments in Perlbal's configuration files start with a C<#>:
+
+    # this is a comment
+    ENABLE myservice # this is also a comment
+
+
+=head2 Environment variables
+
+=head3 DANGABUILD_DAEMONONLY
+
+Used in C<Makefile.PL>. If set to a true value the modules will not be built.
+
+
+=head3 DANGABUILD_MODULESONLY
+
+Used in C<Makefile.PL>. If set to a true value only the modules will be built, not the C<perlbal> executable.
+
+
+=head3 PERLBAL_DEBUG
+
+There are four levels of debugging in Perlbal.
+
+By setting this variable to a value between 0 and 4 (included) you will activate Perbal's debug.
+
+    PERLBAL_DEBUG = 0 # no debug
+
+    PERLBAL_DEBUG = 4 # debug everything
+
+These four levels are described in more detail in L<Perlbal::Manual::Debugging>.
+
+
+=head3 PERLBAL_DEBUG_BUFFERED_UPLOADS
+
+By setting this variable to 1 you can tell Perlbal to add a C<X-PERLBAL-BUFFERED-UPLOAD-REASON> header to requests that have to be buffered.
+
+This can be useful to let your backend machine know that Perlbal is buffering the request.
+
+The value of the header contains the reason why the request was buffered.
+
+
+=head3 PERLBAL_DEBUG_OBJ
+
+This is the variable you'll have to set to a true value in order to properly use the commands C<obj> or C<track>.
+
+See L<Perlbal::Manual::Management> for more information.
+
+
+=head3 PERLBAL_TEST_ALPHA
+
+This is a variable used to test Perlbal's alpha features.
+
+If you're a developer working on one of these features, first set the variable to a true value:
+
+    PERLBAL_TEST_ALPHA = 1
+
+And then, on your test file, use something like:
+
+    unless ($ENV{PERLBAL_TEST_ALPHA}) {
+        plan skip_all => 'Alpha feature; test skipped without $ENV{PERLBAL_TEST_ALPHA}';
+        exit 0;
+    } else {
+        plan tests => 4;
+    }
+
+
+=head3 PERLBAL_TRACK_STATES
+
+This is the variable you'll have to set to a true value in order to properly use the command C<state changes>.
+
+See L<Perlbal::Manual::Management> for more information.
+
+
+=head3 PERLBAL_XS_HEADERS
+
+By setting to a true value you can enable L<Perlbal::XS::HTTPHeaders>, if installed.
+
+Note that if you enable L<Perlbal::XS::HTTPHeaders> you won't have access to the fields of L<Perlbal::HTTPHeaders>.
+
+
+=head3 TEST_PERLBAL_FOREGROUND
+
+This variable is used by L<Perlbal::Test> to test Perlbal.
+
+C<TEST_PERLBAL_FOREGROUND> with a true value tells L<Perlbal::Test> that it should run a server in the foreground.
+
+See L<Perlbal::Test> for more information.
+
+
+=head3 TEST_PERLBAL_USE_EXISTING
+
+This variable is used by L<Perlbal::Test> to test Perlbal.
+
+If C<TEST_PERLBAL_USE_EXISTING> is set to a true value then C<Perlbal::Test::start_server> will be return a socket which is connected to an existing server's management port.
+
+See L<Perlbal::Test> for more information.
+
+
+=head2 SEE ALSO
+
+L<Perlbal::Manual::Management>.

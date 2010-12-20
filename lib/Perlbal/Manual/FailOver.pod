@@ -1,0 +1,28 @@
+=head1 NAME
+
+Perlbal::Manual::FailOver - Fail Over mechanism in Perlbal
+
+
+=head2 VERSION
+
+Perlbal 1.76.
+
+
+=head2 DESCRIPTION
+
+How Perlbal's Fail Over mechanism works.
+
+
+=head2 Fail Over
+
+Whenever Perlbal fails to open a connection to a machine, it assumes that machine is not available and spreads the load between the remaining servers. It keeps trying to open connections to that server according to C<error_retry_schedule>.
+
+If there are no available servers, Perlbal will keep trying to open connections to the servers until C<idle_timeout> is reached, upon which it will close the connection to the user. Clients interpret that closing differently: most will assume a 500 HTTP code, a few assume a 200 OK with empty content.
+
+For more information on parameters C<idle_timeout> and C<error_retry_schedule> see L<Perlbal::Manual::ReverseProxy>.
+
+
+=head2 SEE ALSO
+
+L<Perlbal::Manual::LoadBalancer>,
+L<Perlbal::Manual::ReverseProxy>.

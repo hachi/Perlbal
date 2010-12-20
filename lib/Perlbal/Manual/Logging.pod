@@ -1,0 +1,148 @@
+=head1 NAME
+
+Perlbal::Manual::Logging - How Perlbal's logging system works
+
+
+=head2 VERSION
+
+Perlbal 1.76.
+
+
+=head2 DESCRIPTION
+
+Perlbal supports logging of a few messages (and you can log your messages in your plugins, for instance).
+
+This document describes how to achieve that.
+
+
+=head2 IMPORTANT: foreground vs. background
+
+If Perlbal is running on the foreground, it logs by calling C<printf>, which means you should get the logs on C<STDOUT>.
+
+If Perlbal is running on the background, it logs through L<Sys::Syslog>. If L<Sys::Syslog> is not available, there will be no logging, and THAT'S THE MOST IMPORTANT THING TO KNOW ABOUT PERLBAL'S LOGGING SYSTEM.
+
+
+=head2 How to log a message
+
+You can log a message by calling C<Perlbal::log> as you'd call L<Sys::Syslog>'s C<syslog>:
+
+    Perlbal::log( $priority, $format, @args );
+
+You should read the documentation for L<Sys::Syslog> for more information, but here's an example:
+
+    Perlbal::log( 'info', 'beginning run' );
+
+And here's another example:
+
+    Perlbal::log( 'crit', "this thing crashed: $!" );
+
+
+=head2 What is logged?
+
+=over 4
+
+=item * When we try to read from or write to a filehandle that is undefined, L<Perlbal::AIO> logs a critical message:
+
+    Perlbal::log("crit", "Undef \$fh: $stack_trace");
+
+
+=item * When failing to create a socket, L<Perlbal::BackendHTTP> logs a critical message:
+
+    Perlbal::log('crit', "Error creating socket: $!");
+
+
+=item * When C<inet_aton> fails to create a socket, L<Perlbal::BackendHTTP> logs a critical message:
+
+    Perlbal::log('crit', "inet_aton failed creating socket for $ip");
+
+
+=item * When writing to a client, if we try to read more than we should from the backend, L<Perlbal::ClientHTTPBase> logs a warning message:
+
+    Perlbal::log('warning', "tried to readahead negative bytes.  filesize=$self->{reproxy_file_size}, offset=$self->{reproxy_file_offset}");
+
+
+=item * When opening a file being PUT for writing to disk, if there's an error (which is going to originate a 500 server error), L<Perlbal::ClientHTTPBase> logs a warning message:
+
+    Perlbal::log('warning', "system error: $msg ($info)");
+
+
+=item * If we receive a request with a content lenght different from the actual length of the request, L<Perlbal::ClientProxy> logs a critical message:
+
+    Perlbal::log('crit', "Content length of $clen declared but $self->{buoutpos} bytes written to disk");
+
+
+=item * When trying to buffer data to disk, if the operation fails L<Perlbal::ClientProxy> logs a critical message:
+
+    Perlbal::log('crit', "Failure to open $fn for buffered upload output");
+
+
+=item * After buffering data to disk, if the file is empty, L<Perlbal::ClientProxy> logs a critical message:
+
+    Perlbal::log('crit', "Error writing buffered upload: $!.  Tried to do $len bytes at $self->{buoutpos}.");
+
+
+=item * When purging a buffered upload on the disk, if an error occurs, L<Perlbal::ClientProxy> logs a critical message:
+
+    Perlbal::log('warning', "Unable to link $self->{bufilename}: $!");
+
+
+=item * When marking a backend as pending, if there's already another one in that ip/port, L<Perlbal::Service> will log a couple of warning messages:
+
+    Perlbal::log('warning', "Warning: attempting to spawn backend connection that already existed.");
+
+    Perlbal::log('warning', "          -- [$filename:$line] $package::$subroutine");
+
+
+=item * When deciding whether we should spawn one or more backend connections, if the total of pending conections is negative, L<Perlbal::Service> will log a critical message:
+
+    Perlbal::log('crit', "Bogus: service $self->{name} has pending connect count of $self->{pending_connect_count}?!  Resetting.");
+
+
+=item * When spawning a backend connection, if there is no IP address for the backend, L<Perlbal::Service> will log a critical message:
+
+    Perlbal::log('crit', "No backend IP for service $self->{name}");
+
+
+=item * When starting, L<Perlbal> will log an info message:
+
+    Perlbal::log('info', 'beginning run');
+
+
+=item * When shutting down, L<Perlbal> will log an info message:
+
+    Perlbal::log('info', 'ending run');
+
+
+=item * After each loop, is some error occurred, L<Perlbal> will log a critical message:
+
+    Perlbal::log('crit', "crash log: $_") foreach split(/\r?\n/, $@);
+
+
+=item * When attempting to create the pidfile, if unsuccessful, L<Perlbal> will log an info message:
+
+    Perlbal::log('info', "couldn't create pidfile '$file': $!" );
+
+
+=item * When attempting to write to the pidfile, if unsuccessful, L<Perlbal> will log an info message:
+
+    Perlbal::log('info', "couldn't write into pidfile '$file': $!" );
+
+
+=back
+
+
+=head2 Generating more logs by sending a USR1 signal to perlbal
+
+If you send a USR1 signal to perlbal, that tells it to log some basic statistics to the syslog.
+
+It's similar to connecting to a management service and issue a C<show service> for each service, plus a C<states> and a C<queues> commands.
+
+
+=head2 Where is it logged to?
+
+The way Perlbal opens L<Sys::Syslog>, it logs to F</var/log/daemon.log> by default.
+
+
+=head2 SEE ALSO
+
+You can tweek L<Sys::Syslog>'s configuration under F</etc/syslog.conf>. See L<Sys::Syslog> for more details.

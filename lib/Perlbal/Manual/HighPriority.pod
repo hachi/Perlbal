@@ -1,0 +1,55 @@
+=head1 NAME
+
+Perlbal::Manual::HighPriority - Perlbal's high/low priority queueing system.
+
+
+=head2 VERSION
+
+Perlbal 1.76.
+
+
+=head2 DESCRIPTION
+
+This document describes Perlbal's high/low priority queueing system.
+
+
+=head3 Queuing system
+
+Perlbal has three queues: normal, high priority and low priority.
+
+As their names suggest, this means that usually requests get to the normal queue and are dispatched in FIFO order, with high priority requests going to a different queue that gets ahead of the normal one and a low priority queue that only gets done when the high and normal queues are empty.
+
+In a nutshell, whenever Perlbal needs to select which request to take care of next, it first looks for requests in the high priority queue; if that one is empty, it then looks into the normal queue; and, if the normal queue is empty too, it finally looks in the low priority queue.
+
+
+=head3 High priority with cookies
+
+Perlbal can use cookies to determine if a request should go to the high priority queue (configurable).
+
+The parameters to configure this are C<high_priority_cookie> and C<high_priority_cookie_contents>; the first defines the name of the field to check for on the cookie and the second one defines the content in that field that will trigger the request going to the fast queue:
+
+    SET myservice.high_priority_cookie = name_of_the_field
+    SET myservice.high_priority_cookie_contents = required_content_on_that_field
+
+Here's a clearer example:
+
+    SET myservice.high_priority_cookie = highpriority
+    SET myservice.high_priority_cookie_contents = yes
+
+
+=head3 High priority with plugins
+
+The plugin L<Perlbal::Plugin::Highpri> supports making requests high priority by URI or Host. Also check C<make_high_priority> under L<Perlbal::Manual::Hooks>.
+
+
+=head3 Queue relief
+
+Sometimes if the high priority queue is really busy, the standard queue will suffer from resource starvation. The queue relief system helps prevent this. When there are C<queue_relief_size> or more connections in the standard queue, newly available backends have a C<queue_relief_chance> percent chance of taking a request from the standard priority queue instead of the high priority queue.
+
+    SET web_proxy.queue_relief_size = 2000
+    SET web_proxy.queue_relief_chance = 30 # 0-100, in percent
+
+
+=head3 SEE ALSO
+
+C<make_high_priority> and C<make_low_priority> in L<Perlbal::Manual::Hooks>, L<Perlbal::Plugin::HighPriority>.

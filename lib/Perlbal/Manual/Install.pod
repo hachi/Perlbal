@@ -1,0 +1,200 @@
+=head1 NAME
+
+Perlbal::Manual::Install - Steps, dependencies and requirements to install Perlbal
+
+
+=head2 VERSION
+
+Perlbal 1.76.
+
+
+=head2 DESCRIPTION
+
+How to install Perlbal.
+
+
+=head2 Installing Perlbal for the impatient
+
+    $ perl -MCPAN -e shell
+
+    cpan> install Perlbal
+
+
+=head2 Installing Perlbal (with a little more detail)
+
+You need to have perl on the machine. If you don't have it yet, you can grab it from http://www.perl.org/.
+
+Having perl on the machine should give you access to the CPAN shell, one of several possible ways to install and upgrade Perl modules.
+
+Start your CPAN shell:
+
+    $ perl -MCPAN -e shell
+
+And now tell it to install Perlbal:
+
+    cpan> install Perlbal
+
+In the end you should see a message stating "make install  -- OK" (if that's not the case, please refer to section Troubleshooting later in this document).
+
+
+=head2 Installing Perlbal by hand (without using the CPAN shell)
+
+Head to L<http://search.cpan.org/dist/Perlbal/> and find the download link. Download the file and untar it:
+
+    $ tar zxvf Perlbal-X.XX.tar.gz
+
+Note that X.XX stands for the version number. Replace that with the latest version you got.
+
+Now you need to create the Makefile and run it; we're also going to run the tests before installing Perlbal:
+
+    $ cd Perlbal-X.XX.tar.gz
+
+    $ perl Makefile.PL
+
+    $ make
+
+    $ make test
+
+    $ sudo make install
+
+
+=head2 Installing the latest development version
+
+You can clone Perlbal's repository from github and install it by hand by following the next steps:
+
+    $ git clone http://github.com/perlbal/Perlbal.git
+
+    $ cd Perlbal
+
+    $ perl Makefile.PL
+
+    $ make
+
+    $ make test
+
+    $ sudo make install
+
+
+=head2 Optional Dependencies and Asynchronous IO
+
+Perlbal checks for L<IO::AIO> availability and uses it to perform asynchronous IO operations. If you're performing disk operations (e.g., using Perlbal as a web server), having L<IO::AIO> will improve your response times.
+
+The only thing required in order to benefit from this feature is to install L<IO::AIO>:
+
+    $ perl -MCPAN -e shell
+
+    cpan> install IO::AIO
+
+If you don't have L<IO::AIO> installed a warning message will be displayed when you start perlbal:
+
+    WARNING:  AIO mode disabled or not available.
+              Perlbal will run slowly under load if you're doing any
+              disk operations. (e.g. web_server mode).
+              Install IO::AIO for better performance.
+
+
+=head2 Checking that Perlbal is succesfully installed
+
+Perlbal is shipped with some sample configuration files that reside in the F<conf> directory (of the source).
+
+You can give Perlbal a try by heading to the directory where the source is and using the following command:
+
+    $ sudo perlbal -c conf/webserver.conf
+
+By pointing your browser at C<localhost:80> you should now see Perlbal responding (showing you the contents of C</usr/share/doc>).
+
+Note that the F<webserver.conf> file sets up a Perlbal web server that listens on port 80. If you already have something listening on port 80 you need to either stop that service or change the port number on F<webserver.conf>.
+
+Also note that if your machine doesn't have a C</usr/share/docs> directory you'll see an C<ERROR: Directory not found for service docs> error message. Change the directory in the configuration file to something that exists.
+
+
+=head2 Troubleshooting
+
+=head3 Prerequisites not found
+
+If you're installing Perlbal by hand you may encounter some error messages describing how some prerequisites are not available:
+
+    user@machine:~/Perlbal-X.XX$ perl Makefile.PL
+    Checking if your kit is complete...
+    Looks good
+    Warning: prerequisite BSD::Resource 0 not found.
+    Warning: prerequisite Danga::Socket 1.44 not found.
+    Warning: prerequisite HTTP::Date 0 not found.
+    Warning: prerequisite HTTP::Response 0 not found.
+    Warning: prerequisite Sys::Syscall 0 not found.
+    Writing Makefile for Perlbal
+
+This is perl's way of telling you that since you're installing Perlbal by hand you'll also need to install its prerequisites by hand. Your first choice is to download each of them separately and perform the same installation procedure for each. Unfortunately, they are all likely to have additional prerequisites. Recursively.
+
+Alternately, see the following Troubleshooting item: C<No connection to the internet>.
+
+
+=head3 No connection to the internet
+
+If you don't have a connection to the internet you can still install Perlbal, but you'll have to tranfer the source somehow to the machine.
+
+Given that Perlbal has other module dependencies from CPAN (and those have their own dependencies too), here's a solution for this problem:
+
+
+Step 1: On a machine with connection to the internet, install CPAN::Mini:
+
+    $ perl -MCPAN -e shell
+
+    cpan> install CPAN::Mini
+
+Run C<minicpan> to create a minimal CPAN mirror (it contains only the latest version of each module):
+
+    $ minicpan -l /home/user/minicpan/ -r http://cpan.org/
+
+Now grab that directory and record it to something you can read on the other machine (e.g., a DVD, a hard drive).
+
+Once you're on that machine, you can run the CPAN shell and tell it to look for distributions on the local directory where you now have your own CPAN mirror:
+
+    $ perl -MCPAN -e shell
+
+    cpan> o conf urllist push file:///home/user/path/to/minicpan
+
+    cpan> install Perlbal
+
+If you want C<cpan> to record this change don't forget to commit:
+
+    cpan> o conf commit
+
+
+=head3 No compiler available
+
+If there's no compiler available on the machine you will probably see an error ending in something like:
+
+    Failed during this command:
+     DORMANDO/Perlbal-X.XX.tar.gz : writemakefile NO '/usr/bin/perl Makefile.PL INSTALLDIRS=site' returned status -1
+
+You need to install something like C<gcc> (check L<http://gcc.gnu.org/>).
+
+After installing C<gcc>, when trying to install Perlbal again you may get another error message:
+
+    cpan> install Perlbal
+    Running install for module 'Perlbal'
+    Running make for D/DO/DORMANDO/Perlbal-X.XX.tar.gz
+      Has already been unwrapped into directory /home/myself/.cpan/build/Perlbal-X.XX-GFko0J
+      '/usr/bin/perl Makefile.PL INSTALLDIRS=site' returned status -1, won't make
+    Running make test
+      Make had some problems, won't test
+    Running make install
+      Make had some problems, won't install
+
+This is the cpan shell assuming nothing changed in the system and skipping a few steps. You need to let it know you're willing to forget the past:
+
+    cpan> look Perlbal
+
+    $ rm -rf *
+
+    $ exit
+
+And now you can try installation again:
+
+    cpan> install Perlbal
+
+
+=head2 SEE ALSO
+
+L<Perlbal::Manual>.
