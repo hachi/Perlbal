@@ -1,3 +1,8 @@
+
+    -- Import of the documentation project:
+       http://news.perlfoundation.org/2010/12/perlbal-documentation---final.html
+       (José Castro and Bruno Martins)
+
     -- Make SSL sockets time out if they go stale during SSL negotiation. Fixes a
        visible socket/object leak that slows down the server.
 
