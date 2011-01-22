@@ -178,9 +178,9 @@ sub _do_cleanup {
 
         # No entry in the cache, find out what handler we should assign.
         my $handler;
-        while (my ($check_class, $check_handler) = each %socket_class_handlers) {
+        foreach my $check_class (keys %socket_class_handlers) {
             next unless $sock->isa($check_class);
-            $handler = $check_handler;
+            $handler = $socket_class_handlers{$check_class};
             last;
         }
         # Outside the loop, so that we assign undef if none of the loop passes find anything.
