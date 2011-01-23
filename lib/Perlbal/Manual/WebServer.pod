@@ -5,7 +5,7 @@ Perlbal::Manual::WebServer - Configuring Perlbal as a Web Server
 
 =head2 VERSION
 
-Perlbal 1.76.
+Perlbal 1.78.
 
 
 =head2 DESCRIPTION

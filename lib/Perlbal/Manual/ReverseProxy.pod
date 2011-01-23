@@ -5,7 +5,7 @@ Perlbal::Manual::ReverseProxy - Configuring Perlbal as a Reverse Proxy
 
 =head2 VERSION
 
-Perlbal 1.76.
+Perlbal 1.78.
 
 
 =head2 DESCRIPTION

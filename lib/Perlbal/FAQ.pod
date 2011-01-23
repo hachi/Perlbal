@@ -5,7 +5,7 @@ Perlbal::FAQ - Frequently Asked Questions about Perlbal
 
 =head2 VERSION
 
-Perlbal 1.76.
+Perlbal 1.78.
 
 
 =head2 DESCRIPTION

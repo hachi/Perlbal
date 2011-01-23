@@ -5,7 +5,7 @@ Perlbal::Manual::LoadBalancer - Using Perlbal as a Load Balancer
 
 =head2 VERSION
 
-Perlbal 1.76.
+Perlbal 1.78.
 
 
 =head2 DESCRIPTION
