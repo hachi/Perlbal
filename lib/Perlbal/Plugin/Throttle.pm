@@ -155,14 +155,20 @@ sub load {
         my $cfg = $ss->{extra_config} ||= {};
         my $stash = $cfg->{_throttle_stash} ||= {};
 
-        if ($cfg->{blacklist_file}) {
-            eval { $stash->{blacklist} = read_cidr_list($cfg->{blacklist_file}); };
-            die "Couldn't load $cfg->{blacklist_file}: $@" if $@ || !$stash->{blacklist};
+        if ($cmd eq 'reload') {
+            if (my $whitelist = $cfg->{whitelist_file}) {
+                eval { $stash->{whitelist} = read_cidr_list($whitelist); };
+                return $mc->err("Couldn't load $whitelist: $@")
+                    if $@ || !$stash->{whitelist};
+            }
+            if (my $blacklist = $cfg->{blacklist_file}) {
+                eval { $stash->{blacklist} = read_cidr_list($blacklist); };
+                return $mc->err("Couldn't load $blacklist: $@")
+                    if $@ || !$stash->{blacklist};
+            }
         }
-
-        if ($cfg->{whitelist_file}) {
-            eval { $stash->{whitelist} = read_cidr_list($cfg->{whitelist_file}); };
-            die "Couldn't load $cfg->{whitelist_file}: $@" if $@ || !$stash->{whitelist};
+        else {
+            return $mc->err("unknown command $cmd");
         }
 
         return $mc->ok;
@@ -594,6 +600,13 @@ throttled.
 
 Connections from IPs/CIDRs listed in the file specified by I<blacklist_file>
 immediately sent a "403 Forbidden" response.
+
+=item * Dynamic configuration
+
+Configuration variables may be updated from the management port and the new
+values will be respected. To reload the whitelist and blacklist files, issue
+the "throttle reload" command to the service. To disable throttling, set the
+I<disable_throttling> knob to a nonzero value.
 
 =item * Path specificity
 
