@@ -3,7 +3,7 @@ package Perlbal::Plugin::Throttle;
 use strict;
 use warnings;
 
-our $VERSION = '1.13';
+our $VERSION = '1.20';
 
 use List::Util 'min';
 use Danga::Socket 1.59;
@@ -14,10 +14,6 @@ use Time::HiRes ();
 
 # Debugging flag
 use constant VERBOSE => $ENV{THROTTLE_VERBOSE} || 0;
-
-# Magical return value constants
-use constant HANDLE_REQUEST => 0;
-use constant IGNORE_REQUEST => 1;
 
 sub load {
     Perlbal::Service::add_tunable(
@@ -140,12 +136,17 @@ sub load {
         }
     );
 
-    Perlbal::register_global_hook('manage_command.throttle_reload', sub {
-        my $mc = shift->no_opts;
+    Perlbal::register_global_hook('manage_command.throttle', sub {
+        my $mc = shift->parse(qr/^
+                              throttle\s+
+                              (reload) # command
+                              $/xi,
+                              "usage: throttle reload");
+        my ($cmd, $key) = $mc->args;
 
         my $svcname = $mc->{ctx}{last_created};
         unless ($svcname) {
-            return $mc->err("No service name in context from CREATE SERVICE <name> or USE <service_name>");
+            return $mc->err("No service name set. This command must be used after CREATE SERVICE <name> or USE <service_name>");
         }
 
         my $ss = Perlbal->service($svcname);
@@ -154,16 +155,25 @@ sub load {
         my $cfg = $ss->{extra_config} ||= {};
         my $stash = $cfg->{_throttle_stash} ||= {};
 
-        eval { $stash->{blacklist} = read_cidr_list($cfg->{blacklist_file}); };
-        die "Couldn't load $cfg->{blacklist_file}: $@" if $@ || !$stash->{blacklist};
+        if ($cfg->{blacklist_file}) {
+            eval { $stash->{blacklist} = read_cidr_list($cfg->{blacklist_file}); };
+            die "Couldn't load $cfg->{blacklist_file}: $@" if $@ || !$stash->{blacklist};
+        }
 
-        eval { $stash->{whitelist} = read_cidr_list($cfg->{whitelist_file}); };
-        die "Couldn't load $cfg->{whitelist_file}: $@" if $@ || !$stash->{whitelist};
+        if ($cfg->{whitelist_file}) {
+            eval { $stash->{whitelist} = read_cidr_list($cfg->{whitelist_file}); };
+            die "Couldn't load $cfg->{whitelist_file}: $@" if $@ || !$stash->{whitelist};
+        }
 
         return $mc->ok;
     });
 }
 
+# Magical return value constants
+use constant HANDLE_REQUEST => 0;
+use constant IGNORE_REQUEST => 1;
+
+# indexes into logging flag list
 use constant LOG_WHITELISTED => 0;
 use constant LOG_BLACKLISTED => 1;
 use constant LOG_CONCURRENT  => 2;
@@ -172,6 +182,7 @@ use constant LOG_UNBAN       => 4;
 use constant LOG_THROTTLE    => 5;
 use constant LOG_BANNED      => 6;
 
+# localized variable to track if a connection has already been throttled
 our $DELAYED = 0;
 
 sub register {
@@ -183,7 +194,7 @@ sub register {
     my %throttled;
     my %banned;
 
-    my $store = PPTCache->new($cfg);
+    my $store = PPTStore->new($cfg);
 
     my $ctx = Perlbal::CommandContext->new;
     $ctx->{last_created} = $svc->{name};
@@ -252,14 +263,6 @@ sub register {
                     return IGNORE_REQUEST;
                 }
 
-                # bail immediately on banned IPs
-                if ($banned{$ip}) {
-                    VERBOSE and Perlbal::log(warn => "Client went away");
-                    $log_action->("Blocking banned ip $ip") if $log_on[LOG_BANNED];
-                    $cp->send_response(403, "Forbidden.\n");
-                    return IGNORE_REQUEST;
-                }
-
                 # back from throttling, all later checks were already passed
                 return HANDLE_REQUEST if $DELAYED;
 
@@ -272,9 +275,13 @@ sub register {
                     return HANDLE_REQUEST;
                 }
 
-                # Drop conns from blacklistees
-                if ($stash->{blacklist} && $stash->{blacklist}->find($ip)) {
-                    $log_action->("Blocking blacklisted ip $ip") if $log_on[LOG_BLACKLISTED];
+                # Drop conns from banned/blacklisted IPs
+                my $banned = $banned{$ip};
+                my $blacklisted = $stash->{blacklist} && $stash->{blacklist}->find($ip);
+                if ($banned || $blacklisted) {
+                    my $msg = sprintf 'Blocking %s IP %s', $banned ? 'banned' : 'blacklisted';
+                    VERBOSE and Perlbal::log(warn => $msg);
+                    $log_action->($msg) if $log_on[LOG_BANNED];
                     unless ($cfg->{log_only}) {
                         $cp->send_response(403, "Forbidden.\n");
                         return IGNORE_REQUEST;
@@ -289,10 +296,10 @@ sub register {
                     }
                 }
 
-                my $uri    = $headers->request_uri();
+                my $uri    = $headers->request_uri;
                 my $method = $headers->request_method;
 
-                # Only throttle certain requests
+                # Only throttle matching requests
                 if (defined $path_regex && $uri !~ $path_regex) {
                     VERBOSE && Perlbal::log(info => '%s', "This isn't a throttled URL: $uri");
                     return HANDLE_REQUEST;
@@ -434,7 +441,7 @@ sub read_cidr_list {
     return $list;
 }
 
-package PPTCache;
+package PPTStore;
 
 sub new {
     my $class = shift;
@@ -444,25 +451,25 @@ sub new {
     my $has_memcached = eval { require Cache::Memcached::Async; 1 };
 
     if ($want_memcached && !$has_memcached) {
-        die "memcached support requested by Cache::Memcached::Async failed to load: $@\n";
+        die "memcached support requested but Cache::Memcached::Async failed to load: $@\n";
     }
     return $want_memcached
-        ? PPTCache::Memcached->new($cfg)
-        : PPTCache::Memory->new($cfg);
+        ? PPTStore::Memcached->new($cfg)
+        : PPTStore::Memory->new($cfg);
 }
 
-package PPTCache::Memcached;
+package PPTStore::Memcached;
 
 sub new {
     my $class = shift;
     my $cfg = shift;
-    return bless [
-        map {
-            Cache::Memcached::Async->new({
-                servers => [split /[,\s]+/, $cfg->{memcached_servers}],
-            })
-        } 1..$cfg->{memcached_async_clients}
-    ], $class;
+
+    my @servers = split /[,\s]+/, $cfg->{memcached_servers};
+    my @cxns = map {
+        Cache::Memcached::Async->new({ servers => \@servers })
+    } 1 .. $cfg->{memcached_async_clients};
+
+    return bless \@cxns, $class;
 }
 
 sub get {
@@ -475,7 +482,7 @@ sub set {
     return $self->[rand @$self]->set(@_);
 }
 
-package PPTCache::Memory;
+package PPTStore::Memory;
 
 sub new {
     my $class = shift;
@@ -501,6 +508,7 @@ sub set {
     $self->{$key} = [$params{exptime}, $value];
     return;
 }
+
 1;
 
 __END__
