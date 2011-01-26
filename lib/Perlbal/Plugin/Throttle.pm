@@ -236,181 +236,182 @@ sub register {
 
     VERBOSE and Perlbal::log(info => "Registering Throttle.");
 
-    $svc->register_hook(
-        Throttle => start_proxy_request => sub {
-            my $retval = eval {
-                VERBOSE and Perlbal::log(info => "In Throttle ($DELAYED)");
+    my $start_handler = sub {
+        my $retval = eval {
+            VERBOSE and Perlbal::log(info => "In Throttle ($DELAYED)");
 
-                my $request_time = Time::HiRes::time;
+            my $request_time = Time::HiRes::time;
 
-                my Perlbal::ClientProxy $cp = shift;
-                unless ($cp) {
-                    VERBOSE and Perlbal::log(error => "Missing ClientProxy");
-                    return HANDLE_REQUEST;
+            my Perlbal::ClientProxy $cp = shift;
+            unless ($cp) {
+                VERBOSE and Perlbal::log(error => "Missing ClientProxy");
+                return HANDLE_REQUEST;
+            }
+
+            my $headers = $cp->{req_headers};
+            unless ($headers) {
+                VERBOSE and Perlbal::log(info => "no headers");
+                return HANDLE_REQUEST;
+            }
+
+            my $ip = $cp->observed_ip_string() || $cp->peer_ip_string;
+            unless (defined $ip) {
+                # happens if client goes away
+                VERBOSE and Perlbal::log(warn => "Client went away");
+                $cp->send_response(500, "Internal server error.\n");
+                return IGNORE_REQUEST;
+            }
+
+            # back from throttling, all later checks were already passed
+            return HANDLE_REQUEST if $DELAYED;
+
+            # increment the count of throttled conns
+            $throttled{$ip}++;
+
+            # Immediately passthrough whitelistees
+            if ($stash->{whitelist} && $stash->{whitelist}->find($ip)) {
+                $log_action->("Letting whitelisted ip $ip through") if $log_on[LOG_WHITELISTED];
+                return HANDLE_REQUEST;
+            }
+
+            # Drop conns from banned/blacklisted IPs
+            my $banned = $banned{$ip};
+            my $blacklisted = $stash->{blacklist} && $stash->{blacklist}->find($ip);
+            if ($banned || $blacklisted) {
+                my $msg = sprintf 'Blocking %s IP %s', $banned ? 'banned' : 'blacklisted';
+                VERBOSE and Perlbal::log(warn => $msg);
+                $log_action->($msg) if $log_on[LOG_BANNED];
+                unless ($cfg->{log_only}) {
+                    $cp->send_response(403, "Forbidden.\n");
+                    return IGNORE_REQUEST;
+                }
+            }
+
+            if (exists $throttled{$ip} && $throttled{$ip} > $cfg->{max_concurrent}) {
+                $log_action->("Too many concurrent connections from $ip") if $log_on[LOG_CONCURRENT];
+                unless ($cfg->{log_only}) {
+                    $cp->send_response(503, "Too many connections.\n");
+                    return IGNORE_REQUEST;
+                }
+            }
+
+            my $uri    = $headers->request_uri;
+            my $method = $headers->request_method;
+
+            # Only throttle matching requests
+            if (defined $path_regex && $uri !~ $path_regex) {
+                VERBOSE && Perlbal::log(info => '%s', "This isn't a throttled URL: $uri");
+                return HANDLE_REQUEST;
+            }
+            if (defined $method_regex && $method !~ $method_regex) {
+                VERBOSE && Perlbal::log(info => '%s', "This isn't a throttled method: $method");
+                return HANDLE_REQUEST;
+            }
+
+            return HANDLE_REQUEST if $cfg->{disable_throttling};
+
+            # check if we've seen this ip lately.
+            my $mc_key = "throttle:$prefix:$ip";
+            $store->get($mc_key, timeout => $cfg->{min_delay}, callback => sub {
+                my $value = shift;
+                my ($last_request_time, $violations);
+                if (defined $value) {
+                    ($last_request_time, $violations) = unpack 'FS', $value;
+                }
+                $violations ||= 0;
+
+                $store->set(
+                    $mc_key => pack('FS', $request_time, $violations),
+                    exptime => $cfg->{throttle_threshold_seconds},
+                    timeout => $cfg->{min_delay},
+                );
+
+                my $time_since_last_request;
+                if (defined $last_request_time) {
+                    $time_since_last_request = $request_time - $last_request_time;
                 }
 
-                my $headers = $cp->{req_headers};
-                unless ($headers) {
-                    VERBOSE and Perlbal::log(info => "no headers");
-                    return HANDLE_REQUEST;
-                }
+                VERBOSE and Perlbal::log(info => "$ip; this request at $request_time; last at %s; interval is %s", $last_request_time||'n/a', $time_since_last_request||'n/a');
 
-                my $ip = $cp->observed_ip_string() || $cp->peer_ip_string;
-                unless (defined $ip) {
-                    # happens if client goes away
-                    VERBOSE and Perlbal::log(warn => "Client went away");
-                    $cp->send_response(500, "Internal server error.\n");
+                # at this point we're executing in a danga::socket callback
+                # after we've already told perlbal to ignore the request.
+                # so if we now want it handled it needs to be re-adopted
+
+                my $rehandle = sub {
+                    my $delay = shift;
+                    $delay = 0 if $cfg->{log_only};
+                    Danga::Socket->AddTimer($delay, sub {
+                        local $DELAYED = 1;
+                        $cp->watch_read(1);
+                        $svc->adopt_base_client($cp);
+                    });
+                    $cp->watch_read(0);
+                    return IGNORE_REQUEST;
+                };
+
+                # can we let it through immediately?
+                return $rehandle->(0) if !defined $time_since_last_request; # haven't seen ip before
+                return $rehandle->(0) if $time_since_last_request >= $cfg->{throttle_threshold_seconds}; # waited long enough
+
+                # need to throttle, now figure out by how much. at least
+                # min_delay, at most max_delay, exponentially increasing in
+                # between
+                my $delay = min($cfg->{min_delay} * 2**$violations, $cfg->{max_delay});
+
+                $violations++;
+
+                # banhammer for great justice
+                if (
+                    $cfg->{ban_threshold} &&
+                    $violations >= $cfg->{ban_threshold}
+                ) {
+                    $log_action->("Banning $ip for $cfg->{ban_expiration}s: $uri") if $log_on[LOG_BAN];
+                    $banned{$ip}++ unless $cfg->{log_only};
+                    Danga::Socket->AddTimer($cfg->{ban_expiration}, sub {
+                        $log_action->("Unbanning $ip") if $log_on[LOG_UNBAN];
+                        delete $banned{$ip} unless $cfg->{log_only};
+                    });
+                    $cp->close;
                     return IGNORE_REQUEST;
                 }
 
-                # back from throttling, all later checks were already passed
-                return HANDLE_REQUEST if $DELAYED;
+                $store->set(
+                    $mc_key => pack('FS', $request_time, $violations),
+                    exptime => $delay,
+                    timeout => $cfg->{min_delay},
+                );
 
-                # increment the count of throttled conns
-                $throttled{$ip}++;
+                $log_action->("Throttling $ip for $delay: $uri") if $log_on[LOG_THROTTLE];
 
-                # Immediately passthrough whitelistees
-                if ($stash->{whitelist} && $stash->{whitelist}->find($ip)) {
-                    $log_action->("Letting whitelisted ip $ip through") if $log_on[LOG_WHITELISTED];
-                    return HANDLE_REQUEST;
-                }
+                # schedule request to be re-handled
+                return $rehandle->($delay);
+            });
 
-                # Drop conns from banned/blacklisted IPs
-                my $banned = $banned{$ip};
-                my $blacklisted = $stash->{blacklist} && $stash->{blacklist}->find($ip);
-                if ($banned || $blacklisted) {
-                    my $msg = sprintf 'Blocking %s IP %s', $banned ? 'banned' : 'blacklisted';
-                    VERBOSE and Perlbal::log(warn => $msg);
-                    $log_action->($msg) if $log_on[LOG_BANNED];
-                    unless ($cfg->{log_only}) {
-                        $cp->send_response(403, "Forbidden.\n");
-                        return IGNORE_REQUEST;
-                    }
-                }
-
-                if (exists $throttled{$ip} && $throttled{$ip} > $cfg->{max_concurrent}) {
-                    $log_action->("Too many concurrent connections from $ip") if $log_on[LOG_CONCURRENT];
-                    unless ($cfg->{log_only}) {
-                        $cp->send_response(503, "Too many connections.\n");
-                        return IGNORE_REQUEST;
-                    }
-                }
-
-                my $uri    = $headers->request_uri;
-                my $method = $headers->request_method;
-
-                # Only throttle matching requests
-                if (defined $path_regex && $uri !~ $path_regex) {
-                    VERBOSE && Perlbal::log(info => '%s', "This isn't a throttled URL: $uri");
-                    return HANDLE_REQUEST;
-                }
-                if (defined $method_regex && $method !~ $method_regex) {
-                    VERBOSE && Perlbal::log(info => '%s', "This isn't a throttled method: $method");
-                    return HANDLE_REQUEST;
-                }
-
-                return HANDLE_REQUEST if $cfg->{disable_throttling};
-
-                # check if we've seen this ip lately.
-                my $mc_key = "throttle:$prefix:$ip";
-                $store->get($mc_key, timeout => $cfg->{min_delay}, callback => sub {
-                    my $value = shift;
-                    my ($last_request_time, $violations);
-                    if (defined $value) {
-                        ($last_request_time, $violations) = unpack 'FS', $value;
-                    }
-                    $violations ||= 0;
-
-                    $store->set(
-                        $mc_key => pack('FS', $request_time, $violations),
-                        exptime => $cfg->{throttle_threshold_seconds},
-                        timeout => $cfg->{min_delay},
-                    );
-
-                    my $time_since_last_request;
-                    if (defined $last_request_time) {
-                        $time_since_last_request = $request_time - $last_request_time;
-                    }
-
-                    VERBOSE and Perlbal::log(info => "$ip; this request at $request_time; last at %s; interval is %s", $last_request_time||'n/a', $time_since_last_request||'n/a');
-
-                    # at this point we're executing in a danga::socket callback
-                    # after we've already told perlbal to ignore the request.
-                    # so if we now want it handled it needs to be re-adopted
-                    my $rehandle = sub {
-                        my $delay = shift;
-                        $delay = 0 if $cfg->{log_only};
-                        Danga::Socket->AddTimer($delay, sub {
-                            local $DELAYED = 1;
-                            $cp->watch_read(1);
-                            $svc->adopt_base_client($cp);
-                        });
-                        $cp->watch_read(0);
-                        return IGNORE_REQUEST;
-                    };
-
-                    # can we let it through immediately?
-                    return $rehandle->(0) if !defined $time_since_last_request; # haven't seen ip before
-                    return $rehandle->(0) if $time_since_last_request >= $cfg->{throttle_threshold_seconds}; # waited long enough
-
-                    # need to throttle, now figure out by how much. at least
-                    # min_delay, at most max_delay, exponentially increasing in
-                    # between
-                    my $delay = min($cfg->{min_delay} * 2**$violations, $cfg->{max_delay});
-
-                    $violations++;
-
-                    # banhammer for great justice
-                    if (
-                        $cfg->{ban_threshold} &&
-                        $violations >= $cfg->{ban_threshold}
-                    ) {
-                        $log_action->("Banning $ip for $cfg->{ban_expiration}s: $uri") if $log_on[LOG_BAN];
-                        $banned{$ip}++ unless $cfg->{log_only};
-                        Danga::Socket->AddTimer($cfg->{ban_expiration}, sub {
-                            $log_action->("Unbanning $ip") if $log_on[LOG_UNBAN];
-                            delete $banned{$ip} unless $cfg->{log_only};
-                        });
-                        $cp->close;
-                        return IGNORE_REQUEST;
-                    }
-
-                    $store->set(
-                        $mc_key => pack('FS', $request_time, $violations),
-                        exptime => $delay,
-                        timeout => $cfg->{min_delay},
-                    );
-
-                    $log_action->("Throttling $ip for $delay: $uri") if $log_on[LOG_THROTTLE];
-
-                    # schedule request to be re-handled
-                    return $rehandle->($delay);
-                });
-
-                # make sure we don't take up reading until readoption
-                $cp->watch_read(0);
-                return IGNORE_REQUEST;
-            };
-            if ($@) {
-                # if something horrible should happen internally, don't take out the perlbal
-                Perlbal::log(err => "Throttle failed: '%s'", $@);
-                return HANDLE_REQUEST;
-            }
-            else {
-                return $retval;
-            }
+            # make sure we don't take up reading until readoption
+            $cp->watch_read(0);
+            return IGNORE_REQUEST;
+        };
+        if ($@) {
+            # if something horrible should happen internally, don't take out perlbal
+            Perlbal::log(err => "Throttle failed: '%s'", $@);
+            return HANDLE_REQUEST;
         }
-    );
-    $svc->register_hook(
-        Throttle => end_proxy_request => sub {
-            my Perlbal::ClientProxy $cp = shift;
-
-            my $ip = $cp->observed_ip_string() || $cp->peer_ip_string;
-            return unless $ip;
-
-            delete $throttled{$ip} unless --$throttled{$ip} > 0;
+        else {
+            return $retval;
         }
-    );
+    };
+
+    my $end_handler = sub {
+        my Perlbal::ClientProxy $cp = shift;
+
+        my $ip = $cp->observed_ip_string() || $cp->peer_ip_string;
+        return unless $ip;
+
+        delete $throttled{$ip} unless --$throttled{$ip} > 0;
+    };
+
+    $svc->register_hook(Throttle => start_proxy_request => $start_handler);
+    $svc->register_hook(Throttle => end_proxy_request => $end_handler);
 }
 
 sub read_cidr_list {
@@ -520,48 +521,48 @@ hosts that connect too frequently.
 
 =head1 OVERVIEW
 
-This plugin intercepts HTTP requests to a Perlbal service and slow or drops
+This plugin intercepts HTTP requests to a Perlbal service and slows or drops
 connections from IP addresses which are determined to be connecting too fast.
+
+=head1 BEHAVIOR
 
 An IP address address may be in one of four states depending on its recent
 activity; that state determines how new requests from the IP are handled:
 
-=head2 STATES AND BEHAVIOR
-
 =over 4
 
-=item B<allowed>
+=item * B<allowed>
 
 An IP begins in the B<allowed> state. When a request is received from an IP in
 this state, the request is handled immediately and the IP enters the
 B<probation> state.
 
-=item B<probation>
+=item * B<probation>
 
 If no requests are received from an IP in the B<probation> state for
 I<throttle_threshold_seconds>, it returns to the B<allowed> state.
 
 When a new request is received from an IP in the B<probation> state, the IP
-enters the B<throttled> state and is assigned a B<I<delay>> property initially
-equal to I<min_delay>. Connection to a backend is postponed for B<I<delay>>
+enters the B<throttled> state and is assigned a I<delay> property initially
+equal to I<min_delay>. Connection to a backend is postponed for I<delay>
 seconds while perlbal continues to work. If the connection is still open after
 the delay, the request is then handled normally. A dropped connection does not
-change the IP's B<I<delay>> value.
+change the IP's I<delay> value.
 
-=item B<throttled>
+=item * B<throttled>
 
 If no requests are received from an IP in the B<throttled> state for
-B<I<delay>> seconds, it returns to the B<probation> state.
+I<delay> seconds, it returns to the B<probation> state.
 
 When a new request is received from an IP in the B<throttled> state, its
-B<I<violations>> property is incremented, and its B<I<delay>> property is
+I<violations> property is incremented, and its I<delay> property is
 doubled (up to a maximum of I<max_delay>). The request is postponed for the new
 value of I<delay>.
 
 Only after the most recently created connection from a given IP exits the
-B<throttled> state do B<I<violations>> and B<I<delay>> reset to 0.
+B<throttled> state do I<violations> and I<delay> reset to 0.
 
-Furthermore, if the B<I<violations>> exceeds I<ban_threshold>, the connection
+Furthermore, if the I<violations> exceeds I<ban_threshold>, the connection
 is closed and the IP moves to the B<banned> state.
 
 IPs in the B<throttled> state may have no more than I<max_concurrent>
@@ -570,11 +571,12 @@ circumstance are sent a "503 Too many connections" response. Long-running
 requests which have already been connected to a backend do not count towards
 this limit.
 
-=item B<banned>
+=item * B<banned>
 
-New connections from IPs in the banned state are immediately closed.
+New connections from IPs in the banned state are immediately closed with a 403
+error response.
 
-An IP leaves the B<banned> state after B<I<ban_expiration>> seconds have
+An IP leaves the B<banned> state after I<ban_expiration> seconds have
 elapsed.
 
 =back
@@ -583,21 +585,21 @@ elapsed.
 
 =over 4
 
-=item IP whitelist
+=item * IP whitelist
 
 IPs/CIDRs listed in the file specified by I<whitelist_file> are never
 throttled.
 
-=item IP blacklist
+=item * IP blacklist
 
 Connections from IPs/CIDRs listed in the file specified by I<blacklist_file>
 immediately sent a "403 Forbidden" response.
 
-=item Path specificity
+=item * Path specificity
 
 Throttling may be restricted to URI paths matching the I<path_regex> regex.
 
-=item External shared state
+=item * External shared state
 
 The plugin stores state which IPs have been seen in a memcached(1) instance.
 This allows many throttlers to share their state and also minimizes memory use
@@ -608,11 +610,30 @@ B<allowed> state.
 Orthogonally, multiple throttlers which need to share memcacheds but not state
 may specify distinct B<instance_name> values.
 
-=item Logging
+=item * Logging
 
 If Perlbal::Plugin::Syslogger is installed and registered with the service,
 Throttle can use it to send syslog messages regarding events. Granular
-control for which events are logged is available via the log_on parameter.
+control for which events are logged is available via the B<log_on> parameter.
+
+=back
+
+=head1 OPTIONAL DEPENDENCIES
+
+=over 4
+
+=item * Cache::Memcached::Async
+
+Required for memcached support. This is an easy way to share
+state between different perlbal instances.
+
+=item * Net::CIDR::Lite
+
+Required for blacklist/whitelist support.
+
+=item * Perlbal::Plugin::Syslogger
+
+Required for asynchronous logging support.
 
 =back
 
@@ -620,12 +641,12 @@ control for which events are logged is available via the log_on parameter.
 
 =over 4
 
-=item List loading blocks
+=item * List loading is blocking
 
-The B<reload_files> command loads the whitelist and blacklist files
-synchronously, which will cause the perlbal to hang until it completes.
+The B<throttle reload> management command loads the whitelist and blacklist
+files synchronously, which will cause the perlbal to hang until it completes.
 
-=item Redirects
+=item * Redirects
 
 If a handled request returns a 30x response code and the redirect URI is also
 throttled, then the client's attempt to follow the redirect will necessarily be
@@ -634,6 +655,14 @@ HTTP response headers, which would incur a lot of overhead. To workaround, try
 to have your backend not return 30x's if both the original and redirect URI are
 proxied by the same throttler instance (yes, this is difficult for the case
 where a backend 302s to add a trailing / to a directory).
+
+=back
+
+=head1 SEE ALSO
+
+=over 4
+
+=item * List of tunables in Throttle.pm.
 
 =back
 
@@ -646,19 +675,15 @@ where a backend 302s to add a trailing / to a directory).
 Load CIDR lists asynchronously (perhaps in the manner of
 Perlbal::Pool::_load_nodefile_async).
 
-=item *
-
-Reduce code in anonymous subs to limit memory usage per throttled connection.
-
 =back
 
 =head1 AUTHOR
 
-Adam Thomason, E<lt>athomason@cpan.org<gt>
+Adam Thomason, E<lt>athomason@cpan.orgE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2007 by Six Apart, E<lt>cpan@sixapart.comE<gt>
+Copyright (C) 2007-2011 by Say Media Inc, E<lt>cpan@sixapart.comE<gt>
 
 This library is free software; you can redistribute it and/or modify it under
 the same terms as Perl itself, either Perl version 5.8.6 or, at your option,
