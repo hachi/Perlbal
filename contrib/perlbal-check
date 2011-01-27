@@ -79,8 +79,8 @@ sub parse_config {
     my $c = shift;
     my $o = shift;
 
-    if (exists $c->{sitedefault}) {
-        $o{site} = delete $c->{sitedefault};
+    if (exists $c->{sitedefault} && !$o->{site}) {
+        $o->{site} = delete $c->{sitedefault};
     }
 
     for my $site (keys %$c) {
