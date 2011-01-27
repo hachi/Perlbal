@@ -1,0 +1,400 @@
+#!/usr/bin/perl
+
+=head1 NAME
+
+perlbal-check - monitor traffic on one or more perlbal instances
+
+=head1 DESCRIPTION
+
+Allows you to monitor potentially aggregated queues, and parse the output of
+"socks" into some useful formats; top urls, top clients, etc.
+
+=head1 AUTHORS
+
+additions by Abe Hassan <abe@sixapart.com>
+additions by Kallen <kallen@sixapart.com>
+rewritten and expanded by dormando <dormando@rydia.net>
+
+=head1 SEE ALSO
+
+ http://www.danga.com/perlbal/
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright 2008-2011, Six Apart, Ltd.
+
+You can use and redistribute Perlbal under the same terms as Perl itself.
+
+=cut
+
+use strict;
+use warnings;
+use IO::Socket;
+use Getopt::Long;
+use Data::Dumper qw(Dumper);
+use YAML qw(LoadFile);
+
+$| = 1;
+
+# determine options to use
+my %o = ( delay => 3, mode => 'queues', site => '', min => 1,
+          resolve => 0, config => '/etc/perlbal-check.yaml' );
+my $rv = GetOptions(\%o, 'help|h', 'mode=s', 'delay=i', 'site=s', 'min=i',
+                         'resolve', 'config=s');
+
+my $c;
+eval { $c = LoadFile($o{config}); };
+die "Could not load configuration: $@" if $@;
+parse_config($c, \%o);
+
+show_help() if ($o{help});
+
+sub show_help {
+    my $sites = join('|', sort keys %$c);
+    print "$0 [--delay 3 --mode [queues|popular|backend|clients|topclients] --site [$sites] --min 1]\n";
+    exit 0;
+}
+
+# Hold established perlbal sockets.
+unless ($c->{$o{site}}) {
+    print "Unknown site passed specified by --site. see help\n";
+    show_help();
+}
+my %PERLBAL_SOCKS = %{connect_hosts($c->{$o{site}})};
+
+watch_queues()   if $o{mode} eq 'queues';
+watch_popular($o{min})  if $o{mode} eq 'popular';
+watch_backends() if $o{mode} eq 'backend';
+watch_clients() if $o{mode} eq 'clients';
+watch_top_clients($o{min}) if $o{mode} eq 'topclients';
+show_help();
+
+# Uncomment if you want an idea of how the structure looks.
+#my $r = poll_socks(\%PERLBAL_SOCKS);
+#print Dumper($r), "\n";
+
+# Flattens out any aggregates in the configuration.
+# Not recursive :(
+sub parse_config {
+    my $c = shift;
+    my $o = shift;
+
+    if (exists $c->{sitedefault}) {
+        $o{site} = delete $c->{sitedefault};
+    }
+
+    for my $site (keys %$c) {
+        next unless (ref($c->{$site}) eq 'ARRAY');
+        my @new = ();
+        for my $subsite (@{$c->{$site}}) {
+            die "unknown site $subsite"
+                unless exists $c->{$subsite};
+            die "subsite must be a list of servers"
+                unless (ref($c->{$subsite}) eq 'HASH');
+            push(@new, map { $_ => $c->{$subsite}->{$_} }
+                keys %{$c->{$subsite}});
+        }
+        $c->{$site} = {@new};
+    }
+    # Generate the "all" config.
+    # Stuff can get overwritten, that's fine.
+    my @all = ();
+    for my $site (keys %$c) {
+        push(@all, map { $_ => $c->{$site}->{$_} }
+            keys %{$c->{$site}});
+    }
+    $c->{all} = {@all};
+}
+
+sub connect_hosts {
+    my $servers = shift;
+    my %socks   = ();
+    for my $name (keys %{$servers}) {
+        my $addr = $servers->{$name};
+        my $sock;
+
+        # I don't trust IO::Socket::INET's timeout. Maybe I should?
+        # overriding sigalrm so we don't just bail entirely
+        local $SIG{ALRM} = sub { 1 };
+        alarm(2);
+
+        eval {
+            $sock = IO::Socket::INET->new(PeerAddr => $addr, Timeout => 2, Proto => 'tcp');
+            if ($sock) {
+                $socks{$name} = $sock;
+            } else {
+                print "WARNING: Could not establish connection to $name: $addr\n";
+            }
+        };
+        alarm(0);
+
+        print "WARNING: Failed to establish connection to $name: $addr ERROR: $@\n" if $@;
+    }
+    return \%socks;
+}
+
+# Hideous ip resolution sub with cache.
+my %RCACHE = ();
+sub resolve {
+    $RCACHE{$_[0]} = gethostbyaddr(inet_aton($_[0]), AF_INET)
+        unless $RCACHE{$_[0]};
+    return $RCACHE{$_[0]};
+}
+
+# Find abusive clients? Bad clients!
+sub watch_top_clients {
+    my $minimum = shift;
+
+    while (1) {
+        print "\n" . localtime() . ":\n";
+
+        # Sort by IP.
+        my %ips = ();
+        my $r = poll_socks(\%PERLBAL_SOCKS);
+        for my $c (@$r) {
+            next unless $c->{type} =~ m/^Client/;
+            my $o = $c->{o};
+            next unless $o->{observed_ip};
+            my $ip = $o->{observed_ip};
+            $ips{$ip}->{total}++;
+            $ips{$ip}->{drain}   += $o->{draining_res} ? 1 : 0;
+            $ips{$ip}->{waiting} += $o->{wait_res} ? 1 : 0;
+            $ips{$ip}->{uris}->{$c->{http}}++ if $c->{http};
+        }
+
+        for (sort { $ips{$b}->{total} <=> $ips{$a}->{total} } keys %ips) {
+            my $data = $ips{$_};
+            next unless $data->{total} > $minimum;
+            my $name = $o{resolve} ? resolve($_) : $_;
+            printf "\ttotal:%3d drain:%3d waiting: %3d %s (%s)\n",
+                $data->{total}, $data->{drain} += 0, $data->{waiting} += 0,
+                $_, $name ? $name : 'NA';
+            next unless exists $data->{uris};
+            while (my ($uri, $total) = each %{$data->{uris}}) {
+                printf "\t\t%3d %s\n", $total, $uri;
+            }
+        }
+
+        exit if $o{delay} == 0;
+        sleep $o{delay};
+    }
+}
+
+# Some overall stats on connected clients.
+sub watch_clients {
+    while (1) {
+        print "\n" . localtime() . ":\n";
+
+        my $r = poll_socks(\%PERLBAL_SOCKS);
+
+        my $total = 0;
+        my $reqs  = 0;
+        my $bored = 0;
+        my $btime = 0;
+        my $drain = 0;
+        my $dtime = 0;
+        my $wait  = 0;
+        my $wtime = 0;
+        for my $c (@$r) {
+            next unless $c->{type} =~ m/^Client/;
+            my $o = $c->{o};
+
+            $total++;
+            $reqs += $o->{reqs};
+            if ($o->{persist_wait}) {
+                $bored++; $btime += $c->{t};
+            } elsif ($o->{draining_res}) {
+                $drain++; $dtime += $c->{t};
+            } elsif ($o->{wait_res}) {
+                $wait++; $wtime += $c->{t};
+            }
+        }
+
+        printf "\ttotal:  %10d avg reqs:          %10.2f\n",
+            $total, $reqs / ($total || 1);
+        printf "\tbored:  %10d avg time bored:    %10.2f\n",
+            $bored, $btime / ($bored || 1);
+        printf "\tdrain:  %10d avg time draining: %10.2f\n",
+            $drain, $dtime / ($drain || 1);
+        printf "\twaiting:%10d avg time waiting:  %10.2f\n",
+            $wait, $wtime / ($wait || 1);
+
+        exit if $o{delay} == 0;
+        sleep $o{delay};
+    }
+}
+
+# Crap sorted list of top urls.
+sub watch_popular {
+    my $min_counted = shift;
+    while (1) {
+        print "\n" . localtime() . ":\n";
+        my %u = ();
+        my $r = poll_socks(\%PERLBAL_SOCKS);
+        for my $c (@$r) {
+            next unless $c->{http};
+            $u{$c->{http}}->{total}++;
+            $u{$c->{http}}->{wait_res} += $c->{o}->{wait_res} ? 1 : 0;
+            $u{$c->{http}}->{xfer_res} += $c->{o}->{xfer_res} ? 1 : 0;
+        }
+        for (sort { $u{$b}->{total} <=> $u{$a}->{total} } keys %u) {
+            my $data = $u{$_};
+            if ($data->{total} > $min_counted) {
+                printf "\ttotal:%3d wait:%3d xfer:%3d %s\n",
+                    $data->{total}, $data->{wait_res}, $data->{xfer_res}, $_;
+            }
+        }
+        if($o{delay} == 0) {
+                exit;
+        }
+        sleep $o{delay};
+    }
+}
+
+sub watch_backends {
+    my %tr = ( wait_res => 0, has_attention => 0, bored => 0, xfer_res => 0 );
+    while (1) {
+        print "\n" . localtime() . ":\n";
+        my %n = ();
+        my $maxlen = 0;
+        my $r = poll_socks(\%PERLBAL_SOCKS);
+        for my $c (@$r) {
+            next unless ($c->{type} eq 'BackendHTTP' &&
+                         $c->{o}->{has_attention});
+            my $host = resolve($c->{host}) . ":" . $c->{port};
+            $maxlen = length($host) if (length($host) > $maxlen);
+            for (keys %tr) {
+                if ($c->{o}->{$_}) {
+                    $n{$host}->{$_}++;
+                } elsif (!$n{$host}->{$_}) {
+                    $n{$host}->{$_} += 0;
+                }
+            }
+            $n{$host}->{total}++;
+        }
+        for (sort keys %n) {
+            my $b = $n{$_};
+            printf "%*s:\t%2d/%2d  [bored: %02d; wait_res: %02d; xfer: %02d]\n",
+                $maxlen, $_,
+                $b->{total} - $b->{bored}, $b->{total}, $b->{bored},
+                $b->{wait_res}, $b->{xfer_res};
+        }
+        if($o{delay} == 0) {
+                exit;
+        }
+        sleep $o{delay};
+    }
+}
+
+# Parse a line of perlbal socks output into a hash.
+sub parse_perlbal_sock {
+    my $line = shift;
+    chomp $line;
+
+    my %s = ();
+    if ($line =~ m/^\s+(\d+)\s+(\d+)s\s+Perlbal::(\w+)\((\w+)\): (\w+) to ([^:]+):(\d+):\s+(.*)/) {
+        $s{fd}    = $1;
+        $s{t}     = $2;
+        $s{type}  = $3;
+        # This should be parsed out into {r} {w}
+        $s{rw}    = $4;
+        $s{state} = $5;
+        $s{host}  = $6;
+        $s{port}  = $7;
+        my $r     = $8;
+        for my $chunk (split(/;/, $r)) {
+            $chunk =~ s/^\s+//;
+            $chunk =~ s/\s+$//;
+            if ($chunk =~ m!^http://!i) {
+                $s{http} = $chunk;
+            } elsif ($chunk =~ m/(.*)\s*=\s*(.*)/) {
+                $s{o}->{$1} = $2;
+            } else {
+                $s{o}->{$chunk}++;
+            }
+        }
+        return \%s;
+    }
+}
+
+# Pass in a list of open sockets. Polls, parses, and returns socks output for
+# each.
+sub poll_socks {
+    my $socks = shift;
+
+    my $nodes = 0;
+    my @conns = ();
+    for my $name (keys %$socks) {
+        my $sock = $socks->{$name};
+        next unless $sock;
+        print $sock "socks\r\n";
+        X: while (<$sock>) {
+            chomp;
+            last X if /^\./;
+            my $conn = parse_perlbal_sock($_);
+            # Note which perlbal it was observed from.
+            next unless $conn;
+            $conn->{perlbal} = $name;
+            push(@conns, $conn);
+        }
+
+        $nodes++;
+    }
+
+    return \@conns;
+}
+
+sub watch_queues {
+    while (1) {
+        print "\n" . localtime() . ":\n";
+        my $nodes = 0;
+        # Track how many nodes, per service, have queues observed.
+        my %qnodes = ();
+        my %services = ();
+        my $maxlen = 0;
+        for my $name (keys %PERLBAL_SOCKS) {
+            my $sock = $PERLBAL_SOCKS{$name};
+            next unless $sock;
+            print $sock "queues\r\n";
+            X: while (<$sock>) {
+                chomp;
+                last X if /^\./;
+                # service queue type count
+                if (m/^([^-]+)-(\w+)\.(\w+)\s(\d+)/) {
+                    $services{$1}->{$3}->{$2} = 0 unless exists
+                            $services{$1}->{$3}->{$2};
+                    # Keep tabs on the longest service name.
+                    $maxlen = length($1) if (length($1) > $maxlen);
+                    if ($3 eq 'age' && $4 > $services{$1}->{$3}->{$2}) {
+                        $services{$1}->{$3}->{$2} = $4;
+                    } else {
+                        $services{$1}->{$3}->{$2} += $4;
+                    }
+                    $qnodes{$1}->{$name}++ if $4 > 0;
+                }
+            }
+
+            $nodes++;
+        }
+
+        for my $svc (sort keys %services) {
+            my $queues      = $services{$svc};
+            my $queuednodes = $qnodes{$svc} ? scalar keys %{$qnodes{$svc}} : 0;
+            printf "%*s ", $maxlen, $svc;
+            printf "[norm: %5d, age: %2ds] ", $queues->{count}->{normal},
+                                              $queues->{age}->{normal};
+            printf "[hi: %5d, age: %2ds] ",   $queues->{count}->{highpri},
+                                              $queues->{age}->{highpri};
+            # Some/old perlbals don't have lowpri printed.
+            if (exists $queues->{count}->{lowpri}) {
+                printf "[lo: %5d, age: %2ds] ",   $queues->{count}->{lowpri},
+                                                  $queues->{age}->{lowpri};
+            }
+            printf "[queues on: %2d/%2d]\n", $queuednodes, $nodes;
+        }
+        if($o{delay} == 0) {
+                exit;
+        }
+        sleep $o{delay};
+    }
+}

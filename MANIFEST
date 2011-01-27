@@ -20,6 +20,8 @@ lib/Perlbal/Manual/WebServer.pod
 README
 CHANGES
 CONTRIBUTING
+contrib/perlbal-check
+contrib/perlbal-check.yaml
 conf/echoservice.conf
 conf/load-balancer.conf
 conf/nodelist.dat

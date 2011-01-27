@@ -1,0 +1,17 @@
+sitedefault: firstcluster
+
+firstcluster:
+    boxone: 10.0.0.11:8000
+    boxtwo: 10.0.0.12:8000
+
+secondcluster:
+    boxthree: 10.0.0.13:8000
+    boxfour: 10.0.0.14:8000
+
+thirdcluster:
+    boxfive: 10.0.0.15:8000
+    boxsix: 10.0.0.16:8000
+
+twoclusters:
+    - firstcluster
+    - secondcluster
