@@ -17,9 +17,18 @@ use constant VERBOSE => $ENV{THROTTLE_VERBOSE} || 0;
 
 sub load {
     Perlbal::Service::add_tunable(
+        default_action => {
+            check_role => '*',
+            des => "Whether to throttle or allow new connections from clients on neither the whitelist nor blacklist.",
+            check_type => [enum => qw( allow throttle )],
+            default => 'throttle',
+        }
+    );
+    Perlbal::Service::add_tunable(
         whitelist_file => {
             check_role => '*',
             des => "File containing CIDRs which are never throttled. (Net::CIDR::Lite must be installed.)",
+            check_type => 'file',
             default => undef,
         }
     );
@@ -27,47 +36,48 @@ sub load {
         blacklist_file => {
             check_role => '*',
             des => "File containing CIDRs which are always denied outright. (Net::CIDR::Lite must be installed.)",
+            check_type => 'file',
             default => undef,
         }
     );
     Perlbal::Service::add_tunable(
-        default_action => {
+        blacklist_action => {
             check_role => '*',
-            des => "Action to take when an IP is on neither the whitelist nor blacklist.",
-            check_type => [enum => qw( allow throttle )],
-            default => 'throttle',
+            des => "Whether to deny or throttle connections from blacklisted IPs.",
+            check_type => [enum => qw( deny throttle )],
+            default => 'deny',
         }
     );
     Perlbal::Service::add_tunable(
         throttle_threshold_seconds => {
             check_role => '*',
             des => "Minimum allowable time between requests. If a non-white/-blacklisted client makes another connection within this interval, it will be throttled for min_delay seconds. Further connections will double the delay time.",
-            default => 60,
             check_type => 'int',
+            default => 60,
         }
     );
     Perlbal::Service::add_tunable(
         min_delay => {
             check_role => '*',
             des => "Minimum time for a connection to be throttled if occurring within throttle_threshold_seconds of last attempt.",
-            default => 3,
             check_type => 'int',
+            default => 3,
         }
     );
     Perlbal::Service::add_tunable(
         max_delay => {
             check_role => '*',
             des => "Maximum time for a connection to be throttled after exponential increase from min_delay.",
-            default => 300,
             check_type => 'int',
+            default => 300,
         }
     );
     Perlbal::Service::add_tunable(
         max_concurrent => {
             check_role => '*',
             des => "Maximum number of connections accepted at a time from a single IP, per perlbal instance.",
-            default => 2,
             check_type => 'int',
+            default => 2,
         }
     );
     Perlbal::Service::add_tunable(
@@ -83,26 +93,17 @@ sub load {
         }
     );
     Perlbal::Service::add_tunable(
-        disable_throttling => {
-            check_role => '*',
-            des => "If true, no address is ever throttled. Blacklisted addresses will still be denied.",
-            default => 0,
-            check_type => 'bool',
-        }
-    );
-    Perlbal::Service::add_tunable(
         log_only => {
             check_role => '*',
             des => "Perform the full throttling calculation, but don't actually throttle.",
-            default => 0,
             check_type => 'bool',
+            default => 0,
         }
     );
     Perlbal::Service::add_tunable(
         memcached_servers => {
             check_role => '*',
             des => "List of memcached servers to share state in, if desired. (Cache::Memcached::Async must be installed.)",
-            default => undef,
         }
     );
     Perlbal::Service::add_tunable(
@@ -140,6 +141,7 @@ sub load {
         log_events => {
             check_role => '*',
             des => q{Comma-separated list of events to log (ban, unban, whitelisted, blacklisted, concurrent, throttled, banned; all; none). If this is changed after the plugin is registered, the "throttle reload config" command must be issued.},
+            check_type => [regexp => qr/^(ban|unban|whitelisted|blacklisted|concurrent|throttled|banned| |,)+$/, "log_events is a comma-separated list of loggable events"],
             default => 'all',
         }
     );
@@ -200,19 +202,25 @@ sub load {
     });
 }
 
-# magical return value constants
-use constant HANDLE_REQUEST => 0;
-use constant IGNORE_REQUEST => 1;
+# magical Perlbal hook return value constants
+use constant HANDLE_REQUEST             => 0;
+use constant IGNORE_REQUEST             => 1;
 
 # indexes into logging flag list
-use constant LOG_BAN_ADDED          => 0;
-use constant LOG_BAN_REMOVED        => 1;
-use constant LOG_ALLOW_WHITELISTED  => 2;
-use constant LOG_ALLOW_DEFAULT      => 3;
-use constant LOG_DENY_BANNED        => 5;
-use constant LOG_DENY_BLACKLISTED   => 4;
-use constant LOG_DENY_CONCURRENT    => 6;
-use constant LOG_THROTTLE_DEFAULT   => 7;
+use constant LOG_BAN_ADDED              => 0;
+use constant LOG_BAN_REMOVED            => 1;
+use constant LOG_ALLOW_WHITELISTED      => 2;
+use constant LOG_ALLOW_DEFAULT          => 3;
+use constant LOG_DENY_BANNED            => 4;
+use constant LOG_DENY_BLACKLISTED       => 5;
+use constant LOG_DENY_CONCURRENT        => 6;
+use constant LOG_THROTTLE_BLACKLISTED   => 7;
+use constant LOG_THROTTLE_DEFAULT       => 8;
+use constant NUM_LOG_FLAGS              => 9;
+
+use constant RESULT_ALLOW               => 0;
+use constant RESULT_THROTTLE            => 1;
+use constant RESULT_DENY                => 2;
 
 # localized variable to track if a connection has already been throttled
 our $DELAYED = 0;
@@ -229,24 +237,24 @@ sub register {
     $stash->{whitelist} = load_cidr_list($cfg->{whitelist_file}) if $cfg->{whitelist_file};
     $stash->{blacklist} = load_cidr_list($cfg->{blacklist_file}) if $cfg->{blacklist_file};
 
-    # several service variables are cached in lexicals for efficiency. if these
+    # several service tunables are cached in lexicals for efficiency. if these
     # are changed, the "throttle reload config" command must be issued to
     # update the cache. this implements the reloading (and initial loading).
     my ($log, $path_regex, $method_regex);
     my $loader = $stash->{config_reloader} = sub {
-        my @log_on_cfg = split /[, ]+/, lc $cfg->{log_events};
-        my @log_events = (0) x 8;
+        my @log_on_cfg = grep {length} split /[, ]+/, lc $cfg->{log_events};
+        my @log_events = (0) x NUM_LOG_FLAGS;
         for (@log_on_cfg) {
-            $log_events[LOG_BAN_ADDED]          = 1 if $_ eq 'ban';
-            $log_events[LOG_BAN_REMOVED]        = 1 if $_ eq 'unban';
-            $log_events[LOG_ALLOW_WHITELISTED]  = 1 if $_ eq 'whitelisted';
-            $log_events[LOG_ALLOW_DEFAULT]      = 1 if $_ eq 'allowed';
-            $log_events[LOG_DENY_BANNED]        = 1 if $_ eq 'banned';
-            $log_events[LOG_DENY_BLACKLISTED]   = 1 if $_ eq 'blacklisted';
-            $log_events[LOG_DENY_CONCURRENT]    = 1 if $_ eq 'concurrent';
-            $log_events[LOG_THROTTLE_DEFAULT]   = 1 if $_ eq 'throttled';
-            @log_events = (1) x 8                   if $_ eq 'all';
-            @log_events = (0) x 8                   if $_ eq 'none';
+            $log_events[LOG_BAN_ADDED]              = 1 if $_ eq 'ban';
+            $log_events[LOG_BAN_REMOVED]            = 1 if $_ eq 'unban';
+            $log_events[LOG_ALLOW_WHITELISTED]      = 1 if $_ eq 'whitelisted';
+            $log_events[LOG_DENY_BANNED]            = 1 if $_ eq 'banned';
+            $log_events[LOG_DENY_BLACKLISTED]       =
+            $log_events[LOG_THROTTLE_BLACKLISTED]   = 1 if $_ eq 'blacklisted';
+            $log_events[LOG_DENY_CONCURRENT]        = 1 if $_ eq 'concurrent';
+            $log_events[LOG_THROTTLE_DEFAULT]       = 1 if $_ eq 'throttled';
+            @log_events = (1) x NUM_LOG_FLAGS           if $_ eq 'all';
+            @log_events = (0) x NUM_LOG_FLAGS           if $_ eq 'none';
         }
 
         $log = sub {};
@@ -282,7 +290,7 @@ sub register {
 
     my $start_handler = sub {
         my $retval = eval {
-            VERBOSE and Perlbal::log(info => "In Throttle (${DELAYED}s)");
+            VERBOSE and Perlbal::log(info => "In Throttle (%d)", $DELAYED);
 
             my $request_start = Time::HiRes::time;
 
@@ -297,6 +305,8 @@ sub register {
                 VERBOSE and Perlbal::log(info => "Missing headers");
                 return HANDLE_REQUEST;
             }
+            my $uri    = $headers->request_uri;
+            my $method = $headers->request_method;
 
             my $ip = $cp->observed_ip_string() || $cp->peer_ip_string;
             unless (defined $ip) {
@@ -312,49 +322,56 @@ sub register {
             # increment the count of throttled conns
             $throttled{$ip}++;
 
-            # immediately passthrough whitelistees
-            if ($stash->{whitelist} && $stash->{whitelist}->find($ip)) {
-                $log->(LOG_ALLOW_WHITELISTED, "Letting whitelisted ip $ip through");
-                return HANDLE_REQUEST;
-            }
+            my $result = sub {
+                # immediately passthrough whitelistees
+                if ($stash->{whitelist} && $stash->{whitelist}->find($ip)) {
+                    $log->(LOG_ALLOW_WHITELISTED, "Letting whitelisted ip $ip through");
+                    return RESULT_ALLOW;
+                }
 
-            # drop conns from banned/blacklisted IPs
-            my $is_banned = $banned{$ip};
-            my $is_blacklisted = $stash->{blacklist} && $stash->{blacklist}->find($ip);
-            if ($is_banned || $is_blacklisted) {
-                my $msg = sprintf 'Blocking %s IP %s', $is_banned ? 'banned' : 'blacklisted';
-                $log->($is_banned ? LOG_DENY_BANNED : LOG_DENY_BLACKLISTED, $msg);
+                # drop conns from banned IPs
+                if ($banned{$ip}) {
+                    $log->(LOG_DENY_BANNED, "Denying banned IP $ip");
+                    return RESULT_DENY;
+                }
+
+                # drop conns from banned/blacklisted IPs
+                if ($stash->{blacklist} && $stash->{blacklist}->find($ip)) {
+                    if ($cfg->{blacklist_action} eq 'deny') {
+                        $log->(LOG_DENY_BLACKLISTED, "Denying blacklisted IP $ip");
+                        return RESULT_DENY;
+                    }
+                    else {
+                        $log->(LOG_THROTTLE_BLACKLISTED, "Throttling blacklisted IP $ip");
+                        return RESULT_THROTTLE;
+                    }
+                }
+
+                if (exists $throttled{$ip} && $throttled{$ip} > $cfg->{max_concurrent}) {
+                    $log->(LOG_DENY_CONCURRENT, "Too many concurrent connections from $ip");
+                    return RESULT_DENY;
+                }
+
+                return RESULT_ALLOW if $cfg->{default_action} eq 'allow';
+
+                # only throttle matching requests
+                if (defined $path_regex && $uri !~ $path_regex) {
+                    VERBOSE && Perlbal::log(info => "This isn't a throttled URL: %s", $uri);
+                    return RESULT_ALLOW;
+                }
+                if (defined $method_regex && $method !~ $method_regex) {
+                    VERBOSE && Perlbal::log(info => "This isn't a throttled method: %s", $method);
+                    return RESULT_ALLOW;
+                }
+            }->();
+
+            if ($result == RESULT_DENY) {
                 unless ($cfg->{log_only}) {
                     $cp->send_response(403, "Forbidden.\n");
                     return IGNORE_REQUEST;
                 }
             }
-
-            if (exists $throttled{$ip} && $throttled{$ip} > $cfg->{max_concurrent}) {
-                $log->(LOG_DENY_CONCURRENT, "Too many concurrent connections from $ip");
-                unless ($cfg->{log_only}) {
-                    $cp->send_response(503, "Too many connections.\n");
-                    return IGNORE_REQUEST;
-                }
-            }
-
-            my $uri    = $headers->request_uri;
-            my $method = $headers->request_method;
-
-            # only throttle matching requests
-            if (defined $path_regex && $uri !~ $path_regex) {
-                VERBOSE && Perlbal::log(info => '%s', "This isn't a throttled URL: $uri");
-                return HANDLE_REQUEST;
-            }
-            if (defined $method_regex && $method !~ $method_regex) {
-                VERBOSE && Perlbal::log(info => '%s', "This isn't a throttled method: $method");
-                return HANDLE_REQUEST;
-            }
-
-            return HANDLE_REQUEST if $cfg->{disable_throttling};
-
-            if ($cfg->{default_action} eq 'allow') {
-                $log->(LOG_ALLOW_DEFAULT, "Allowing $ip by default");
+            elsif ($result == RESULT_ALLOW) {
                 return HANDLE_REQUEST;
             }
 
@@ -404,8 +421,16 @@ sub register {
                 };
 
                 # can we let it through immediately?
-                return $handle_after->(0) if !defined $time_since_last_request; # forgotten or haven't seen ip before
-                return $handle_after->(0) if $time_since_last_request >= $cfg->{throttle_threshold_seconds}; # waited long enough
+                unless (defined $time_since_last_request) {
+                    # forgotten or haven't seen ip before
+                    $log->(LOG_ALLOW_DEFAULT, "Allowed unseen $ip");
+                    return $handle_after->(0);
+                }
+                if ($time_since_last_request >= $cfg->{throttle_threshold_seconds}) {
+                    # waited long enough
+                    $log->(LOG_ALLOW_DEFAULT, "Allowed reformed $ip");
+                    return $handle_after->(0);
+                }
 
                 # need to throttle, now figure out by how much. at least
                 # min_delay, at most max_delay, exponentially increasing in
@@ -416,7 +441,7 @@ sub register {
 
                 # banhammer for great justice
                 if ($cfg->{ban_threshold} && $violations >= $cfg->{ban_threshold}) {
-                    $log->(LOG_BAN_ADDED, "Banning $ip for $cfg->{ban_expiration}s: $uri");
+                    $log->(LOG_BAN_ADDED, "Banning $ip for $cfg->{ban_expiration}s: %s", $uri);
                     $banned{$ip}++ unless $cfg->{log_only};
                     Danga::Socket->AddTimer($cfg->{ban_expiration}, sub {
                         $log->(LOG_BAN_REMOVED, "Unbanning $ip");
@@ -432,7 +457,7 @@ sub register {
                     timeout => $cfg->{min_delay},
                 );
 
-                $log->(LOG_THROTTLE_DEFAULT, "Throttling $ip for $delay: $uri");
+                $log->(LOG_THROTTLE_DEFAULT, "Throttling $ip for $delay: %s", $uri);
 
                 # schedule request to be re-handled
                 return $handle_after->($delay);
@@ -639,20 +664,30 @@ elapsed.
 
 =item * IP whitelist
 
-IPs/CIDRs listed in the file specified by I<whitelist_file> are never
-throttled.
+Connections from IPs/CIDRs listed in the file specified by I<whitelist_file>
+are always allowed.
 
 =item * IP blacklist
 
 Connections from IPs/CIDRs listed in the file specified by I<blacklist_file>
 immediately sent a "403 Forbidden" response.
 
+=item * Flexible attack response
+
+For services where throttling should not normally be enabled, use the
+I<default_action> tunable. When I<default_action> is set to "allow", new
+connections from non-white/blacklisted IPs will not be throttled.
+
+Furthermore, if throttling should only apply to specific clients, set
+I<blacklist_action> to "throttle". Blacklisted connections will then be
+throttled instead of denied.
+
 =item * Dynamic configuration
 
-Configuration variables may be updated from the management port and the new
-values will be respected. To reload the whitelist and blacklist files, issue
-the "throttle reload" command to the service. To disable throttling, set the
-I<disable_throttling> knob to a nonzero value.
+Most service tunables may be updated from the management port, after which the
+new values will be respected (although see L</CAVEATS>). To reload the
+whitelist and blacklist files, issue the I<throttle reload whitelist> or
+I<throttle reload blacklist> command to the service.
 
 =item * Path specificity
 
@@ -693,7 +728,8 @@ Log when a request is allowed because the source IP is on the whitelist.
 
 =item * blacklisted
 
-Log when a request is denied because the source IP is on the blacklist.
+Log when a request is denied or throttled because the source IP is on the
+blacklist.
 
 =item * banned
 
@@ -705,15 +741,10 @@ for connecting excessively.
 Log when a request is denied because the source IP has too many open connections
 waiting to be unthrottled.
 
-=item * allowed
-
-Log when a request is allowed because the source IP was not on the whitelist or
-blacklist and the I<default_action> is I<allow>.
-
 =item * throttled
 
-Log when a request is allowed because the source IP was not on the whitelist or
-blacklist and the I<default_action> is I<throttle>.
+Log when a request is throttled because the source IP was not on the whitelist
+or blacklist.
 
 =item * all
 
