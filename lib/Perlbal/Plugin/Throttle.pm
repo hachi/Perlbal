@@ -118,7 +118,7 @@ sub load {
         instance_name => {
             check_role => '*',
             des => "Name of throttler instance; instances with the same name will share knowledge of IPs.",
-            default => 'default',
+            default => 'Throttle',
         }
     );
     Perlbal::Service::add_tunable(
@@ -376,7 +376,7 @@ sub register {
             }
 
             # check if we've seen this IP lately.
-            my $key = "PBThrottle:$cfg->{instance_name}:$ip";
+            my $key = $cfg->{instance_name} . $ip;
             $store->get($key, timeout => $cfg->{min_delay}, callback => sub {
                 my $value = shift;
                 my ($last_request_time, $violations);
