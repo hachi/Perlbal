@@ -16,14 +16,7 @@ use Time::HiRes ();
 use constant VERBOSE => $ENV{THROTTLE_VERBOSE} || 0;
 
 sub load {
-    Perlbal::Service::add_tunable(
-        default_action => {
-            check_role => '*',
-            des => "Whether to throttle or allow new connections from clients on neither the whitelist nor blacklist.",
-            check_type => [enum => qw( allow throttle )],
-            default => 'throttle',
-        }
-    );
+    # behavior
     Perlbal::Service::add_tunable(
         whitelist_file => {
             check_role => '*',
@@ -41,6 +34,14 @@ sub load {
         }
     );
     Perlbal::Service::add_tunable(
+        default_action => {
+            check_role => '*',
+            des => "Whether to throttle or allow new connections from clients on neither the whitelist nor blacklist.",
+            check_type => [enum => qw( allow throttle )],
+            default => 'throttle',
+        }
+    );
+    Perlbal::Service::add_tunable(
         blacklist_action => {
             check_role => '*',
             des => "Whether to deny or throttle connections from blacklisted IPs.",
@@ -48,6 +49,40 @@ sub load {
             default => 'deny',
         }
     );
+
+    # filters
+    Perlbal::Service::add_tunable(
+        path_regex => {
+            check_role => '*',
+            des => "Regex which path portion of URI must match for throttling to be in effect.",
+        }
+    );
+    Perlbal::Service::add_tunable(
+        method_regex => {
+            check_role => '*',
+            des => "Regex which HTTP method must match for throttling to be in effect.",
+        }
+    );
+
+    # logging
+    Perlbal::Service::add_tunable(
+        log_events => {
+            check_role => '*',
+            des => q{Comma-separated list of events to log (ban, unban, whitelisted, blacklisted, concurrent, throttled, banned; all; none). If this is changed after the plugin is registered, the "throttle reload config" command must be issued.},
+            check_type => [regexp => qr/^(ban|unban|whitelisted|blacklisted|concurrent|throttled|banned| |,)+$/, "log_events is a comma-separated list of loggable events"],
+            default => 'all',
+        }
+    );
+    Perlbal::Service::add_tunable(
+        log_only => {
+            check_role => '*',
+            des => "Perform the full throttling calculation, but don't actually throttle or deny connections.",
+            check_type => 'bool',
+            default => 0,
+        }
+    );
+
+    # throttler parameters
     Perlbal::Service::add_tunable(
         throttle_threshold_seconds => {
             check_role => '*',
@@ -81,25 +116,23 @@ sub load {
         }
     );
     Perlbal::Service::add_tunable(
-        path_regex => {
+        ban_threshold => {
             check_role => '*',
-            des => "Regex which path portion of URI must match for throttling to be in effect.",
-        }
-    );
-    Perlbal::Service::add_tunable(
-        method_regex => {
-            check_role => '*',
-            des => "Regex which HTTP method must match for throttling to be in effect.",
-        }
-    );
-    Perlbal::Service::add_tunable(
-        log_only => {
-            check_role => '*',
-            des => "Perform the full throttling calculation, but don't actually throttle.",
-            check_type => 'bool',
+            des => "Number of accumulated violations required to temporarily ban the source IP.",
+            check_type => 'int',
             default => 0,
         }
     );
+    Perlbal::Service::add_tunable(
+        ban_expiration => {
+            check_role => '*',
+            des => "Number of seconds after which banned IP is unbanned.",
+            check_type => 'int',
+            default => 60,
+        }
+    );
+
+    # memcached
     Perlbal::Service::add_tunable(
         memcached_servers => {
             check_role => '*',
@@ -119,30 +152,6 @@ sub load {
             check_role => '*',
             des => "Name of throttler instance; instances with the same name will share knowledge of IPs.",
             default => 'Throttle',
-        }
-    );
-    Perlbal::Service::add_tunable(
-        ban_threshold => {
-            check_role => '*',
-            des => "Number of accumulated violations required to temporarily ban the source IP.",
-            check_type => 'int',
-            default => 0,
-        }
-    );
-    Perlbal::Service::add_tunable(
-        ban_expiration => {
-            check_role => '*',
-            des => "Number of seconds after which banned IP is unbanned.",
-            check_type => 'int',
-            default => 60,
-        }
-    );
-    Perlbal::Service::add_tunable(
-        log_events => {
-            check_role => '*',
-            des => q{Comma-separated list of events to log (ban, unban, whitelisted, blacklisted, concurrent, throttled, banned; all; none). If this is changed after the plugin is registered, the "throttle reload config" command must be issued.},
-            check_type => [regexp => qr/^(ban|unban|whitelisted|blacklisted|concurrent|throttled|banned| |,)+$/, "log_events is a comma-separated list of loggable events"],
-            default => 'all',
         }
     );
 
