@@ -31,6 +31,14 @@ sub load {
         }
     );
     Perlbal::Service::add_tunable(
+        default_action => {
+            check_role => '*',
+            des => "Action to take when an IP is on neither the whitelist nor blacklist.",
+            check_type => [enum => qw( allow throttle )],
+            default => 'throttle',
+        }
+    );
+    Perlbal::Service::add_tunable(
         throttle_threshold_seconds => {
             check_role => '*',
             des => "Minimum allowable time between requests. If a non-white/-blacklisted client makes another connection within this interval, it will be throttled for min_delay seconds. Further connections will double the delay time.",
@@ -77,7 +85,7 @@ sub load {
     Perlbal::Service::add_tunable(
         disable_throttling => {
             check_role => '*',
-            des => "If true, no address is ever throttled (debug).",
+            des => "If true, no address is ever throttled. Blacklisted addresses will still be denied.",
             default => 0,
             check_type => 'bool',
         }
@@ -129,9 +137,9 @@ sub load {
         }
     );
     Perlbal::Service::add_tunable(
-        log_on => {
+        log_events => {
             check_role => '*',
-            des => q{Comma-separated list of actions to log on (whitelisted, blacklisted, concurrent, ban, unban, throttle, banned; all; none). If this is changed after the plugin is registered, the "throttle reload levels" command must be issued.},
+            des => q{Comma-separated list of events to log (ban, unban, whitelisted, blacklisted, concurrent, throttled, banned; all; none). If this is changed after the plugin is registered, the "throttle reload config" command must be issued.},
             default => 'all',
         }
     );
@@ -140,9 +148,9 @@ sub load {
         my $mc = shift->parse(qr/^
                               throttle\s+
                               (reload) # command
-                              (whitelist|blacklist|levels)
+                              (whitelist|blacklist|config)
                               $/xi,
-                              "usage: throttle reload <whitelist|blacklist|levels>");
+                              "usage: throttle reload <config|whitelist|blacklist>");
         my ($cmd, $key, $what) = $mc->args;
 
         my $svcname = $mc->{ctx}{last_created};
@@ -159,7 +167,7 @@ sub load {
         if ($cmd eq 'reload') {
             if ($what eq 'whitelist') {
                 if (my $whitelist = $cfg->{whitelist_file}) {
-                    eval { $stash->{whitelist} = read_cidr_list($whitelist); };
+                    eval { $stash->{whitelist} = load_cidr_list($whitelist); };
                     return $mc->err("Couldn't load $whitelist: $@")
                         if $@ || !$stash->{whitelist};
                 }
@@ -169,7 +177,7 @@ sub load {
             }
             elsif ($what eq 'blacklist') {
                 if (my $blacklist = $cfg->{blacklist_file}) {
-                    eval { $stash->{blacklist} = read_cidr_list($blacklist); };
+                    eval { $stash->{blacklist} = load_cidr_list($blacklist); };
                     return $mc->err("Couldn't load $blacklist: $@")
                         if $@ || !$stash->{blacklist};
                 }
@@ -177,8 +185,8 @@ sub load {
                     return $mc->err("no blacklist file configured");
                 }
             }
-            elsif ($what eq 'levels') {
-                $stash->{log_configurer}->();
+            elsif ($what eq 'config') {
+                $stash->{config_reloader}->();
             }
             else {
                 return $mc->err("unknown object to reload: $what");
@@ -192,18 +200,19 @@ sub load {
     });
 }
 
-# Magical return value constants
+# magical return value constants
 use constant HANDLE_REQUEST => 0;
 use constant IGNORE_REQUEST => 1;
 
 # indexes into logging flag list
-use constant LOG_WHITELISTED => 0;
-use constant LOG_BLACKLISTED => 1;
-use constant LOG_CONCURRENT  => 2;
-use constant LOG_BAN         => 3;
-use constant LOG_UNBAN       => 4;
-use constant LOG_THROTTLE    => 5;
-use constant LOG_BANNED      => 6;
+use constant LOG_BAN_ADDED          => 0;
+use constant LOG_BAN_REMOVED        => 1;
+use constant LOG_ALLOW_WHITELISTED  => 2;
+use constant LOG_ALLOW_DEFAULT      => 3;
+use constant LOG_DENY_BANNED        => 5;
+use constant LOG_DENY_BLACKLISTED   => 4;
+use constant LOG_DENY_CONCURRENT    => 6;
+use constant LOG_THROTTLE_DEFAULT   => 7;
 
 # localized variable to track if a connection has already been throttled
 our $DELAYED = 0;
@@ -211,49 +220,43 @@ our $DELAYED = 0;
 sub register {
     my ($class, $svc) = @_;
 
-    VERBOSE and Perlbal::log(info => "Registering Throttle.");
+    VERBOSE and Perlbal::log(info => "Registering Throttle plugin.");
 
-    my $cfg = $svc->{extra_config} ||= {};
+    my $cfg   = $svc->{extra_config}    ||= {};
     my $stash = $cfg->{_throttle_stash} ||= {};
 
-    my %throttled;
-    my %banned;
+    # these are allowed to die at register time
+    $stash->{whitelist} = load_cidr_list($cfg->{whitelist_file}) if $cfg->{whitelist_file};
+    $stash->{blacklist} = load_cidr_list($cfg->{blacklist_file}) if $cfg->{blacklist_file};
 
-    my $store = PPTStore->new($cfg);
-
-    my $ctx = Perlbal::CommandContext->new;
-    $ctx->{last_created} = $svc->{name};
-    $ctx->verbose(0);
-    Perlbal::run_manage_command('throttle reload', \&Perlbal::log, $ctx);
-
-    my $prefix       = $cfg->{instance_name};
-    my $path_regex   = $cfg->{path_regex}   ? qr/$cfg->{path_regex}/   : undef;
-    my $method_regex = $cfg->{method_regex} ? qr/$cfg->{method_regex}/ : undef;
-
-    my $log;
-    my $log_configurer = $stash->{log_configurer} = sub {
-        my @log_on_cfg = split /[, ]+/, lc $cfg->{log_on};
-        my @log_on = (0) x 7;
+    # several service variables are cached in lexicals for efficiency. if these
+    # are changed, the "throttle reload config" command must be issued to
+    # update the cache. this implements the reloading (and initial loading).
+    my ($log, $path_regex, $method_regex);
+    my $loader = $stash->{config_reloader} = sub {
+        my @log_on_cfg = split /[, ]+/, lc $cfg->{log_events};
+        my @log_events = (0) x 8;
         for (@log_on_cfg) {
-            @log_on = (1) x 7            if $_ eq 'all';
-            @log_on = (0) x 7            if $_ eq 'none';
-            $log_on[LOG_WHITELISTED] = 1 if $_ eq 'whitelisted';
-            $log_on[LOG_BLACKLISTED] = 1 if $_ eq 'blacklisted';
-            $log_on[LOG_CONCURRENT]  = 1 if $_ eq 'concurrent';
-            $log_on[LOG_BAN]         = 1 if $_ eq 'ban';
-            $log_on[LOG_UNBAN]       = 1 if $_ eq 'unban';
-            $log_on[LOG_THROTTLE]    = 1 if $_ eq 'throttle';
-            $log_on[LOG_BANNED]      = 1 if $_ eq 'banned';
+            $log_events[LOG_BAN_ADDED]          = 1 if $_ eq 'ban';
+            $log_events[LOG_BAN_REMOVED]        = 1 if $_ eq 'unban';
+            $log_events[LOG_ALLOW_WHITELISTED]  = 1 if $_ eq 'whitelisted';
+            $log_events[LOG_ALLOW_DEFAULT]      = 1 if $_ eq 'allowed';
+            $log_events[LOG_DENY_BANNED]        = 1 if $_ eq 'banned';
+            $log_events[LOG_DENY_BLACKLISTED]   = 1 if $_ eq 'blacklisted';
+            $log_events[LOG_DENY_CONCURRENT]    = 1 if $_ eq 'concurrent';
+            $log_events[LOG_THROTTLE_DEFAULT]   = 1 if $_ eq 'throttled';
+            @log_events = (1) x 8                   if $_ eq 'all';
+            @log_events = (0) x 8                   if $_ eq 'none';
         }
 
         $log = sub {};
-        if (grep {$_} @log_on) {
+        if (grep {$_} @log_events) {
             my $has_syslogger = eval { require Perlbal::Plugin::Syslogger; 1 };
             if ($has_syslogger && $cfg->{syslog_host}) {
                 VERBOSE and Perlbal::log(info => "Using Perlbal::Plugin::Syslogger");
                 $log = sub {
                     my $action = shift;
-                    return unless $log_on[$action];
+                    return unless $log_events[$action];
                     Perlbal::Plugin::Syslogger::send_syslog_msg($svc, $_[0]);
                 };
             }
@@ -261,13 +264,21 @@ sub register {
                 VERBOSE and Perlbal::log(warn => "Syslogger plugin unavailable, using Perlbal::log");
                 $log = sub {
                     my $action = shift;
-                    return unless $log_on[$action];
+                    return unless $log_events[$action];
                     Perlbal::log(info => $_[0]);
                 };
             }
         }
+
+        $path_regex   = $cfg->{path_regex}   ? qr/$cfg->{path_regex}/   : undef;
+        $method_regex = $cfg->{method_regex} ? qr/$cfg->{method_regex}/ : undef;
     };
-    $log_configurer->();
+    $loader->();
+
+    # structures for tracking IP states
+    my %throttled;
+    my %banned;
+    my $store = Perlbal::Plugin::Throttle::Store->new($cfg);
 
     my $start_handler = sub {
         my $retval = eval {
@@ -283,7 +294,7 @@ sub register {
 
             my $headers = $cp->{req_headers};
             unless ($headers) {
-                VERBOSE and Perlbal::log(info => "no headers");
+                VERBOSE and Perlbal::log(info => "Missing headers");
                 return HANDLE_REQUEST;
             }
 
@@ -303,17 +314,16 @@ sub register {
 
             # immediately passthrough whitelistees
             if ($stash->{whitelist} && $stash->{whitelist}->find($ip)) {
-                $log->(LOG_WHITELISTED, "Letting whitelisted ip $ip through");
+                $log->(LOG_ALLOW_WHITELISTED, "Letting whitelisted ip $ip through");
                 return HANDLE_REQUEST;
             }
 
             # drop conns from banned/blacklisted IPs
-            my $banned = $banned{$ip};
-            my $blacklisted = $stash->{blacklist} && $stash->{blacklist}->find($ip);
-            if ($banned || $blacklisted) {
-                my $msg = sprintf 'Blocking %s IP %s', $banned ? 'banned' : 'blacklisted';
-                VERBOSE and Perlbal::log(warn => $msg);
-                $log->(LOG_BANNED, $msg);
+            my $is_banned = $banned{$ip};
+            my $is_blacklisted = $stash->{blacklist} && $stash->{blacklist}->find($ip);
+            if ($is_banned || $is_blacklisted) {
+                my $msg = sprintf 'Blocking %s IP %s', $is_banned ? 'banned' : 'blacklisted';
+                $log->($is_banned ? LOG_DENY_BANNED : LOG_DENY_BLACKLISTED, $msg);
                 unless ($cfg->{log_only}) {
                     $cp->send_response(403, "Forbidden.\n");
                     return IGNORE_REQUEST;
@@ -321,7 +331,7 @@ sub register {
             }
 
             if (exists $throttled{$ip} && $throttled{$ip} > $cfg->{max_concurrent}) {
-                $log->(LOG_CONCURRENT, "Too many concurrent connections from $ip");
+                $log->(LOG_DENY_CONCURRENT, "Too many concurrent connections from $ip");
                 unless ($cfg->{log_only}) {
                     $cp->send_response(503, "Too many connections.\n");
                     return IGNORE_REQUEST;
@@ -343,8 +353,13 @@ sub register {
 
             return HANDLE_REQUEST if $cfg->{disable_throttling};
 
-            # check if we've seen this ip lately.
-            my $key = "PBThrottle:$prefix:$ip";
+            if ($cfg->{default_action} eq 'allow') {
+                $log->(LOG_ALLOW_DEFAULT, "Allowing $ip by default");
+                return HANDLE_REQUEST;
+            }
+
+            # check if we've seen this IP lately.
+            my $key = "PBThrottle:$cfg->{instance_name}:$ip";
             $store->get($key, timeout => $cfg->{min_delay}, callback => sub {
                 my $value = shift;
                 my ($last_request_time, $violations);
@@ -364,7 +379,11 @@ sub register {
                     $time_since_last_request = $request_start - $last_request_time;
                 }
 
-                VERBOSE and Perlbal::log(info => "$ip; this request at $request_start; last at %s; interval is %s", $last_request_time||'n/a', $time_since_last_request||'n/a');
+                VERBOSE and Perlbal::log(
+                    info => "%s; this request at s; last at %s; interval is %s",
+                    $ip, $request_start,
+                    $last_request_time || 'n/a', $time_since_last_request || 'n/a'
+                );
 
                 my $handle_after = sub {
                     my $delay = shift;
@@ -397,10 +416,10 @@ sub register {
 
                 # banhammer for great justice
                 if ($cfg->{ban_threshold} && $violations >= $cfg->{ban_threshold}) {
-                    $log->(LOG_BAN, "Banning $ip for $cfg->{ban_expiration}s: $uri");
+                    $log->(LOG_BAN_ADDED, "Banning $ip for $cfg->{ban_expiration}s: $uri");
                     $banned{$ip}++ unless $cfg->{log_only};
                     Danga::Socket->AddTimer($cfg->{ban_expiration}, sub {
-                        $log->(LOG_UNBAN, "Unbanning $ip");
+                        $log->(LOG_BAN_REMOVED, "Unbanning $ip");
                         delete $banned{$ip};
                     });
                     $cp->close;
@@ -413,7 +432,7 @@ sub register {
                     timeout => $cfg->{min_delay},
                 );
 
-                $log->(LOG_THROTTLE, "Throttling $ip for $delay: $uri");
+                $log->(LOG_THROTTLE_DEFAULT, "Throttling $ip for $delay: $uri");
 
                 # schedule request to be re-handled
                 return $handle_after->($delay);
@@ -446,7 +465,7 @@ sub register {
     $svc->register_hook(Throttle => end_proxy_request   => $end_handler);
 }
 
-sub read_cidr_list {
+sub load_cidr_list {
     my $file = shift;
 
     require Net::CIDR::Lite;
@@ -460,6 +479,7 @@ sub read_cidr_list {
         if ($line =~ /([0-9\/\.]+)/) {
             my $cidr = $1;
             if (index($cidr, "/") < 0) {
+                # slash-less specifications are assumed to be singular IPs
                 $list->add_ip($cidr);
             }
             else {
@@ -469,12 +489,12 @@ sub read_cidr_list {
         }
     }
 
-    die "$file is empty\n" if $empty;
+    die "$file contains no recognizable CIDRs\n" if $empty;
 
     return $list;
 }
 
-package PPTStore;
+package Perlbal::Plugin::Throttle::Store;
 
 sub new {
     my $class = shift;
@@ -487,11 +507,11 @@ sub new {
         die "memcached support requested but Cache::Memcached::Async failed to load: $@\n";
     }
     return $want_memcached
-        ? PPTStore::Memcached->new($cfg)
-        : PPTStore::Memory->new($cfg);
+        ? Perlbal::Plugin::Throttle::Store::Memcached->new($cfg)
+        : Perlbal::Plugin::Throttle::Store::Memory->new($cfg);
 }
 
-package PPTStore::Memcached;
+package Perlbal::Plugin::Throttle::Store::Memcached;
 
 sub new {
     my $class = shift;
@@ -515,7 +535,7 @@ sub set {
     return $self->[rand @$self]->set(@_);
 }
 
-package PPTStore::Memory;
+package Perlbal::Plugin::Throttle::Store::Memory;
 
 sub new {
     my $class = shift;
@@ -647,13 +667,95 @@ least-recently seen IPs will be forgotten, effectively resetting them to the
 B<allowed> state.
 
 Orthogonally, multiple throttlers which need to share memcacheds but not state
-may specify distinct B<instance_name> values.
+may specify distinct I<instance_name> values.
 
 =item * Logging
 
 If Perlbal::Plugin::Syslogger is installed and registered with the service,
-Throttle can use it to send syslog messages regarding events. Granular
-control for which events are logged is available via the B<log_on> parameter.
+Throttle can use it to send syslog messages regarding actions that are taken.
+Granular control for which events are logged is available via the I<log_events>
+parameter. I<log_events> is composed of one or more of the following events,
+separated by commas:
+
+=over 4
+
+=item * ban
+
+Log when a temporary local ban is added for an IP address.
+
+=item * unban
+
+Log when a temporary local ban is removed for an IP address.
+
+=item * whitelisted
+
+Log when a request is allowed because the source IP is on the whitelist.
+
+=item * blacklisted
+
+Log when a request is denied because the source IP is on the blacklist.
+
+=item * banned
+
+Log when a request is denied because the source IP is on the temporary ban list
+for connecting excessively.
+
+=item * concurrent
+
+Log when a request is denied because the source IP has too many open connections
+waiting to be unthrottled.
+
+=item * allowed
+
+Log when a request is allowed because the source IP was not on the whitelist or
+blacklist and the I<default_action> is I<allow>.
+
+=item * throttled
+
+Log when a request is allowed because the source IP was not on the whitelist or
+blacklist and the I<default_action> is I<throttle>.
+
+=item * all
+
+Enables all the above logging options.
+
+=item * none
+
+Disables all the above logging options.
+
+=back
+
+=back
+
+=head1 CAVEATS
+
+=over 4
+
+=item * Dynamic configuration changes
+
+Changes to certain service tunables will not be noticed until the B<throttle
+reload config> management command is issued. These include I<log_events>,
+I<path_regex>, and I<method_regex>).
+
+Changes to certain other tunables will not be respected after the plugin has
+been registered. These include I<memcached_servers> and
+I<memcached_async_clients>.
+
+=item * List loading is blocking
+
+The I<throttle reload whitelist> and I<throttle reload blacklist> management
+commands load the whitelist and blacklist files synchronously, which will cause
+the perlbal to hang until it completes.
+
+=item * Redirects
+
+If a handled request returns a 30x response code and the redirect URI is also
+throttled, then the client's attempt to follow the redirect will necessarily be
+delayed by I<min_delay>. Fixing this would require that the plugin inspect the
+HTTP response headers, which would incur a lot of overhead. To workaround, try
+to have your backend not return 30x's if both the original and redirect URI are
+proxied by the same throttler instance (yes, this is difficult for the case
+where a backend 302s to add a trailing / to a directory).
 
 =back
 
@@ -663,8 +765,8 @@ control for which events are logged is available via the B<log_on> parameter.
 
 =item * Cache::Memcached::Async
 
-Required for memcached support. This is an easy way to share
-state between different perlbal instances.
+Required for memcached support. This is the supported way to share state
+between different perlbal instances.
 
 =item * Net::CIDR::Lite
 
@@ -672,28 +774,7 @@ Required for blacklist/whitelist support.
 
 =item * Perlbal::Plugin::Syslogger
 
-Required for asynchronous logging support.
-
-=back
-
-=head1 CAVEATS
-
-=over 4
-
-=item * List loading is blocking
-
-The B<throttle reload> management command loads the whitelist and blacklist
-files synchronously, which will cause the perlbal to hang until it completes.
-
-=item * Redirects
-
-If a handled request returns a 30x response code and the redirect URI is also
-throttled, then the client's attempt to follow the redirect will necessarily be
-delayed by B<min_delay>. Fixing this would require that the plugin inspect the
-HTTP response headers, which would incur a lot of overhead. To workaround, try
-to have your backend not return 30x's if both the original and redirect URI are
-proxied by the same throttler instance (yes, this is difficult for the case
-where a backend 302s to add a trailing / to a directory).
+Required for event logging support.
 
 =back
 
