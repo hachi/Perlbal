@@ -86,13 +86,13 @@ sub load {
     Perlbal::Service::add_tunable(
         throttle_threshold_seconds => {
             check_role => '*',
-            des => "Minimum allowable time between requests. If a non-white/-blacklisted client makes another connection within this interval, it will be throttled for min_delay seconds. Further connections will double the delay time.",
+            des => "Minimum allowable time between requests. If a non-white/-blacklisted client makes another connection within this interval, it will be throttled for initial_delay seconds. Further connections will double the delay time.",
             check_type => 'int',
             default => 60,
         }
     );
     Perlbal::Service::add_tunable(
-        min_delay => {
+        initial_delay => {
             check_role => '*',
             des => "Minimum time for a connection to be throttled if occurring within throttle_threshold_seconds of last attempt.",
             check_type => 'int',
@@ -102,7 +102,7 @@ sub load {
     Perlbal::Service::add_tunable(
         max_delay => {
             check_role => '*',
-            des => "Maximum time for a connection to be throttled after exponential increase from min_delay.",
+            des => "Maximum time for a connection to be throttled after exponential increase from initial_delay.",
             check_type => 'int',
             default => 300,
         }
@@ -386,7 +386,7 @@ sub register {
 
             # check if we've seen this IP lately.
             my $key = $cfg->{instance_name} . $ip;
-            $store->get($key, timeout => $cfg->{min_delay}, callback => sub {
+            $store->get($key, timeout => $cfg->{initial_delay}, callback => sub {
                 my $value = shift;
                 my ($last_request_time, $violations);
                 if (defined $value) {
@@ -397,7 +397,7 @@ sub register {
                 $store->set(
                     $key => pack('FS', $request_start, $violations),
                     exptime => $cfg->{throttle_threshold_seconds},
-                    timeout => $cfg->{min_delay},
+                    timeout => $cfg->{initial_delay},
                 );
 
                 my $time_since_last_request;
@@ -442,9 +442,9 @@ sub register {
                 }
 
                 # need to throttle, now figure out by how much. at least
-                # min_delay, at most max_delay, exponentially increasing in
+                # initial_delay, at most max_delay, exponentially increasing in
                 # between
-                my $delay = min($cfg->{min_delay} * 2**$violations, $cfg->{max_delay});
+                my $delay = min($cfg->{initial_delay} * 2**$violations, $cfg->{max_delay});
 
                 $violations++;
 
@@ -463,7 +463,7 @@ sub register {
                 $store->set(
                     $key => pack('FS', $request_start, $violations),
                     exptime => $delay,
-                    timeout => $cfg->{min_delay},
+                    timeout => $cfg->{initial_delay},
                 );
 
                 $log->(LOG_THROTTLE_DEFAULT, "Throttling $ip for $delay: %s", $uri);
@@ -630,7 +630,7 @@ I<throttle_threshold_seconds>, it returns to the B<allowed> state.
 
 When a new request is received from an IP in the B<probation> state, the IP
 enters the B<throttled> state and is assigned a I<delay> property initially
-equal to I<min_delay>. Connection to a backend is postponed for I<delay>
+equal to I<initial_delay>. Connection to a backend is postponed for I<delay>
 seconds while perlbal continues to work. If the connection is still open after
 the delay, the request is then handled normally. A dropped connection does not
 change the IP's I<delay> value.
@@ -791,10 +791,10 @@ the perlbal to hang until it completes.
 
 If a handled request returns a 30x response code and the redirect URI is also
 throttled, then the client's attempt to follow the redirect will necessarily be
-delayed by I<min_delay>. Fixing this would require that the plugin inspect the
-HTTP response headers, which would incur a lot of overhead. To workaround, try
-to have your backend not return 30x's if both the original and redirect URI are
-proxied by the same throttler instance (yes, this is difficult for the case
+delayed by I<initial_delay>. Fixing this would require that the plugin inspect
+the HTTP response headers, which would incur a lot of overhead. To workaround,
+try to have your backend not return 30x's if both the original and redirect URI
+are proxied by the same throttler instance (yes, this is difficult for the case
 where a backend 302s to add a trailing / to a directory).
 
 =back
