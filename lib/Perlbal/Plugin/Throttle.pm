@@ -21,23 +21,21 @@ sub load {
         whitelist_file => {
             check_role => '*',
             des => "File containing CIDRs which are never throttled. (Net::CIDR::Lite must be installed.)",
-            check_type => 'file',
-            default => undef,
+            check_type => 'file_or_none',
         }
     );
     Perlbal::Service::add_tunable(
         blacklist_file => {
             check_role => '*',
             des => "File containing CIDRs which are always denied outright. (Net::CIDR::Lite must be installed.)",
-            check_type => 'file',
-            default => undef,
+            check_type => 'file_or_none',
         }
     );
     Perlbal::Service::add_tunable(
         default_action => {
             check_role => '*',
             des => "Whether to throttle or allow new connections from clients on neither the whitelist nor blacklist.",
-            check_type => [enum => qw( allow throttle )],
+            check_type => [enum => [qw( allow throttle )]],
             default => 'throttle',
         }
     );
@@ -45,7 +43,7 @@ sub load {
         blacklist_action => {
             check_role => '*',
             des => "Whether to deny or throttle connections from blacklisted IPs.",
-            check_type => [enum => qw( deny throttle )],
+            check_type => [enum => [qw( deny throttle )]],
             default => 'deny',
         }
     );
@@ -69,7 +67,7 @@ sub load {
         log_events => {
             check_role => '*',
             des => q{Comma-separated list of events to log (ban, unban, whitelisted, blacklisted, concurrent, throttled, banned; all; none). If this is changed after the plugin is registered, the "throttle reload config" command must be issued.},
-            check_type => [regexp => qr/^(ban|unban|whitelisted|blacklisted|concurrent|throttled|banned| |,)+$/, "log_events is a comma-separated list of loggable events"],
+            check_type => [regexp => qr/^(ban|unban|whitelisted|blacklisted|concurrent|throttled|banned|all|none| |,)+$/, "log_events is a comma-separated list of loggable events"],
             default => 'all',
         }
     );
@@ -232,12 +230,12 @@ use constant RESULT_THROTTLE            => 1;
 use constant RESULT_DENY                => 2;
 
 # localized variable to track if a connection has already been throttled
-our $DELAYED = 0;
+our $DELAYED = undef;
 
 sub register {
     my ($class, $svc) = @_;
 
-    VERBOSE and Perlbal::log(info => "Registering Throttle plugin.");
+    VERBOSE and Perlbal::log(info => "Registering Throttle plugin on service $svc->{name}");
 
     my $cfg   = $svc->{extra_config}    ||= {};
     my $stash = $cfg->{_throttle_stash} ||= {};
@@ -274,7 +272,7 @@ sub register {
                 $log = sub {
                     my $action = shift;
                     return unless $log_events[$action];
-                    Perlbal::Plugin::Syslogger::send_syslog_msg($svc, $_[0]);
+                    Perlbal::Plugin::Syslogger::send_syslog_msg($svc, @_);
                 };
             }
             else {
@@ -282,7 +280,7 @@ sub register {
                 $log = sub {
                     my $action = shift;
                     return unless $log_events[$action];
-                    Perlbal::log(info => $_[0]);
+                    Perlbal::log(info => @_);
                 };
             }
         }
@@ -299,7 +297,9 @@ sub register {
 
     my $start_handler = sub {
         my $retval = eval {
-            VERBOSE and Perlbal::log(info => "In Throttle (%d)", $DELAYED);
+            VERBOSE and Perlbal::log(info => "In Throttle (%s)",
+                defined $DELAYED ? sprintf 'back after %.2fs', $DELAYED : 'initial'
+            );
 
             my $request_start = Time::HiRes::time;
 
@@ -326,7 +326,7 @@ sub register {
             }
 
             # back from throttling, all later checks were already passed
-            return HANDLE_REQUEST if $DELAYED;
+            return HANDLE_REQUEST if defined $DELAYED;
 
             # increment the count of throttled conns
             $throttled{$ip}++;
@@ -361,8 +361,6 @@ sub register {
                     return RESULT_DENY;
                 }
 
-                return RESULT_ALLOW if $cfg->{default_action} eq 'allow';
-
                 # only throttle matching requests
                 if (defined $path_regex && $uri !~ $path_regex) {
                     VERBOSE && Perlbal::log(info => "This isn't a throttled URL: %s", $uri);
@@ -372,6 +370,8 @@ sub register {
                     VERBOSE && Perlbal::log(info => "This isn't a throttled method: %s", $method);
                     return RESULT_ALLOW;
                 }
+
+                return $cfg->{default_action} eq 'allow' ? RESULT_ALLOW : RESULT_THROTTLE;
             }->();
 
             if ($result == RESULT_DENY) {
@@ -386,18 +386,16 @@ sub register {
 
             # check if we've seen this IP lately.
             my $key = $cfg->{instance_name} . $ip;
-            $store->get($key, timeout => $cfg->{initial_delay}, callback => sub {
-                my $value = shift;
-                my ($last_request_time, $violations);
-                if (defined $value) {
-                    ($last_request_time, $violations) = unpack 'FS', $value;
-                }
+            $store->get(key => $key, timeout => $cfg->{initial_delay}, callback => sub {
+                my ($last_request_time, $violations) = @_;
                 $violations ||= 0;
 
                 $store->set(
-                    $key => pack('FS', $request_start, $violations),
+                    key     => $key,
                     exptime => $cfg->{throttle_threshold_seconds},
                     timeout => $cfg->{initial_delay},
+                    start   => $request_start,
+                    count   => $violations,
                 );
 
                 my $time_since_last_request;
@@ -406,7 +404,7 @@ sub register {
                 }
 
                 VERBOSE and Perlbal::log(
-                    info => "%s; this request at s; last at %s; interval is %s",
+                    info => "%s; this request at %.3f; last at %s; interval is %s",
                     $ip, $request_start,
                     $last_request_time || 'n/a', $time_since_last_request || 'n/a'
                 );
@@ -421,7 +419,7 @@ sub register {
                         # we're now executing in a timer callback after
                         # perlbal has been told to ignore the request. so if we
                         # now want it handled it needs to be re-adopted.
-                        local $DELAYED = 1; # to short-circuit throttling logic on the next pass through
+                        local $DELAYED = $delay; # to short-circuit throttling logic on the next pass through
                         $cp->watch_read(1);
                         $svc->adopt_base_client($cp);
                     });
@@ -461,7 +459,9 @@ sub register {
                 }
 
                 $store->set(
-                    $key => pack('FS', $request_start, $violations),
+                    key     => $key,
+                    start   => $request_start,
+                    count   => $violations,
                     exptime => $delay,
                     timeout => $cfg->{initial_delay},
                 );
@@ -561,15 +561,33 @@ sub new {
 
 sub get {
     my $self = shift;
-    return $self->[rand @$self]->get(@_);
+    my %p = @_;
+    $self->[rand @$self]->get(
+        $p{key},
+        timeout => $p{timeout},
+        callback => sub {
+            my $value = shift;
+            return $p{callback}->() unless $value;
+            return $p{callback}->(unpack('FS', $value));
+        },
+    );
+    return;
 }
 
 sub set {
     my $self = shift;
-    return $self->[rand @$self]->set(@_);
+    my %p = @_;
+
+    $self->[rand @$self]->set(
+        $p{key} => pack('FS', $p{start}, $p{count}),
+        exptime => $p{exptime},
+        timeout => $p{timeout},
+    );
 }
 
 package Perlbal::Plugin::Throttle::Store::Memory;
+
+use Time::HiRes 'time';
 
 sub new {
     my $class = shift;
@@ -579,20 +597,17 @@ sub new {
 
 sub get {
     my $self = shift;
-    my $key = shift;
-    my %params = @_;
-    my $entry = $self->{$key};
-    my $value = $entry ? (time < $entry->[0] ? $entry->[1] : undef) : undef;
-    $params{callback}->($value);
-    return;
+    my %p = @_;
+    my $entry = $self->{$p{key}};
+
+    return $p{callback}->($entry->[1], $entry->[2]) if $entry && time < $entry->[0];
+    return $p{callback}->();
 }
 
 sub set {
     my $self = shift;
-    my $key = shift;
-    my $value = shift;
-    my %params = @_;
-    $self->{$key} = [$params{exptime}, $value];
+    my %p = @_;
+    $self->{$p{key}} = [time + $p{exptime}, $p{start}, $p{count}];
     return;
 }
 
