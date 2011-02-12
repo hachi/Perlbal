@@ -56,7 +56,7 @@ Perlbal::Socket->set_socket_idle_handler('Perlbal::SocketSSL' => sub {
     return unless $max_age;
 
     # Attributes are in another class, don't violate object boundaries.
-    $v->close("perlbal_timeout")
+    $v->{sock}->close(SSL_no_shutdown => 1, SSL_ctx_free => 1)
         if $v->{alive_time} < $Perlbal::tick_time - $max_age;
 });
 
