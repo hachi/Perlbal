@@ -3,11 +3,6 @@
 # This is a simple class that extends Danga::Socket and contains an IO::Socket::SSL
 # for the purpose of allowing non-blocking SSL in Perlbal.
 #
-# WARNING: this code will break IO::Socket::SSL if you use it in any plugins or
-# have custom Perlbal modifications that use it.  you will run into issues.  This
-# is because we override the close method to prevent premature closure of the socket,
-# so you will end up with the socket not closing properly.
-#
 # Copyright 2007, Mark Smith <mark@plogs.net>.
 #
 # This file is licensed under the same terms as Perl itself.
@@ -26,29 +21,6 @@ use Perlbal::Socket;
 use base 'Danga::Socket';
 use fields qw( listener create_time alive_time);
 
-# magic IO::Socket::SSL crap to make it play nice with us
-{
-    no strict 'refs';
-    no warnings 'redefine';
-
-    # replace IO::Socket::SSL::close with our own code...
-    my $orig = *IO::Socket::SSL::close{CODE};
-    *IO::Socket::SSL::close = sub {
-        my $self = shift()
-            or return IO::Socket::SSL::_invalid_object();
-
-        # if we have args, close ourselves (second call!), else don't
-        if (exists ${*$self}->{__close_args}) {
-            $orig->($self, @{${*$self}->{__close_args}});
-        } else {
-            ${*$self}->{__close_args} = [ @_ ];
-            if (exists ${*$self}->{_danga_socket}) {
-                ${*$self}->{_danga_socket}->close('intercepted_ssl_close');
-            }
-        }
-    };
-}
-
 Perlbal::Socket->set_socket_idle_handler('Perlbal::SocketSSL' => sub {
     my Perlbal::SocketSSL $v = shift;
 
@@ -56,7 +28,7 @@ Perlbal::Socket->set_socket_idle_handler('Perlbal::SocketSSL' => sub {
     return unless $max_age;
 
     # Attributes are in another class, don't violate object boundaries.
-    $v->close("perlbal_timeout")
+    $v->{sock}->close(SSL_no_shutdown => 1, SSL_ctx_free => 1)
         if $v->{alive_time} < $Perlbal::tick_time - $max_age;
 });
 
@@ -156,6 +128,33 @@ sub event_err {
 # You can tuna-fish, but you can't tune a Perlbal::SocketSSL
 sub max_idle_time {
     return 60;
+}
+
+package Perlbal::SocketSSL2;
+
+use strict;
+use warnings;
+
+use IO::Socket::SSL;
+
+use base 'IO::Socket::SSL';
+
+sub close {
+    my $self = shift
+        or return IO::Socket::SSL::_invalid_object();
+
+    # If we our Danga::Socket sibling has a sock then we're being called for the first time.
+    # NOTE: this isn't strictly safe, ->close can get called on a sock multiple times. We
+    #       really could use a safe way to know if this handle is being called from the post-
+    #       event-loop cleanup code in Danga::Socket.
+    if (my $ds = ${*$self}->{_danga_socket}) {
+        ${*$self}->{__close_args} = [ @_ ];
+        delete ${*$self}->{_danga_socket};
+        $ds->close('intercepted_ssl_close')
+            if $ds->sock;
+    } else {
+        return $self->SUPER::close(@{${*$self}->{__close_args}});
+    }
 }
 
 1;

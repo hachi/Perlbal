@@ -1,3 +1,6 @@
+    -- Make SSL sockets time out if they go stayle, like we claimed was
+       fixed two versions ago, but this time we also clean up the FDs too.
+
 1.78: 2011-01-22
 
     -- Fix corruption of idle socket handlers introduced by SSL fix in 1.77.
