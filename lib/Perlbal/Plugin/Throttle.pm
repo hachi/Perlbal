@@ -624,7 +624,49 @@ __END__
 Perlbal::Plugin::Throttle - Perlbal plugin that throttles connections from
 hosts that connect too frequently.
 
-=head1 OVERVIEW
+=head1 SYNOPSIS
+
+    # in perlbal.conf
+
+    LOAD Throttle
+
+    CREATE POOL web
+        POOL web ADD 10.0.0.1:80
+
+    CREATE SERVICE throttler
+        SET role                        = reverse_proxy
+        SET listen                      = 0.0.0.0:80
+        SET pool                        = web
+
+        # adjust throttler aggressiveness
+        SET initial_delay               = 10
+        SET max_delay                   = 60
+        SET throttle_threshold_seconds  = 3
+        SET max_concurrent              = 2
+        SET ban_threshold               = 4
+        SET ban_expiration              = 180
+
+        # limit which requests are throttled
+        SET path_regex                  = ^/webapp/
+        SET method_regex                = ^GET$
+
+        # allow or ban specific addresses or range (requires Net::CIDR::Lite)
+        SET whitelist_file              = conf/whitelist.txt
+        SET blacklist_file              = conf/blacklist.txt
+
+        # granular logging (requires Perlbal::Plugin::Syslogger)
+        SET log_events                  = ban,unban,throttled,banned
+        SET log_only                    = false
+
+        # share state between perlbals (requires Cache::Memcached::Async)
+        SET memcached_servers           = 10.0.2.1:11211,10.0.2.2:11211
+        SET memcached_async_clients     = 4
+        SET instance_name               = mywebapp
+
+        SET plugins                     = Throttle
+    ENABLE throttler
+
+=head1 DESCRIPTION
 
 This plugin intercepts HTTP requests to a Perlbal service and slows or drops
 connections from IP addresses which are determined to be connecting too fast.
