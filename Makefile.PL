@@ -32,6 +32,7 @@ WriteMakefile(
         'Test::More'    => 0,
         'File::Find'    => 0,
         'Time::HiRes'   => 0,
+        'LWP::UserAgent' => 0,
         #'IO::AIO'  => 1.6,     # recommened.
     },
 
