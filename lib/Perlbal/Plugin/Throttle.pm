@@ -297,11 +297,11 @@ sub register {
 
     my $start_handler = sub {
         my $retval = eval {
+            my $request_start = Time::HiRes::time;
+
             VERBOSE and Perlbal::log(info => "In Throttle (%s)",
                 defined $DELAYED ? sprintf 'back after %.2fs', $DELAYED : 'initial'
             );
-
-            my $request_start = Time::HiRes::time;
 
             my Perlbal::ClientProxy $cp = shift;
             unless ($cp) {
@@ -384,18 +384,22 @@ sub register {
                 return HANDLE_REQUEST;
             }
 
+            # now entering throttle path...
+
             # check if we've seen this IP lately.
             my $key = $cfg->{instance_name} . $ip;
             $store->get(key => $key, timeout => $cfg->{initial_delay}, callback => sub {
                 my ($last_request_time, $violations) = @_;
                 $violations ||= 0;
 
+                # do an early set to update the last_request_time and
+                # expiration in case of early exit
                 $store->set(
                     key     => $key,
-                    exptime => $cfg->{throttle_threshold_seconds},
-                    timeout => $cfg->{initial_delay},
                     start   => $request_start,
                     count   => $violations,
+                    exptime => $cfg->{throttle_threshold_seconds},
+                    timeout => $cfg->{initial_delay},
                 );
 
                 my $time_since_last_request;
