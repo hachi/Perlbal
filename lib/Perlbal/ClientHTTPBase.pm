@@ -649,7 +649,12 @@ sub _serve_request_multiple {
     foreach my $file ('', @multiple_files) {
         Perlbal::AIO::aio_stat("$dirbase$file", sub {
             $remain--;
-            $statinfo{$file} = $! ? [] : [ stat(_) ];
+            if ($!) {
+                Perlbal::log('warning', "concat_get; unable to stat '$file': $!");
+                $statinfo{$file} = [];
+            } else {
+                $statinfo{$file} = [ stat(_) ];
+            }
             return if $remain || $self->{closed};
             $self->_serve_request_multiple_poststat($hd, $dirbase, \@multiple_files, \%statinfo);
         });
