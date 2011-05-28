@@ -116,7 +116,7 @@ sub event_read {
         if ($self->{sslopts}) {
             # try to upgrade to SSL, this does no IO it just re-blesses
             # and prepares the SSL engine for handling us later
-            IO::Socket::SSL->start_SSL(
+            Perlbal::SocketSSL2->start_SSL(
                                        $psock,
                                        SSL_server => 1,
                                        SSL_startHandshake => 0,
@@ -126,7 +126,7 @@ sub event_read {
 
             # safety checking to ensure we got upgraded
             return $psock->close
-                unless ref $psock eq 'IO::Socket::SSL';
+                unless ref $psock eq 'Perlbal::SocketSSL2';
 
             # class into new package and run with it
             my $sslsock = new Perlbal::SocketSSL($psock, $self);
