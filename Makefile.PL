@@ -32,7 +32,7 @@ WriteMakefile(
         'Test::More'    => 0,
         'File::Find'    => 0,
         'Time::HiRes'   => 0,
-        'LWP::UserAgent' => 0,
+        'LWP'           => 0, # FIXME this is way too general, be more specific
         #'IO::AIO'  => 1.6,     # recommened.
     },
 
