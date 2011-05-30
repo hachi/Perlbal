@@ -148,16 +148,11 @@ sub close {
     #       really could use a safe way to know if this handle is being called from the post-
     #       event-loop cleanup code in Danga::Socket.
     if (my $ds = ${*$self}->{_danga_socket}) {
-        use Devel::StackTrace;
-        print STDERR Devel::StackTrace->new->as_string;
         ${*$self}->{__close_args} = [ @_ ];
         delete ${*$self}->{_danga_socket};
         $ds->close('intercepted_ssl_close')
             if $ds->sock;
     } else {
-        warn "Processing second call of SSL close\n";
-        use Devel::StackTrace;
-        print STDERR Devel::StackTrace->new->as_string;
         return $self->SUPER::close(@{${*$self}->{__close_args}});
     }
 }
