@@ -294,7 +294,7 @@ sub handle_delete {
         # now attempt the unlink
         Perlbal::AIO::aio_unlink($self->{service}->{docroot} . '/' . $uri, sub {
             my $err = shift;
-            if ($err == 0 && !$!) {
+            if ($err == 0) {
                 # delete was successful
                 return $self->send_response(204);
             } elsif ($! == ENOENT) {

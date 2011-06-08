@@ -1207,7 +1207,7 @@ sub purge_buffered_upload {
     eval {
         # now asynchronously unlink the file
         Perlbal::AIO::aio_unlink($self->{bufilename}, sub {
-            if ($!) {
+            if ($_[0] != 0 && $!) {
                 # note an error, but whatever, we'll either overwrite the file later (O_TRUNC | O_CREAT)
                 # or a cleaner will come through and do it for us someday (if the user runs one)
                 Perlbal::log('warning', "Unable to link $self->{bufilename}: $!");
