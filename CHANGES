@@ -1,3 +1,5 @@
+1.79: 2011-06-15
+
     -- Make SSL sockets time out if they go stale, like we claimed was
        fixed two versions ago, but this time we also clean up the FDs too.
        (Jonathan Steinert <hachi@kuiki.net>)
