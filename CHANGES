@@ -1,5 +1,10 @@
-    -- Make SSL sockets time out if they go stayle, like we claimed was
+    -- Make SSL sockets time out if they go stale, like we claimed was
        fixed two versions ago, but this time we also clean up the FDs too.
+       (Jonathan Steinert <hachi@kuiki.net>)
+
+    -- fix DELETE's failing if using IO::AIO 3.7 or newer (dormando <dormando@rydia.net>)
+
+    -- ship perlbal-check with perlbal. (dormando <dormando@rydia.net>)
 
 1.78: 2011-01-22
 
