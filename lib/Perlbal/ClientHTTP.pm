@@ -22,6 +22,7 @@ use fields ('put_in_progress', # 1 when we're currently waiting for an async job
             'content_length',  # length of document being transferred
             'content_length_remain', # bytes remaining to be read
             'chunked_upload_state', # bool/obj:  if processing a chunked upload, Perlbal::ChunkedUploadState object, else undef
+            'md5_ctx',         # Digest::MD5 used to verify Content-MD5
             );
 
 use HTTP::Date ();
@@ -29,6 +30,7 @@ use File::Path;
 
 use Errno qw( EPIPE );
 use POSIX qw( O_CREAT O_TRUNC O_WRONLY O_RDONLY ENOENT );
+use Digest::MD5;
 
 # class list of directories we know exist
 our (%VerifiedDirs);
@@ -61,6 +63,7 @@ sub init {
     $self->{put_fh} = undef;
     $self->{put_pos} = 0;
     $self->{chunked_upload_state} = undef;
+    $self->{md5_ctx} = undef;
 }
 
 sub close {
@@ -133,6 +136,8 @@ sub handle_put {
     my $hd = $self->{req_headers};
 
     return $self->send_response(403) unless $self->{service}->{enable_put};
+
+    $self->{md5_ctx} = $hd->header('Content-MD5') ? Digest::MD5->new : undef;
 
     return if $self->handle_put_chunked;
 
@@ -427,6 +432,8 @@ sub put_writeout {
 
     my $data = join("", map { $$_ } @{$self->{read_buf}});
     my $count = length $data;
+    my $md5_ctx = $self->{md5_ctx};
+    $md5_ctx->add($data) if $md5_ctx;
 
     # reset our input buffer
     $self->{read_buf}   = [];
@@ -469,6 +476,17 @@ sub put_close {
 
     if (CORE::close($self->{put_fh})) {
         $self->{put_fh} = undef;
+
+        my $md5_ctx = $self->{md5_ctx};
+        if ($md5_ctx) {
+            my $actual = $md5_ctx->b64digest;
+            my $expect = $self->{req_headers}->header("Content-MD5");
+            $expect =~ s/=+\s*\z//;
+            if ($actual ne $expect) {
+                return $self->send_response(400,
+                    "Content-MD5 mismatch, expected: $expect actual: $actual");
+            }
+        }
         return $self->send_response(200);
     } else {
         return $self->system_error("Error saving file", "error in close: $!");
