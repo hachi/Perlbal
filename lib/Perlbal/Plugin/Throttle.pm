@@ -156,11 +156,11 @@ sub load {
     Perlbal::register_global_hook('manage_command.throttle', sub {
         my $mc = shift->parse(qr/^
                               throttle\s+
-                              (reload) # command
+                              (reload)\s+ # command
                               (whitelist|blacklist|config)
                               $/xi,
                               "usage: throttle reload <config|whitelist|blacklist>");
-        my ($cmd, $key, $what) = $mc->args;
+        my ($cmd, $what) = $mc->args;
 
         my $svcname = $mc->{ctx}{last_created};
         unless ($svcname) {
