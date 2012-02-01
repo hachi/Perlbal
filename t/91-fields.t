@@ -7,7 +7,10 @@ use Hash::Util;
 
 my $warn_mocked =
   "mocked by perlbal, this error should not be raised using Perlbal::Fields";
-*Hash::Util::lock_ref_keys = sub { croak $warn_mocked; };
+{
+    no warnings 'redefine';
+    *Hash::Util::lock_ref_keys = sub { croak $warn_mocked; };
+}
 
 SKIP: {
     skip "perl need to be greater than 5.009", 1 if ( $] < 5.009 );
