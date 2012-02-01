@@ -1620,7 +1620,7 @@ sub enable {
                 (defined $self->{ssl_ca_path} ? (SSL_ca_path => $self->{ssl_ca_path}) : ()),
                 (defined $self->{ssl_verify_mode} ? (SSL_verify_mode => $self->{ssl_verify_mode}) : ()),
             };
-            return $mc->err("IO::Socket:SSL (0.97+) not available.  Can't do SSL.") unless eval "use IO::Socket::SSL 0.97 (); 1;";
+            return $mc->err("IO::Socket:SSL (0.98+) not available.  Can't do SSL.") unless eval "use IO::Socket::SSL 0.98 (); 1;";
             return $mc->err("SSL key file ($self->{ssl_key_file}) doesn't exist")   unless -f $self->{ssl_key_file};
             return $mc->err("SSL cert file ($self->{ssl_cert_file}) doesn't exist") unless -f $self->{ssl_cert_file};
         }

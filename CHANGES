@@ -1,3 +1,6 @@
+    -- Change IO::Socket::SSL version requirement error to reflect what we actually
+       require. (Jonathan Steinert <hachi@kuiki.net>)
+
     -- Completely redo the deps list for perlbal. This addresses an issue exposed when
        LWP was split into component modules (RT 68490) , plus other subtle issues we've
        been ignoring or unaware of. (Jonathan Steinert <hachi@kuiki.net>)
