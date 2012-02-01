@@ -39,7 +39,7 @@ BEGIN {
 
 my $has_gladiator  = eval "use Devel::Gladiator; 1;";
 my $has_cycle      = eval "use Devel::Cycle; 1;";
-use Devel::Peek;
+my $has_devel_peek = eval "use Devel::Peek; 1;";
 
 use vars qw($VERSION);
 $VERSION = '1.79';
@@ -346,7 +346,7 @@ sub arena_ref_counts {
 my %last_gladiator;
 sub MANAGE_gladiator {
     my $mc = shift->no_opts;
-    unless ($has_gladiator) {
+    unless ($has_gladiator && $has_devel_peek) {
         $mc->end;
         return;
     }

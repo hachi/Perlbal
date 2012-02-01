@@ -1,3 +1,5 @@
+    -- Switch Devel::Peek to an optional requirement (Jonathan Steinert <hachi@kuiki.net>)
+
     -- Change perlbal-check to use IO::Socket::INET, not just IO::Socket
        (Jonathan Steinert <hachi@kuiki.net>)
 
