@@ -52,7 +52,6 @@ use strict;
 use warnings;
 no  warnings qw(deprecated);
 
-use Storable ();
 use IO::Socket;
 use IO::Handle;
 use IO::File;
