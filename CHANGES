@@ -1,3 +1,7 @@
+    -- Completely redo the deps list for perlbal. This addresses an issue exposed when
+       LWP was split into component modules (RT 68490) , plus other subtle issues we've
+       been ignoring or unaware of. (Jonathan Steinert <hachi@kuiki.net>)
+
     -- Stop loading Storable, we don't use it (Jonathan Steinert <hachi@kuiki.net>)
 
     -- Switch Devel::Peek to an optional requirement (Jonathan Steinert <hachi@kuiki.net>)
