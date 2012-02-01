@@ -1,3 +1,6 @@
+    -- Change perlbal-check to use IO::Socket::INET, not just IO::Socket
+       (Jonathan Steinert <hachi@kuiki.net>)
+
     -- Can use PERLBAL_REMOVE_FIELDS=1 to disable fields and improve performance
        (Nicolas Rochelemagne <nicolas.rochelemagne@cpanel.net>)
 

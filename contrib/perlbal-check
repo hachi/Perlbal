@@ -29,7 +29,7 @@ You can use and redistribute Perlbal under the same terms as Perl itself.
 
 use strict;
 use warnings;
-use IO::Socket;
+use IO::Socket::INET;
 use Getopt::Long;
 use Data::Dumper qw(Dumper);
 use YAML qw(LoadFile);
