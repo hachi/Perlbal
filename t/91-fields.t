@@ -2,7 +2,7 @@ use strict;
 use warnings;
 use Carp;
 
-use Test::More tests => 6;    # last test to print
+use Test::More 0.94 tests => 6;    # last test to print
 use Hash::Util;
 
 my $warn_mocked =

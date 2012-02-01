@@ -29,7 +29,7 @@ WriteMakefile(
         'BSD::Resource' => 0,
         'HTTP::Date'    => 0,
         'HTTP::Response' => 0,
-        'Test::More'    => 0,
+        'Test::More'    => 0.94,
         'File::Find'    => 0,
         'Time::HiRes'   => 0,
         'LWP::UserAgent' => 0,

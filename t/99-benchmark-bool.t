@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 5;    # last test to print
+use Test::More 0.94 tests => 5;    # last test to print
 
 for my $class (qw/Perlbal Perlbal::Service/) {
     use_ok( $class, "can load module $class" );
