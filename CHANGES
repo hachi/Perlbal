@@ -1,5 +1,8 @@
-NEXT_RELEASE:
     -- Can use PERLBAL_REMOVE_FIELDS=1 to disable fields and improve performance
+       (Nicolas Rochelemagne <nicolas.rochelemagne@cpanel.net>)
+
+    -- Optimize handling of SET for bool values
+       (Nicolas Rochelemagne <nicolas.rochelemagne@cpanel.net>)
 
 1.79: 2011-06-15
 
