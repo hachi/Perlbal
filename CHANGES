@@ -1,3 +1,6 @@
+    -- Include an XFFExtras plugin that can add X-Forwarded-Port and X-Forwarded-Proto
+       headers to help proxy backends construct canonical URLs with less configuration.
+
     -- Fix perlbal-check's age calculation to get the maximum age of queues across all
        Perlbals. (Abe Hassan <ahassan@saymedia.com>)
 
