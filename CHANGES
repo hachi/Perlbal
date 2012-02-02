@@ -1,3 +1,6 @@
+    -- Fix perlbal-check's age calculation to get the maximum age of queues across all
+       Perlbals. (Abe Hassan <ahassan@saymedia.com>)
+
     -- Add DEFAULT command to allow setting default values for later service tunables
        (Mark Smith <mark@qq.is>)
 
