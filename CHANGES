@@ -1,3 +1,6 @@
+    -- Add DEFAULT command to allow setting default values for later service tunables
+       (Mark Smith <mark@qq.is>)
+
     -- Change IO::Socket::SSL version requirement error to reflect what we actually
        require. (Jonathan Steinert <hachi@kuiki.net>)
 
