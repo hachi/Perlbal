@@ -387,7 +387,7 @@ sub start_put_open {
 
     $self->{put_in_progress} = 1;
     if ($self->{md5_ctx}) {
-        $fs_path = "$path/$file.$$." . rand . '.tmp';
+        $fs_path = "$path/$file.$$." . int(rand(0xffffffff)) . '.tmp';
         $self->{put_final_name} = "$path/$file";
         $open_flags = O_CREAT | O_EXCL | O_WRONLY;
     } else {
