@@ -1,3 +1,6 @@
+    -- Force keepalives off when we haven't finished reading a request body, but we
+       are already sending a response. (Jonathan Steinert <hachi@kuiki.net>)
+
     -- Add support for Content-MD5 checking on PUT requests to web server services.
        (Eric Wong <normalperson@yhbt.net>)
 
