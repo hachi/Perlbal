@@ -1,3 +1,6 @@
+    -- Add support for Content-MD5 checking on PUT requests to web server services.
+       (Eric Wong <normalperson@yhbt.net>)
+
     -- Include an XFFExtras plugin that can add X-Forwarded-Port and X-Forwarded-Proto
        headers to help proxy backends construct canonical URLs with less configuration.
 
