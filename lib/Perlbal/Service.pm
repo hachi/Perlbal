@@ -30,6 +30,7 @@ use fields (
             'index_files',        # arrayref of filenames to try for index files
             'enable_concatenate_get',   # bool:  if user can request concatenated files
             'enable_put', # bool: whether PUT is supported
+            'enable_md5', # bool: whether Content-MD5 is supported on PUT
             'max_put_size', # int: max size in bytes of a put file
             'max_chunked_request_size',  # int: max size in bytes of a chunked request (to be written to disk first)
             'min_put_directory', # int: number of directories required to exist at beginning of URIs in put
@@ -265,6 +266,13 @@ our $tunables = {
     'enable_put' => {
         des => "Enable HTTP PUT requests.",
         default => 0,
+        check_role => "web_server",
+        check_type => "bool",
+    },
+
+    'enable_md5' => {
+        des => "Enable verification of the Content-MD5 header in HTTP PUT requests",
+        default => 1,
         check_role => "web_server",
         check_type => "bool",
     },
